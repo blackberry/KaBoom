@@ -1,4 +1,4 @@
-package com.blackberry.logdriver.kaboom;
+package com.blackberry.kaboom;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;

@@ -16,7 +16,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.blackberry.logdriver.kaboom;
+package com.blackberry.kaboom;
 
 /**
  * Simple Pair class used to define a unique (principal, keyTab) combination.

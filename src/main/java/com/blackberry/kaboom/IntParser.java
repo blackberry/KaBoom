@@ -1,4 +1,4 @@
-package com.blackberry.logdriver.kaboom;
+package com.blackberry.kaboom;
 
 public class IntParser {
   private int intFromBytesPos;

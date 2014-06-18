@@ -1,4 +1,4 @@
-package com.blackberry.logdriver.kaboom;
+package com.blackberry.kaboom;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

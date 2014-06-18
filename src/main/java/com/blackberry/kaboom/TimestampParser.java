@@ -1,4 +1,4 @@
-package com.blackberry.logdriver.kaboom;
+package com.blackberry.kaboom;
 
 import java.text.ParseException;
 import java.util.Calendar;

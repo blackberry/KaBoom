@@ -13,7 +13,7 @@
  *  limitations under the License. 
  */
 
-package com.blackberry.logdriver.kaboom;
+package com.blackberry.kaboom;
 
 import java.io.IOException;
 import java.security.PrivilegedExceptionAction;

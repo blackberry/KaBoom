@@ -1,4 +1,4 @@
-package com.blackberry.logdriver.kaboom;
+package com.blackberry.kaboom;
 
 import static org.junit.Assert.*;
 
@@ -8,7 +8,7 @@ import java.util.TimeZone;
 
 import org.junit.Test;
 
-import com.blackberry.logdriver.kaboom.TimestampParser;
+import com.blackberry.kaboom.TimestampParser;
 
 public class TimestampParserTest {
 

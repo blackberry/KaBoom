@@ -1,10 +1,10 @@
-package com.blackberry.logdriver.kaboom;
+package com.blackberry.kaboom;
 
 import static org.junit.Assert.*;
 
 import org.junit.Test;
 
-import com.blackberry.logdriver.kaboom.PriParser;
+import com.blackberry.kaboom.PriParser;
 
 public class PriParserTest {
   @Test

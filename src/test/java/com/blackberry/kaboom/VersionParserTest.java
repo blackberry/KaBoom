@@ -1,10 +1,10 @@
-package com.blackberry.logdriver.kaboom;
+package com.blackberry.kaboom;
 
 import static org.junit.Assert.*;
 
 import org.junit.Test;
 
-import com.blackberry.logdriver.kaboom.VersionParser;
+import com.blackberry.kaboom.VersionParser;
 
 public class VersionParserTest {
   @Test
