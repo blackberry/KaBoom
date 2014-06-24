@@ -26,11 +26,14 @@ public class StateUtils {
   public static void getPartitionHosts(String kafkaSeedBrokers,
       List<String> topics, Map<String, String> partitionToHost,
       Map<String, List<String>> hostToPartition) {
+    LOG.debug("Getting partition to host mappings for {}", topics);
+
     // Map partition to host and host to partition
     for (String seed : kafkaSeedBrokers.split(",")) {
       String seedHost = seed.split(":")[0];
       int seedPort = Integer.parseInt(seed.split(":")[1]);
 
+      LOG.debug("Trying broker @ {}:{}", seedHost, seedPort);
       SimpleConsumer consumer = null;
       try {
         consumer = new SimpleConsumer(seedHost, seedPort, 100000, 64 * 1024,
@@ -56,10 +59,16 @@ public class StateUtils {
             parts.add(partition);
           }
         }
+      } catch (Exception e) {
+        LOG.error("Error getting meta data", e);
+        continue;
       } finally {
         if (consumer != null)
           consumer.close();
       }
+
+      LOG.debug("Successfully got partition to host mappings");
+      return;
     }
   }
 
