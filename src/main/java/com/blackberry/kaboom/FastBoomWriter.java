@@ -7,7 +7,12 @@ import java.nio.charset.Charset;
 import java.util.Random;
 import java.util.zip.Deflater;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class FastBoomWriter {
+  private static final Logger LOG = LoggerFactory
+      .getLogger(FastBoomWriter.class);
   private static final Charset UTF8 = Charset.forName("UTF8");
 
   private static final byte[] MAGIC_NUMBER = new byte[] { 'O', 'b', 'j', 1 };
@@ -115,11 +120,11 @@ public class FastBoomWriter {
   private long blockNumber = 0L;
 
   private long logBlockSecond = 0L;
-  private byte[] logBlockBytes = new byte[1024];
+  private byte[] logBlockBytes = new byte[1024 * 1024];
   private ByteBuffer logBlockBuffer = ByteBuffer.wrap(logBlockBytes);
 
   private long logLineCount;
-  private byte[] logLinesBytes = new byte[2 * 1024 * 1024];
+  private byte[] logLinesBytes = new byte[logBlockBytes.length - 41];
   private ByteBuffer logLinesBuffer = ByteBuffer.wrap(logLinesBytes);
 
   public void writeLine(long timestamp, byte[] message, int offset, int length)
@@ -130,7 +135,16 @@ public class FastBoomWriter {
     // If the buffer is too full to hold it, or the second has changed, then
     // write out the block first.
     if ((logBlockBuffer.position() > 0 && second != logBlockSecond)
-        || logBlockBytes.length - logBlockBuffer.position() < 10 + 10 + length) {
+        || logLinesBytes.length - logLinesBuffer.position() < 10 + 10 + length) {
+      if (logBlockBuffer.position() > 0 && second != logBlockSecond) {
+        LOG.debug("New Block ({} lines) (second changed from {} to {})",
+            logLineCount, logBlockSecond, second);
+      } else if (logLinesBytes.length - logLinesBuffer.position() < 10 + 10 + length) {
+        LOG.debug("New Block. ({} lines) (buffer full)", logLineCount);
+      } else {
+        LOG.debug("New Block. ({} lines)", logLineCount);
+      }
+
       writeLogBlock();
     }
 
@@ -138,6 +152,7 @@ public class FastBoomWriter {
       logBlockBuffer.clear();
       logLinesBuffer.clear();
       logLineCount = 0;
+      logBlockSecond = second;
 
       // second
       encodeLong(second);
@@ -152,12 +167,18 @@ public class FastBoomWriter {
       logBlockBuffer.put(longBytes, 0, longBuffer.position());
     }
 
-    encodeLong(ms);
-    logLinesBuffer.put(longBytes, 0, longBuffer.position());
+    try {
+      encodeLong(ms);
+      logLinesBuffer.put(longBytes, 0, longBuffer.position());
 
-    encodeLong(length);
-    logLinesBuffer.put(longBytes, 0, longBuffer.position());
-    logLinesBuffer.put(message, offset, length);
+      encodeLong(length);
+      logLinesBuffer.put(longBytes, 0, longBuffer.position());
+      logLinesBuffer.put(message, offset, length);
+    } catch (Exception e) {
+      LOG.info("Exception! Buffer:{}, Length:{}", logLinesBuffer, length, e);
+      LOG.info("???.  {} - {} < 10 + 10 + {}", logBlockBytes.length,
+          logBlockBuffer.position(), length);
+    }
 
     logLineCount++;
   }
@@ -190,18 +211,33 @@ public class FastBoomWriter {
   }
 
   private int compressedSize;
-  private byte[] compressedBlockBytes = new byte[2 * 1024 * 1024];
+  private byte[] compressedBlockBytes = new byte[256 * 1024];
   private Deflater deflater = new Deflater(6, true);
 
   private void writeAvroBlock() throws IOException {
+    LOG.debug("Writing Avro Block ({} bytes)", avroBlockBuffer.position());
     encodeLong(avroBlockRecordCount);
     out.write(longBytes, 0, longBuffer.position());
 
-    deflater.reset();
-    deflater.setInput(avroBlockBytes, 0, avroBlockBuffer.position());
-    deflater.finish();
-    compressedSize = deflater.deflate(compressedBlockBytes, 0,
-        compressedBlockBytes.length);
+    while (true) {
+      deflater.reset();
+      deflater.setInput(avroBlockBytes, 0, avroBlockBuffer.position());
+      deflater.finish();
+      compressedSize = deflater.deflate(compressedBlockBytes, 0,
+          compressedBlockBytes.length);
+      if (compressedSize == compressedBlockBytes.length) {
+        // it probably didn't actually compress all of it. Expand and retry
+        LOG.debug("Expanding compression buffer {} -> {}",
+            compressedBlockBytes.length, compressedBlockBytes.length * 2);
+        compressedBlockBytes = new byte[compressedBlockBytes.length * 2];
+      } else {
+        LOG.debug("Compressed {} bytes to {} bytes ({}% reduction)",
+            avroBlockBuffer.position(), compressedSize, Math
+                .round(100 - (100.0 * compressedSize / avroBlockBuffer
+                    .position())));
+        break;
+      }
+    }
 
     encodeLong(compressedSize);
     out.write(longBytes, 0, longBuffer.position());
