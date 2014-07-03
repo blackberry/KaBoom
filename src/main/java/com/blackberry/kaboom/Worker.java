@@ -86,7 +86,7 @@ public class Worker implements Runnable {
     this.partition = partition;
     this.consumerConfig = consumerConfig;
 
-    partitionId = partition + "-" + id;
+    partitionId = topic + "-" + partition;
 
     LOG.info("[{}] Created worker.", partitionId);
   }
