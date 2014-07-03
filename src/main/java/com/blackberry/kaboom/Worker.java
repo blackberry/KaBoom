@@ -31,6 +31,8 @@ public class Worker implements Runnable {
   private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
   private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
 
+  private String partitionId;
+
   private Consumer consumer;
   private long offset;
   private boolean stopping = false;
@@ -84,7 +86,9 @@ public class Worker implements Runnable {
     this.partition = partition;
     this.consumerConfig = consumerConfig;
 
-    LOG.info("Created worker for topic '{}', partition {}.", topic, partition);
+    partitionId = partition + "-" + id;
+
+    LOG.info("[{}] Created worker.", partitionId);
   }
 
   @Override
@@ -94,14 +98,14 @@ public class Worker implements Runnable {
     try {
       offset = getOffset();
     } catch (Exception e) {
-      LOG.error("Error getting offset.", e);
+      LOG.error("[{}] Error getting offset.", partitionId, e);
       return;
     }
 
     try {
       hostname = InetAddress.getLocalHost().getCanonicalHostName();
     } catch (UnknownHostException e) {
-      LOG.error("Can't determine local hostname");
+      LOG.error("[{}] Can't determine local hostname", partitionId);
       hostname = "unknown.host";
     }
 
@@ -110,8 +114,7 @@ public class Worker implements Runnable {
     consumer = new Consumer(consumerConfig, clientId, topic, partition, offset,
         MetricRegistrySingleton.getInstance().getMetricsRegistry());
 
-    LOG.info(
-        "Created worker for topic '{}', partition {}.  Starting at offset {}.",
+    LOG.info("[{}] Created worker.  Starting at offset {}.", partitionId,
         topic, partition, offset);
 
     byte[] bytes = new byte[1024 * 1024];
@@ -129,7 +132,7 @@ public class Worker implements Runnable {
     while (System.currentTimeMillis() < endTime) {
       try {
         if (stopping) {
-          LOG.info("Stopping Worker.");
+          LOG.info("[{}] Stopping Worker.", partitionId);
           break;
         }
 
@@ -142,8 +145,8 @@ public class Worker implements Runnable {
         if (consumer.getLastOffset() < offset) {
           // Sometimes the consumer may report data we've already seen.
           LOG.debug(
-              "Received offset {} which is before requested offset of {}.  Skipping message.",
-              consumer.getLastOffset(), offset);
+              "[{}] Received offset {} which is before requested offset of {}.  Skipping message.",
+              partitionId, consumer.getLastOffset(), offset);
           continue;
         }
 
@@ -151,8 +154,8 @@ public class Worker implements Runnable {
         linesread++;
 
         if (offset != consumer.getLastOffset()) {
-          LOG.info("Offset anomaly! Expected:{}, Got:{}", offset,
-              consumer.getLastOffset());
+          LOG.info("[{}] Offset anomaly! Expected:{}, Got:{}", partitionId,
+              offset, consumer.getLastOffset());
         }
         offset = consumer.getNextOffset();
 
@@ -164,7 +167,8 @@ public class Worker implements Runnable {
             // now. Come back if we need it.
             pos = 10;
           } else {
-            LOG.warn("Unrecognized encoding version: {}", version);
+            LOG.warn("[{}] Unrecognized encoding version: {}", partitionId,
+                version);
             pos = 0;
           }
         } else {
@@ -196,18 +200,20 @@ public class Worker implements Runnable {
           }
         } else {
           if (version == (byte) 0x00) {
-            LOG.debug("Failed to parse timestamp.  Using stored timestamp");
+            LOG.debug(
+                "[{}] Failed to parse timestamp.  Using stored timestamp",
+                partitionId);
             timestamp = longFromBytes(bytes, 2);
           } else {
-            LOG.error("Error parsing timestamp.");
+            LOG.error("[{}] Error parsing timestamp.", partitionId);
             timestamp = System.currentTimeMillis();
           }
         }
         getBoomWriter(timestamp).writeLine(timestamp, bytes, pos, length - pos);
 
       } catch (Throwable t) {
-        LOG.error("Error processing message.", t);
-        LOG.info("Deleting all tmp files");
+        LOG.error("[{}] Error processing message.", partitionId, t);
+        LOG.info("[{]] Deleting all tmp files", partitionId);
         for (Entry<Long, OutputFile> entry : outputFileMap.entrySet()) {
           entry.getValue().abort();
         }
@@ -216,24 +222,24 @@ public class Worker implements Runnable {
     }
 
     // Close all writers, and store offset
-    LOG.info("Closing all output files.");
+    LOG.info("[{}] Closing all output files.", partitionId);
     for (Entry<Long, OutputFile> entry : outputFileMap.entrySet()) {
       try {
         entry.getValue().getBoomWriter().close();
         entry.getValue().close();
       } catch (IOException e) {
-        LOG.error("Error closing output file", e);
+        LOG.error("[{}] Error closing output file", partitionId, e);
       }
     }
-    LOG.info("Storing processed offsets into ZooKeeper.");
+    LOG.info("[{}] Storing processed offsets into ZooKeeper.", partitionId);
     try {
       storeOffset();
     } catch (Exception e) {
-      LOG.error("Error storing offset in ZooKeeper", e);
+      LOG.error("[{}] Error storing offset in ZooKeeper", partitionId, e);
     }
 
-    LOG.info("Worker stopped. (Read {} lines.  Next offset is {})", linesread,
-        offset);
+    LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})",
+        partitionId, linesread, offset);
   }
 
   private void storeOffset() throws Exception {
@@ -340,23 +346,23 @@ public class Worker implements Runnable {
     }
 
     public void abort() {
-      LOG.info("Aborting output file.");
+      LOG.info("[{}] Aborting output file.", partitionId);
       try {
         boomWriter.close();
       } catch (IOException e) {
-        LOG.error("Error closing boom writer.", e);
+        LOG.error("[{}] Error closing boom writer.", partitionId, e);
       }
       try {
         out.close();
       } catch (IOException e) {
-        LOG.error("Error closing boom writer output file.", e);
+        LOG.error("[{}] Error closing boom writer output file.", partitionId, e);
       }
       synchronized (fsLock) {
         try {
           fs = tmpPath.getFileSystem(hConf);
           fs.delete(new Path(tmpdir), true);
         } catch (IOException e) {
-          LOG.error("Error deleting temp files.", e);
+          LOG.error("[{}] Error deleting temp files.", partitionId, e);
         }
       }
     }
@@ -381,13 +387,13 @@ public class Worker implements Runnable {
                   try {
                     fs = tmpPath.getFileSystem(hConf);
                   } catch (IOException e) {
-                    LOG.error("Error getting File System.", e);
+                    LOG.error("[{}] Error getting File System.", partitionId, e);
                   }
                 }
                 try {
                   fs.rename(tmpPath, finalPath);
                 } catch (Exception e) {
-                  LOG.error("Error renaming file.", e);
+                  LOG.error("[{}] Error renaming file.", partitionId, e);
                   abort();
                 }
                 fs.delete(new Path(tmpdir), true);
@@ -395,7 +401,7 @@ public class Worker implements Runnable {
               }
             });
       } catch (Exception e) {
-        LOG.error("Error creating file.", e);
+        LOG.error("[{}] Error creating file.", partitionId, e);
       }
 
     }
