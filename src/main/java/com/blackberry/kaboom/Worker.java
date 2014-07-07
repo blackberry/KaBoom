@@ -334,6 +334,7 @@ public class Worker implements Runnable {
                     LOG.error("Error getting File System.", e);
                   }
                 }
+                LOG.info("[{}] Opening {}.", partitionId, tmpPath);
                 out = fs.create(tmpPath, permissions, false, bufferSize,
                     replicas, blocksize, null);
                 boomWriter = new FastBoomWriter(out);
@@ -372,6 +373,7 @@ public class Worker implements Runnable {
     }
 
     public void close() throws IOException {
+      LOG.info("[{}] Closing {}.", partitionId, tmpPath);
       boomWriter.close();
       out.close();
 
@@ -391,6 +393,8 @@ public class Worker implements Runnable {
                   }
                 }
                 try {
+                  LOG.info("[{}] Moving {} to {}.", partitionId, tmpPath,
+                      finalPath);
                   fs.rename(tmpPath, finalPath);
                 } catch (Exception e) {
                   LOG.error("[{}] Error renaming file.", partitionId, e);
