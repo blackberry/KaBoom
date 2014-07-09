@@ -142,6 +142,9 @@ public class KaBoom {
     }
     hConf.setBoolean("fs.automatic.close", false);
 
+    // Start monitoring
+    MetricRegistrySingleton.getInstance().enableJmx();
+
     // Check for local hostname
     String hostname = props.getProperty("kaboom.hostname", InetAddress
         .getLocalHost().getHostName());
