@@ -7,8 +7,10 @@ import java.net.UnknownHostException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Calendar;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
@@ -29,7 +31,6 @@ import com.blackberry.krackle.consumer.ConsumerConfiguration;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
-import com.codahale.metrics.MetricRegistry;
 
 public class Worker implements Runnable {
   private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
@@ -70,7 +71,26 @@ public class Worker implements Runnable {
   private long endTime;
 
   private int lag = 0;
-  String lagGaugeName;
+  private String lagGaugeName;
+
+  // Add a static metric for the max messag lag
+  private static Set<Worker> workers = new HashSet<Worker>();
+  private static Object workersLock = new Object();
+  static {
+    MetricRegistrySingleton.getInstance().getMetricsRegistry()
+        .register("kaboom:total:max message lag", new Gauge<Integer>() {
+          @Override
+          public Integer getValue() {
+            int maxLag = 0;
+            synchronized (workersLock) {
+              for (Worker w : workers) {
+                maxLag = Math.max(maxLag, w.getLag());
+              }
+            }
+            return maxLag;
+          }
+        });
+  }
 
   private static final String id = UUID.randomUUID().toString();
 
@@ -95,8 +115,8 @@ public class Worker implements Runnable {
 
     partitionId = topic + "-" + partition;
 
-    lagGaugeName = MetricRegistry.name(Worker.class, "message lag "
-        + partitionId);
+    lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
+
     if (MetricRegistrySingleton.getInstance().getMetricsRegistry()
         .getGauges(new MetricFilter() {
           @Override
@@ -116,162 +136,172 @@ public class Worker implements Runnable {
           }
         });
 
+    synchronized (workersLock) {
+      workers.add(this);
+    }
     LOG.info("[{}] Created worker.", partitionId);
   }
 
   @Override
   public void run() {
-    zkPath = ZK_ROOT + "/topics/" + topic + "/" + partition;
-
     try {
-      offset = getOffset();
-    } catch (Exception e) {
-      LOG.error("[{}] Error getting offset.", partitionId, e);
-      return;
-    }
+      zkPath = ZK_ROOT + "/topics/" + topic + "/" + partition;
 
-    try {
-      hostname = InetAddress.getLocalHost().getCanonicalHostName();
-    } catch (UnknownHostException e) {
-      LOG.error("[{}] Can't determine local hostname", partitionId);
-      hostname = "unknown.host";
-    }
-
-    String clientId = "kaboom-" + hostname;
-
-    consumer = new Consumer(consumerConfig, clientId, topic, partition, offset,
-        MetricRegistrySingleton.getInstance().getMetricsRegistry());
-
-    LOG.info("[{}] Created worker.  Starting at offset {}.", partitionId,
-        topic, partition, offset);
-
-    byte[] bytes = new byte[1024 * 1024];
-    int length = -1;
-    long timestamp;
-
-    byte version = -1;
-
-    int pos = 0;
-    PriParser pri = new PriParser();
-    VersionParser ver = new VersionParser();
-    TimestampParser tsp = new TimestampParser();
-
-    long linesread = 0;
-    while (System.currentTimeMillis() < endTime) {
       try {
-        if (stopping) {
-          LOG.info("[{}] Stopping Worker.", partitionId);
-          break;
-        }
-
-        length = consumer.getMessage(bytes, 0, bytes.length);
-
-        if (length == -1) {
-          continue;
-        }
-
-        if (consumer.getLastOffset() < offset) {
-          // Sometimes the consumer may report data we've already seen.
-          LOG.debug(
-              "[{}] Received offset {} which is before requested offset of {}.  Skipping message.",
-              partitionId, consumer.getLastOffset(), offset);
-          continue;
-        }
-
-        // LOG.info("Read message: {}", new String(bytes, 0, length, "UTF8"));
-        linesread++;
-
-        if (offset != consumer.getLastOffset()) {
-          LOG.info("[{}] Offset anomaly! Expected:{}, Got:{}", partitionId,
-              offset, consumer.getLastOffset());
-        }
-
-        lag = (int) (consumer.getHighWaterMark() - offset);
-        offset = consumer.getNextOffset();
-
-        // Check for version
-        if (bytes[0] == (byte) 0xFE) {
-          version = bytes[1];
-          if (version == (byte) 0x00) {
-            // Version 0 has a timestamp in the front, so we can skip that for
-            // now. Come back if we need it.
-            pos = 10;
-          } else {
-            LOG.warn("[{}] Unrecognized encoding version: {}", partitionId,
-                version);
-            pos = 0;
-          }
-        } else {
-          // version -1 is a raw log
-          version = (byte) 0xFF;
-          pos = 0;
-        }
-
-        // Optional PRI at the start of the line.
-        if (pri.parsePri(bytes, pos, length)) {
-          pos += pri.getPriLength();
-        }
-
-        // On the off chance that someone is following RFC5424 and has
-        // inserted a version in the log line.
-        if (ver.parseVersion(bytes, pos, length - pos)) {
-          // Skip the length of the version and the following space.
-          pos += ver.getVersionLength() + 1;
-        }
-
-        tsp.parse(bytes, pos, length - pos);
-        if (tsp.getError() == TimestampParser.NO_ERROR) {
-          timestamp = tsp.getTimestamp();
-          // Move position to the end of the timestamp.
-          pos += tsp.getLength();
-          // If the next char is a space, skip that too.
-          if (pos < length && bytes[pos] == ' ') {
-            pos++;
-          }
-        } else {
-          if (version == (byte) 0x00) {
-            LOG.debug(
-                "[{}] Failed to parse timestamp.  Using stored timestamp",
-                partitionId);
-            timestamp = longFromBytes(bytes, 2);
-          } else {
-            LOG.error("[{}] Error parsing timestamp.", partitionId);
-            timestamp = System.currentTimeMillis();
-          }
-        }
-        getBoomWriter(timestamp).writeLine(timestamp, bytes, pos, length - pos);
-
-      } catch (Throwable t) {
-        LOG.error("[{}] Error processing message.", partitionId, t);
-        LOG.info("[{}] Deleting all tmp files", partitionId);
-        for (Entry<Long, OutputFile> entry : outputFileMap.entrySet()) {
-          entry.getValue().abort();
-        }
+        offset = getOffset();
+      } catch (Exception e) {
+        LOG.error("[{}] Error getting offset.", partitionId, e);
         return;
       }
-    }
 
-    // Close all writers, and store offset
-    LOG.info("[{}] Closing all output files.", partitionId);
-    for (Entry<Long, OutputFile> entry : outputFileMap.entrySet()) {
       try {
-        entry.getValue().getBoomWriter().close();
-        entry.getValue().close();
-      } catch (IOException e) {
-        LOG.error("[{}] Error closing output file", partitionId, e);
+        hostname = InetAddress.getLocalHost().getCanonicalHostName();
+      } catch (UnknownHostException e) {
+        LOG.error("[{}] Can't determine local hostname", partitionId);
+        hostname = "unknown.host";
+      }
+
+      String clientId = "kaboom-" + hostname;
+
+      consumer = new Consumer(consumerConfig, clientId, topic, partition,
+          offset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
+
+      LOG.info("[{}] Created worker.  Starting at offset {}.", partitionId,
+          topic, partition, offset);
+
+      byte[] bytes = new byte[1024 * 1024];
+      int length = -1;
+      long timestamp;
+
+      byte version = -1;
+
+      int pos = 0;
+      PriParser pri = new PriParser();
+      VersionParser ver = new VersionParser();
+      TimestampParser tsp = new TimestampParser();
+
+      long linesread = 0;
+      while (System.currentTimeMillis() < endTime) {
+        try {
+          if (stopping) {
+            LOG.info("[{}] Stopping Worker.", partitionId);
+            break;
+          }
+
+          length = consumer.getMessage(bytes, 0, bytes.length);
+
+          if (length == -1) {
+            continue;
+          }
+
+          if (consumer.getLastOffset() < offset) {
+            // Sometimes the consumer may report data we've already seen.
+            LOG.debug(
+                "[{}] Received offset {} which is before requested offset of {}.  Skipping message.",
+                partitionId, consumer.getLastOffset(), offset);
+            continue;
+          }
+
+          // LOG.info("Read message: {}", new String(bytes, 0, length, "UTF8"));
+          linesread++;
+
+          if (offset != consumer.getLastOffset()) {
+            LOG.info("[{}] Offset anomaly! Expected:{}, Got:{}", partitionId,
+                offset, consumer.getLastOffset());
+          }
+
+          lag = (int) (consumer.getHighWaterMark() - offset);
+          offset = consumer.getNextOffset();
+
+          // Check for version
+          if (bytes[0] == (byte) 0xFE) {
+            version = bytes[1];
+            if (version == (byte) 0x00) {
+              // Version 0 has a timestamp in the front, so we can skip that for
+              // now. Come back if we need it.
+              pos = 10;
+            } else {
+              LOG.warn("[{}] Unrecognized encoding version: {}", partitionId,
+                  version);
+              pos = 0;
+            }
+          } else {
+            // version -1 is a raw log
+            version = (byte) 0xFF;
+            pos = 0;
+          }
+
+          // Optional PRI at the start of the line.
+          if (pri.parsePri(bytes, pos, length)) {
+            pos += pri.getPriLength();
+          }
+
+          // On the off chance that someone is following RFC5424 and has
+          // inserted a version in the log line.
+          if (ver.parseVersion(bytes, pos, length - pos)) {
+            // Skip the length of the version and the following space.
+            pos += ver.getVersionLength() + 1;
+          }
+
+          tsp.parse(bytes, pos, length - pos);
+          if (tsp.getError() == TimestampParser.NO_ERROR) {
+            timestamp = tsp.getTimestamp();
+            // Move position to the end of the timestamp.
+            pos += tsp.getLength();
+            // If the next char is a space, skip that too.
+            if (pos < length && bytes[pos] == ' ') {
+              pos++;
+            }
+          } else {
+            if (version == (byte) 0x00) {
+              LOG.debug(
+                  "[{}] Failed to parse timestamp.  Using stored timestamp",
+                  partitionId);
+              timestamp = longFromBytes(bytes, 2);
+            } else {
+              LOG.error("[{}] Error parsing timestamp.", partitionId);
+              timestamp = System.currentTimeMillis();
+            }
+          }
+          getBoomWriter(timestamp).writeLine(timestamp, bytes, pos,
+              length - pos);
+
+        } catch (Throwable t) {
+          LOG.error("[{}] Error processing message.", partitionId, t);
+          LOG.info("[{}] Deleting all tmp files", partitionId);
+          for (Entry<Long, OutputFile> entry : outputFileMap.entrySet()) {
+            entry.getValue().abort();
+          }
+          return;
+        }
+      }
+
+      // Close all writers, and store offset
+      LOG.info("[{}] Closing all output files.", partitionId);
+      for (Entry<Long, OutputFile> entry : outputFileMap.entrySet()) {
+        try {
+          entry.getValue().getBoomWriter().close();
+          entry.getValue().close();
+        } catch (IOException e) {
+          LOG.error("[{}] Error closing output file", partitionId, e);
+        }
+      }
+      LOG.info("[{}] Storing processed offsets into ZooKeeper.", partitionId);
+      try {
+        storeOffset();
+      } catch (Exception e) {
+        LOG.error("[{}] Error storing offset in ZooKeeper", partitionId, e);
+      }
+
+      MetricRegistrySingleton.getInstance().getMetricsRegistry()
+          .remove(lagGaugeName);
+      LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})",
+          partitionId, linesread, offset);
+    } finally {
+      synchronized (workersLock) {
+        workers.remove(this);
       }
     }
-    LOG.info("[{}] Storing processed offsets into ZooKeeper.", partitionId);
-    try {
-      storeOffset();
-    } catch (Exception e) {
-      LOG.error("[{}] Error storing offset in ZooKeeper", partitionId, e);
-    }
-
-    MetricRegistrySingleton.getInstance().getMetricsRegistry()
-        .remove(lagGaugeName);
-    LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})",
-        partitionId, linesread, offset);
   }
 
   private void storeOffset() throws Exception {
@@ -509,4 +539,7 @@ public class Worker implements Runnable {
     stopping = true;
   }
 
+  public int getLag() {
+    return lag;
+  }
 }
