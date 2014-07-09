@@ -3,7 +3,6 @@ package com.blackberry.kaboom;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.net.InetAddress;
@@ -261,8 +260,8 @@ public class KaBoom {
 
         try {
           FileSystem.get(hConf).close();
-        } catch (IOException e) {
-          LOG.error("Error closing Hadoop filesystem");
+        } catch (Throwable t) {
+          LOG.error("Error closing Hadoop filesystem", t);
         }
 
         try {
