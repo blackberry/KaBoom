@@ -184,8 +184,7 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter {
             }
           }
           if (chosenClient == null) {
-            LOG.error("Couldn't find client to assign partition to");
-            continue;
+            chosenClient = sortedClients.get(0);
           }
 
           LOG.info("Assigning partition {} to client {}", partition,
