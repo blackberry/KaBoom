@@ -26,6 +26,8 @@ import org.slf4j.LoggerFactory;
 import com.blackberry.krackle.MetricRegistrySingleton;
 import com.blackberry.krackle.consumer.Consumer;
 import com.blackberry.krackle.consumer.ConsumerConfiguration;
+import com.codahale.metrics.Gauge;
+import com.codahale.metrics.MetricRegistry;
 
 public class Worker implements Runnable {
   private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
@@ -65,6 +67,8 @@ public class Worker implements Runnable {
 
   private long endTime;
 
+  private int lag = 0;
+
   private static final String id = UUID.randomUUID().toString();
 
   public Worker(ConsumerConfiguration consumerConfig, Configuration hConf,
@@ -87,6 +91,18 @@ public class Worker implements Runnable {
     this.consumerConfig = consumerConfig;
 
     partitionId = topic + "-" + partition;
+
+    MetricRegistrySingleton
+        .getInstance()
+        .getMetricsRegistry()
+        .register(
+            MetricRegistry.name(Worker.class, "message lag " + partitionId),
+            new Gauge<Integer>() {
+              @Override
+              public Integer getValue() {
+                return lag;
+              }
+            });
 
     LOG.info("[{}] Created worker.", partitionId);
   }
@@ -157,6 +173,8 @@ public class Worker implements Runnable {
           LOG.info("[{}] Offset anomaly! Expected:{}, Got:{}", partitionId,
               offset, consumer.getLastOffset());
         }
+
+        lag = (int) (consumer.getHighWaterMark() - offset);
         offset = consumer.getNextOffset();
 
         // Check for version
