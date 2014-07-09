@@ -27,6 +27,8 @@ import com.blackberry.krackle.MetricRegistrySingleton;
 import com.blackberry.krackle.consumer.Consumer;
 import com.blackberry.krackle.consumer.ConsumerConfiguration;
 import com.codahale.metrics.Gauge;
+import com.codahale.metrics.Metric;
+import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 
 public class Worker implements Runnable {
@@ -92,17 +94,26 @@ public class Worker implements Runnable {
 
     partitionId = topic + "-" + partition;
 
-    MetricRegistrySingleton
-        .getInstance()
-        .getMetricsRegistry()
-        .register(
-            MetricRegistry.name(Worker.class, "message lag " + partitionId),
-            new Gauge<Integer>() {
-              @Override
-              public Integer getValue() {
-                return lag;
-              }
-            });
+    final String lagGaugeName = MetricRegistry.name(Worker.class,
+        "message lag " + partitionId);
+    if (MetricRegistrySingleton.getInstance().getMetricsRegistry()
+        .getGauges(new MetricFilter() {
+          @Override
+          public boolean matches(String s, Metric m) {
+            return s.equals(lagGaugeName);
+          }
+        }).size() > 0) {
+      LOG.debug("Removing existing gauge for '{}'", lagGaugeName);
+      MetricRegistrySingleton.getInstance().getMetricsRegistry()
+          .remove(lagGaugeName);
+    }
+    MetricRegistrySingleton.getInstance().getMetricsRegistry()
+        .register(lagGaugeName, new Gauge<Integer>() {
+          @Override
+          public Integer getValue() {
+            return lag;
+          }
+        });
 
     LOG.info("[{}] Created worker.", partitionId);
   }
