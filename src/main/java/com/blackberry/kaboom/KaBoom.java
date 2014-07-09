@@ -29,8 +29,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 
+import com.blackberry.krackle.MetricRegistrySingleton;
 import com.blackberry.krackle.consumer.ConsumerConfiguration;
-
 
 public class KaBoom {
   private static final Logger LOG = LoggerFactory.getLogger(KaBoom.class);
@@ -65,6 +65,11 @@ public class KaBoom {
       System.err.println("Error getting config file.");
       t.printStackTrace();
       System.exit(1);
+    }
+
+    // Check to see if we need to enable console reporting
+    if (Boolean.parseBoolean(System.getProperty("metrics.to.console", "false"))) {
+      MetricRegistrySingleton.getInstance().enableConsole();
     }
 
     // props.list(System.out);
