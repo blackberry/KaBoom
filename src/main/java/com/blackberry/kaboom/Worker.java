@@ -70,6 +70,7 @@ public class Worker implements Runnable {
   private long endTime;
 
   private int lag = 0;
+  String lagGaugeName;
 
   private static final String id = UUID.randomUUID().toString();
 
@@ -94,8 +95,8 @@ public class Worker implements Runnable {
 
     partitionId = topic + "-" + partition;
 
-    final String lagGaugeName = MetricRegistry.name(Worker.class,
-        "message lag " + partitionId);
+    lagGaugeName = MetricRegistry.name(Worker.class, "message lag "
+        + partitionId);
     if (MetricRegistrySingleton.getInstance().getMetricsRegistry()
         .getGauges(new MetricFilter() {
           @Override
@@ -267,6 +268,8 @@ public class Worker implements Runnable {
       LOG.error("[{}] Error storing offset in ZooKeeper", partitionId, e);
     }
 
+    MetricRegistrySingleton.getInstance().getMetricsRegistry()
+        .remove(lagGaugeName);
     LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})",
         partitionId, linesread, offset);
   }
