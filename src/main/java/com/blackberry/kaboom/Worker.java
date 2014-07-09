@@ -231,7 +231,7 @@ public class Worker implements Runnable {
 
       } catch (Throwable t) {
         LOG.error("[{}] Error processing message.", partitionId, t);
-        LOG.info("[{]] Deleting all tmp files", partitionId);
+        LOG.info("[{}] Deleting all tmp files", partitionId);
         for (Entry<Long, OutputFile> entry : outputFileMap.entrySet()) {
           entry.getValue().abort();
         }
