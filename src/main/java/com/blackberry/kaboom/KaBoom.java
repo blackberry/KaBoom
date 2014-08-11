@@ -67,7 +67,8 @@ public class KaBoom {
     }
 
     // Check to see if we need to enable console reporting
-    if (Boolean.parseBoolean(System.getProperty("metrics.to.console", "false"))) {
+    if (Boolean.parseBoolean(System.getProperty("metrics.to.console", "false")
+        .trim())) {
       MetricRegistrySingleton.getInstance().enableConsole();
     }
 
