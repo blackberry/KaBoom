@@ -276,7 +276,7 @@ public class Worker implements Runnable {
            * 			and log on the information passed to getBoomWriter.
            */
           if((length - pos) < 0)
-        	  LOG.info("[{}] Length - Offset is < 0: timestamp: {}, bytes: {}, pos: {}, length: {}", partitionId, timestamp, bytes, pos, length);
+        	  LOG.info("[{}] Length - Offset is < 0: timestamp: {}, pos: {}, length: {}", partitionId, timestamp, pos, length);
           
           getBoomWriter(timestamp).writeLine(timestamp, bytes, pos,
               length - pos);
