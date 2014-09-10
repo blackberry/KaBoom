@@ -70,18 +70,21 @@ public class Worker implements Runnable {
 
   private long endTime;
 
-  private int lag = 0;
+  private long lag = 0;
   private String lagGaugeName;
 
   // Add a static metric for the max messag lag
   private static Set<Worker> workers = new HashSet<Worker>();
   private static Object workersLock = new Object();
+  /*
+   * aryder: change Integer to Long
+   */
   static {
     MetricRegistrySingleton.getInstance().getMetricsRegistry()
-        .register("kaboom:total:max message lag", new Gauge<Integer>() {
+        .register("kaboom:total:max message lag", new Gauge<Long>() {
           @Override
-          public Integer getValue() {
-            int maxLag = 0;
+          public Long getValue() {
+            long maxLag = 0;
             synchronized (workersLock) {
               for (Worker w : workers) {
                 maxLag = Math.max(maxLag, w.getLag());
@@ -128,10 +131,14 @@ public class Worker implements Runnable {
       MetricRegistrySingleton.getInstance().getMetricsRegistry()
           .remove(lagGaugeName);
     }
+    
+    /*
+     * aryder: Changed Integer to Long
+     */
     MetricRegistrySingleton.getInstance().getMetricsRegistry()
-        .register(lagGaugeName, new Gauge<Integer>() {
+        .register(lagGaugeName, new Gauge<Long>() {
           @Override
-          public Integer getValue() {
+          public Long getValue() {
             return lag;
           }
         });
@@ -263,6 +270,14 @@ public class Worker implements Runnable {
               timestamp = System.currentTimeMillis();
             }
           }
+          
+          /*
+           * aryder: 	Adding if statement to catch if length - pos < 0,
+           * 			and log on the information passed to getBoomWriter.
+           */
+          if((length - pos) < 0)
+        	  LOG.info("[{}] Length - Offset is < 0: timestamp: {}, bytes: {}, pos: {}, length: {}", partitionId, timestamp, bytes, pos, length);
+          
           getBoomWriter(timestamp).writeLine(timestamp, bytes, pos,
               length - pos);
 
@@ -538,8 +553,10 @@ public class Worker implements Runnable {
     LOG.info("Stop request received.");
     stopping = true;
   }
-
-  public int getLag() {
+/*
+ * aryder: changed int to long
+ */
+  public long getLag() {
     return lag;
   }
 }

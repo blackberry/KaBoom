@@ -167,13 +167,20 @@ public class FastBoomWriter {
       logBlockBuffer.put(longBytes, 0, longBuffer.position());
     }
 
-    encodeLong(ms);
-    logLinesBuffer.put(longBytes, 0, longBuffer.position());
-
-    encodeLong(length);
-    logLinesBuffer.put(longBytes, 0, longBuffer.position());
-    logLinesBuffer.put(message, offset, length);
-
+    /*
+     * aryder: added try-catch back in to catch errors
+     */
+    try {
+	    encodeLong(ms);
+	    logLinesBuffer.put(longBytes, 0, longBuffer.position());
+	
+	    encodeLong(length);
+	    logLinesBuffer.put(longBytes, 0, longBuffer.position());
+	    logLinesBuffer.put(message, offset, length);
+    } catch (Exception e) {
+    	LOG.info("Exception! Buffer:{}, Length:{}", logLinesBuffer, length, e);
+    	LOG.info("???.  {} - {} < 10 + 10 + {}", logBlockBytes.length, logBlockBuffer.position(), length);
+    }
     logLineCount++;
   }
 
