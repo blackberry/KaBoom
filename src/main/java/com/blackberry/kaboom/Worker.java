@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TimeZone;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.curator.framework.CuratorFramework;
@@ -95,7 +94,7 @@ public class Worker implements Runnable {
         });
   }
 
-  private static final String id = UUID.randomUUID().toString();
+  
 
   public Worker(ConsumerConfiguration consumerConfig, Configuration hConf,
       CuratorFramework curator, String topic, int partition, long runDuration,
@@ -391,8 +390,12 @@ public class Worker implements Runnable {
       dir = fillInTemplate(hour);
       i = counter.getAndIncrement();
 
-      filename = String.format("kaboom-%s-%08d.bm", id, i);
-      tmpdir = String.format("%s/_tmp_kaboom_%s_%08d", dir, id, i);
+      /*
+       * 	Related to IPGBD-1028 
+       * 	Output topic-partitionId-offset-incrementval.bm
+       */
+      filename = String.format("%s-%s-%08d-%08d.bm", topic, partitionId, offset, i);
+      tmpdir = String.format("%s/_tmp_%s-%s-%08d-%08d.bm", dir, topic, partitionId, offset, i);
 
       finalPath = new Path(dir + "/" + filename);
       tmpPath = new Path(tmpdir + "/" + filename);
@@ -412,8 +415,8 @@ public class Worker implements Runnable {
                   }
                 }
                 LOG.info("[{}] Opening {}.", partitionId, tmpPath);
-                out = fs.create(tmpPath, permissions, false, bufferSize,
-                    replicas, blocksize, null);
+                out = fs.create(tmpPath, permissions, false, bufferSize, replicas, blocksize, null);
+                
                 boomWriter = new FastBoomWriter(out);
                 return null;
               }
