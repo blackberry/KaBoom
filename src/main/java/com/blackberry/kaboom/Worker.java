@@ -216,7 +216,7 @@ public class Worker implements Runnable {
                 offset, consumer.getLastOffset());
           }
 
-          lag = (int) (consumer.getHighWaterMark() - offset);
+          lag = consumer.getHighWaterMark() - offset;
           offset = consumer.getNextOffset();
 
           // Check for version
@@ -258,7 +258,7 @@ public class Worker implements Runnable {
             //however we still have the rest of the last message in the byte buffer and
             //parsing the timestamp will push us past then end of the line
             if (pos > length) {
-            	Log.error("Error: parsing timestamp has went beyond length of the message");
+            	LOG.error("Error: parsing timestamp has went beyond length of the message");
             	continue;
             }
             // If the next char is a space, skip that too.
