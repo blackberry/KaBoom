@@ -254,6 +254,13 @@ public class Worker implements Runnable {
             timestamp = tsp.getTimestamp();
             // Move position to the end of the timestamp.
             pos += tsp.getLength();
+            //mbruce: occasionally we get a line that is truncated partway through the timestamp, 
+            //however we still have the rest of the last message in the byte buffer and
+            //parsing the timestamp will push us past then end of the line
+            if (pos > length) {
+            	Log.error("Error: parsing timestamp has went beyond length of the message");
+            	continue;
+            }
             // If the next char is a space, skip that too.
             if (pos < length && bytes[pos] == ' ') {
               pos++;
