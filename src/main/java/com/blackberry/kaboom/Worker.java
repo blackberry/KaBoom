@@ -401,8 +401,8 @@ public class Worker implements Runnable {
        * 	Related to IPGBD-1028 
        * 	Output topic-partitionId-offset-incrementval.bm
        */
-      filename = String.format("%s-%s-%08d-%08d.bm", topic, partitionId, offset, i);
-      tmpdir = String.format("%s/_tmp_%s-%s-%08d-%08d.bm", dir, topic, partitionId, offset, i);
+      filename = String.format("%s-%08d-%08d.bm", partitionId, offset, i);
+      tmpdir = String.format("%s/_tmp_%s-%08d-%08d.bm", dir, partitionId, offset, i);
 
       finalPath = new Path(dir + "/" + filename);
       tmpPath = new Path(tmpdir + "/" + filename);
