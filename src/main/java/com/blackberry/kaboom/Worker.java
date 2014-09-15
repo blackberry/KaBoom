@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TimeZone;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.curator.framework.CuratorFramework;
@@ -70,18 +69,21 @@ public class Worker implements Runnable {
 
   private long endTime;
 
-  private int lag = 0;
+  private long lag = 0;
   private String lagGaugeName;
 
   // Add a static metric for the max messag lag
   private static Set<Worker> workers = new HashSet<Worker>();
   private static Object workersLock = new Object();
+  /*
+   * aryder: change Integer to Long
+   */
   static {
     MetricRegistrySingleton.getInstance().getMetricsRegistry()
-        .register("kaboom:total:max message lag", new Gauge<Integer>() {
+        .register("kaboom:total:max message lag", new Gauge<Long>() {
           @Override
-          public Integer getValue() {
-            int maxLag = 0;
+          public Long getValue() {
+            long maxLag = 0;
             synchronized (workersLock) {
               for (Worker w : workers) {
                 maxLag = Math.max(maxLag, w.getLag());
@@ -92,7 +94,7 @@ public class Worker implements Runnable {
         });
   }
 
-  private static final String id = UUID.randomUUID().toString();
+  
 
   public Worker(ConsumerConfiguration consumerConfig, Configuration hConf,
       CuratorFramework curator, String topic, int partition, long runDuration,
@@ -128,10 +130,14 @@ public class Worker implements Runnable {
       MetricRegistrySingleton.getInstance().getMetricsRegistry()
           .remove(lagGaugeName);
     }
+    
+    /*
+     * aryder: Changed Integer to Long
+     */
     MetricRegistrySingleton.getInstance().getMetricsRegistry()
-        .register(lagGaugeName, new Gauge<Integer>() {
+        .register(lagGaugeName, new Gauge<Long>() {
           @Override
-          public Integer getValue() {
+          public Long getValue() {
             return lag;
           }
         });
@@ -210,7 +216,7 @@ public class Worker implements Runnable {
                 offset, consumer.getLastOffset());
           }
 
-          lag = (int) (consumer.getHighWaterMark() - offset);
+          lag = consumer.getHighWaterMark() - offset;
           offset = consumer.getNextOffset();
 
           // Check for version
@@ -248,6 +254,13 @@ public class Worker implements Runnable {
             timestamp = tsp.getTimestamp();
             // Move position to the end of the timestamp.
             pos += tsp.getLength();
+            //mbruce: occasionally we get a line that is truncated partway through the timestamp, 
+            //however we still have the rest of the last message in the byte buffer and
+            //parsing the timestamp will push us past then end of the line
+            if (pos > length) {
+            	LOG.error("Error: parsing timestamp has went beyond length of the message");
+            	continue;
+            }
             // If the next char is a space, skip that too.
             if (pos < length && bytes[pos] == ' ') {
               pos++;
@@ -263,6 +276,14 @@ public class Worker implements Runnable {
               timestamp = System.currentTimeMillis();
             }
           }
+          
+          /*
+           * aryder: 	Adding if statement to catch if length - pos < 0,
+           * 			and log on the information passed to getBoomWriter.
+           */
+          if((length - pos) < 0)
+        	  LOG.info("[{}] Length - Offset is < 0: timestamp: {}, pos: {}, length: {}", partitionId, timestamp, pos, length);
+          
           getBoomWriter(timestamp).writeLine(timestamp, bytes, pos,
               length - pos);
 
@@ -376,8 +397,12 @@ public class Worker implements Runnable {
       dir = fillInTemplate(hour);
       i = counter.getAndIncrement();
 
-      filename = String.format("kaboom-%s-%08d.bm", id, i);
-      tmpdir = String.format("%s/_tmp_kaboom_%s_%08d", dir, id, i);
+      /*
+       * 	Related to IPGBD-1028 
+       * 	Output topic-partitionId-offset-incrementval.bm
+       */
+      filename = String.format("%s-%08d-%08d.bm", partitionId, offset, i);
+      tmpdir = String.format("%s/_tmp_%s-%08d-%08d.bm", dir, partitionId, offset, i);
 
       finalPath = new Path(dir + "/" + filename);
       tmpPath = new Path(tmpdir + "/" + filename);
@@ -397,8 +422,8 @@ public class Worker implements Runnable {
                   }
                 }
                 LOG.info("[{}] Opening {}.", partitionId, tmpPath);
-                out = fs.create(tmpPath, permissions, false, bufferSize,
-                    replicas, blocksize, null);
+                out = fs.create(tmpPath, permissions, false, bufferSize, replicas, blocksize, null);
+                
                 boomWriter = new FastBoomWriter(out);
                 return null;
               }
@@ -538,8 +563,10 @@ public class Worker implements Runnable {
     LOG.info("Stop request received.");
     stopping = true;
   }
-
-  public int getLag() {
+/*
+ * aryder: changed int to long
+ */
+  public long getLag() {
     return lag;
   }
 }
