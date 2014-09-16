@@ -4,7 +4,7 @@
   xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.blackberry.kaboom</groupId>
-  <version>trunk-HDP2.1</version>
+  <version>6.0.1-HDP2.1</version>
   <artifactId>kaboom</artifactId>
   <name>KaBoom</name>
   <url>http://blackberry.com</url>
@@ -75,6 +75,11 @@
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka_2.9.2</artifactId>
       <version>0.8.1.1</version>
+    </dependency>
+    <dependency>
+    	<groupId>com.codahale.metrics</groupId>
+    	<artifactId>metrics-core</artifactId>
+    	<version>3.0.2</version>
     </dependency>
 
     <!-- Test dependencies -->
