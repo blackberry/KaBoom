@@ -94,6 +94,21 @@ public class Worker implements Runnable {
         });
   }
 
+	static {
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				.register("kaboom:total:sum message lag", new Gauge<Long>() {
+					@Override
+					public Long getValue() {
+						long sumLag = 0;
+						synchronized (workersLock) {
+							for (Worker w : workers) {
+								sumLag += w.getLag();
+							}
+						}
+						return sumLag;
+					}
+				});
+	}
   
 
   public Worker(ConsumerConfiguration consumerConfig, Configuration hConf,
