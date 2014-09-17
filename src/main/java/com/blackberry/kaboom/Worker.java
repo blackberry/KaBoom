@@ -70,14 +70,13 @@ public class Worker implements Runnable {
 	private long endTime;
 
 	private long lag = 0;
+	private int lag_sec = 0;
 	private String lagGaugeName;
+	private String lagSecGaugeName;
 
-	// Add a static metric for the max messag lag
 	private static Set<Worker> workers = new HashSet<Worker>();
 	private static Object workersLock = new Object();
-	/*
-	 * aryder: change Integer to Long
-	 */
+
 	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
 				.register("kaboom:total:max message lag", new Gauge<Long>() {
@@ -90,6 +89,22 @@ public class Worker implements Runnable {
 							}
 						}
 						return maxLag;
+					}
+				});
+	}
+
+	static {
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				.register("kaboom:total:max message lag sec", new Gauge<Integer>() {
+					@Override
+					public Integer getValue() {
+						int maxLagSec = 0;
+						synchronized (workersLock) {
+							for (Worker w : workers) {
+								maxLagSec = Math.max(maxLagSec, w.getLagSec());
+							}
+						}
+						return maxLagSec;
 					}
 				});
 	}
@@ -132,22 +147,32 @@ public class Worker implements Runnable {
 		partitionId = topic + "-" + partition;
 
 		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
-
-		if (MetricRegistrySingleton.getInstance().getMetricsRegistry()
-				.getGauges(new MetricFilter() {
-					@Override
-					public boolean matches(String s, Metric m) {
-						return s.equals(lagGaugeName);
-					}
-				}).size() > 0) {
-			LOG.debug("Removing existing gauge for '{}'", lagGaugeName);
-			MetricRegistrySingleton.getInstance().getMetricsRegistry()
-					.remove(lagGaugeName);
-		}
+		lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
 
 		/*
-		 * aryder: Changed Integer to Long
+		 * dariens: iterate through an array of metrics that need to be removed when new 
+		 * workers are instantiated 
 		 */
+				
+		String[] metrics_to_remove = {lagGaugeName, lagSecGaugeName};
+		
+		for (final String metric_name: metrics_to_remove)
+		{
+			if (MetricRegistrySingleton.getInstance().getMetricsRegistry()
+					.getGauges(new MetricFilter() {
+						@Override
+						public boolean matches(String s, Metric m) {
+							return s.equals(metric_name);
+						}
+					}).size() > 0) {
+				LOG.debug("Removing existing metric: '{}'", metric_name);
+				MetricRegistrySingleton.getInstance().getMetricsRegistry()
+						.remove(metric_name);
+			}			
+		}
+		
+		// Add: long lagGaugeName
+		
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
 				.register(lagGaugeName, new Gauge<Long>() {
 					@Override
@@ -155,7 +180,17 @@ public class Worker implements Runnable {
 						return lag;
 					}
 				});
-
+		
+		// Add: int lagSecGaugeName
+		
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				.register(lagSecGaugeName, new Gauge<Integer>() {
+					@Override
+					public Integer getValue() {
+						return lag_sec;
+					}
+				});
+		
 		synchronized (workersLock) {
 			workers.add(this);
 		}
@@ -292,6 +327,11 @@ public class Worker implements Runnable {
 							timestamp = System.currentTimeMillis();
 						}
 					}
+					
+					// dariens: calculate lag seconds
+					
+					lag_sec = (int) (System.currentTimeMillis() - timestamp);
+					if (lag_sec < 0) lag_sec = 0;
 
 					/*
 					 * aryder: Adding if statement to catch if length - pos < 0, and log
@@ -588,5 +628,8 @@ public class Worker implements Runnable {
 	 */
 	public long getLag() {
 		return lag;
+	}
+	public int getLagSec() {
+		return lag_sec;
 	}
 }
