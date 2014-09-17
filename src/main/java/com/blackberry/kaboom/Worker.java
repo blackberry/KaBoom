@@ -330,7 +330,7 @@ public class Worker implements Runnable {
 					
 					// dariens: calculate lag seconds
 					
-					lag_sec = (int) (System.currentTimeMillis() - timestamp);
+					lag_sec = (int) (System.currentTimeMillis() - timestamp) / 1000;
 					if (lag_sec < 0) lag_sec = 0;
 
 					/*
