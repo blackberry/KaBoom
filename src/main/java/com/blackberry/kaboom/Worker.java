@@ -437,8 +437,6 @@ public class Worker implements Runnable {
 		return outputFile.getBoomWriter();
 	}
 
-	private static AtomicLong counter = new AtomicLong(0L);
-
 	private class OutputFile {
 		private String dir;
 		private String tmpdir;
@@ -449,18 +447,15 @@ public class Worker implements Runnable {
 
 		private FastBoomWriter boomWriter;
 		private OutputStream out;
-		private long i;
 
 		public OutputFile(long hour) {
 			dir = fillInTemplate(hour);
-			i = counter.getAndIncrement();
 
 			/*
 			 * Related to IPGBD-1028 Output topic-partitionId-offset-incrementval.bm
 			 */
-			filename = String.format("%s-%08d-%08d.bm", partitionId, offset, i);
-			tmpdir = String.format("%s/_tmp_%s-%08d-%08d.bm", dir, partitionId,
-					offset, i);
+			filename = String.format("%s-%08d.bm", partitionId, offset);
+			tmpdir = String.format("%s/_tmp_%s-%08d.bm", dir, partitionId,	offset);
 
 			finalPath = new Path(dir + "/" + filename);
 			tmpPath = new Path(tmpdir + "/" + filename);
@@ -480,6 +475,10 @@ public class Worker implements Runnable {
 									}
 								}
 								LOG.info("[{}] Opening {}.", partitionId, tmpPath);
+								if(fs.exists(tmpPath)) {
+									fs.delete(tmpPath, false);
+									LOG.info("[{}] Removing file from HDFS because it already exists: {}", partitionId, tmpPath.toString());
+								}
 								out = fs.create(tmpPath, permissions, false, bufferSize,
 										replicas, blocksize, null);
 
