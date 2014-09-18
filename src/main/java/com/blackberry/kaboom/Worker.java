@@ -374,6 +374,8 @@ public class Worker implements Runnable {
 
 			MetricRegistrySingleton.getInstance().getMetricsRegistry()
 					.remove(lagGaugeName);
+			MetricRegistrySingleton.getInstance().getMetricsRegistry()
+			.remove(lagSecGaugeName);
 			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})",
 					partitionId, linesread, offset);
 		} finally {
