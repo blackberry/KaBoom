@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TimeZone;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.hadoop.conf.Configuration;
@@ -79,22 +78,6 @@ public class Worker implements Runnable {
 
 	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-				.register("kaboom:total:max message lag", new Gauge<Long>() {
-					@Override
-					public Long getValue() {
-						long maxLag = 0;
-						synchronized (workersLock) {
-							for (Worker w : workers) {
-								maxLag = Math.max(maxLag, w.getLag());
-							}
-						}
-						return maxLag;
-					}
-				});
-	}
-
-	static {
-		MetricRegistrySingleton.getInstance().getMetricsRegistry()
 				.register("kaboom:total:max message lag sec", new Gauge<Integer>() {
 					@Override
 					public Integer getValue() {
@@ -105,22 +88,6 @@ public class Worker implements Runnable {
 							}
 						}
 						return maxLagSec;
-					}
-				});
-	}
-
-	static {
-		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-				.register("kaboom:total:sum message lag", new Gauge<Long>() {
-					@Override
-					public Long getValue() {
-						long sumLag = 0;
-						synchronized (workersLock) {
-							for (Worker w : workers) {
-								sumLag += w.getLag();
-							}
-						}
-						return sumLag;
 					}
 				});
 	}
@@ -137,25 +104,6 @@ public class Worker implements Runnable {
 							}
 						}
 						return sumLag;
-					}
-				});
-	}
-	
-	static {
-		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-				.register("kaboom:total:avg message lag", new Gauge<Long>() {
-					@Override
-					public Long getValue() {
-						long sumLag = 0;
-						int count = 0;
-						synchronized (workersLock) {
-							for (Worker w : workers) {
-								count++;
-								sumLag += w.getLag();
-							}
-						}
-						long avgLag = sumLag/count;
-						return avgLag;
 					}
 				});
 	}
