@@ -127,6 +127,22 @@ public class Worker implements Runnable {
 	
 	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				.register("kaboom:total:sum message lag sec", new Gauge<Long>() {
+					@Override
+					public Long getValue() {
+						long sumLag = 0;
+						synchronized (workersLock) {
+							for (Worker w : workers) {
+								sumLag += w.getLagSec();
+							}
+						}
+						return sumLag;
+					}
+				});
+	}
+	
+	static {
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
 				.register("kaboom:total:avg message lag", new Gauge<Long>() {
 					@Override
 					public Long getValue() {
@@ -136,6 +152,25 @@ public class Worker implements Runnable {
 							for (Worker w : workers) {
 								count++;
 								sumLag += w.getLag();
+							}
+						}
+						long avgLag = sumLag/count;
+						return avgLag;
+					}
+				});
+	}
+	
+	static {
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				.register("kaboom:total:avg message lag sec", new Gauge<Long>() {
+					@Override
+					public Long getValue() {
+						long sumLag = 0;
+						int count = 0;
+						synchronized (workersLock) {
+							for (Worker w : workers) {
+								count++;
+								sumLag += w.getLagSec();
 							}
 						}
 						long avgLag = sumLag/count;
