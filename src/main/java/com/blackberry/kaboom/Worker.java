@@ -66,12 +66,16 @@ public class Worker implements Runnable {
 	private int partition;
 	private ConsumerConfiguration consumerConfig;
 
+	private long startTime;
 	private long endTime;
-
+	
 	private long lag = 0;
 	private int lag_sec = 0;
+	private long linesread = 0;
+	
 	private String lagGaugeName;
 	private String lagSecGaugeName;
+	private String msgWrittenGaugeName;
 
 	private static Set<Worker> workers = new HashSet<Worker>();
 	private static Object workersLock = new Object();
@@ -145,18 +149,21 @@ public class Worker implements Runnable {
 		this.topic = topic;
 		this.partition = partition;
 		this.consumerConfig = consumerConfig;
+		this.startTime = System.currentTimeMillis();
+		this.linesread = 0;
 
 		partitionId = topic + "-" + partition;
 
 		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
 		lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
+		msgWrittenGaugeName = "kaboom:partitions:" + partitionId + ":messages written per second";
 
 		/*
 		 * dariens: iterate through an array of metrics that need to be removed when new 
 		 * workers are instantiated 
 		 */
 				
-		String[] metrics_to_remove = {lagGaugeName, lagSecGaugeName};
+		String[] metrics_to_remove = {lagGaugeName, lagSecGaugeName, msgWrittenGaugeName};
 		
 		for (final String metric_name: metrics_to_remove)
 		{
@@ -190,6 +197,16 @@ public class Worker implements Runnable {
 					@Override
 					public Integer getValue() {
 						return lag_sec;
+					}
+				});
+		
+	// Add: long msgWrittenGaugeName
+		
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				.register(msgWrittenGaugeName, new Gauge<Long>() {
+					@Override
+					public Long getValue() {
+						return linesread / ((System.currentTimeMillis() - startTime) / 1000);
 					}
 				});
 		
@@ -237,7 +254,6 @@ public class Worker implements Runnable {
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();
 
-			long linesread = 0;
 			while (System.currentTimeMillis() < endTime) {
 				try {
 					if (stopping) {
@@ -378,6 +394,8 @@ public class Worker implements Runnable {
 					.remove(lagGaugeName);
 			MetricRegistrySingleton.getInstance().getMetricsRegistry()
 			.remove(lagSecGaugeName);
+			MetricRegistrySingleton.getInstance().getMetricsRegistry()
+			.remove(msgWrittenGaugeName);
 			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})",
 					partitionId, linesread, offset);
 		} finally {
