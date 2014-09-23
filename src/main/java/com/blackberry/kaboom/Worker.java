@@ -130,6 +130,40 @@ public class Worker implements Runnable {
 					}
 				});
 	}
+	
+	static {
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				.register("kaboom:total:avg messages written per sec", new Gauge<Long>() {
+					@Override
+					public Long getValue() {
+						long sumMsgWritten = 0;
+						int count = 0;
+						synchronized (workersLock) {
+							for (Worker w : workers) {
+								count++;
+								sumMsgWritten += w.getMsgWrittenPerSec();
+							}
+						}
+						return sumMsgWritten/count;
+					}
+				});
+	}
+	
+	static {
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				.register("kaboom:total:total messages written per sec", new Gauge<Long>() {
+					@Override
+					public Long getValue() {
+						long sumMsgWritten = 0;
+						synchronized (workersLock) {
+							for (Worker w : workers) {
+								sumMsgWritten += w.getMsgWrittenPerSec();
+							}
+						}
+						return sumMsgWritten;
+					}
+				});
+	}
 
 	public Worker(ConsumerConfiguration consumerConfig, Configuration hConf,
 			CuratorFramework curator, String topic, int partition, long runDuration,
@@ -652,5 +686,8 @@ public class Worker implements Runnable {
 	}
 	public int getLagSec() {
 		return lag_sec;
+	}
+	public long getMsgWrittenPerSec() {
+		return linesread / ((System.currentTimeMillis() - startTime) / 1000);
 	}
 }
