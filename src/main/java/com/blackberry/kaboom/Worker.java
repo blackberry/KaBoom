@@ -38,6 +38,7 @@ public class Worker implements Runnable {
 
 	private Consumer consumer;
 	private long offset;
+	private long timestamp;
 	private boolean stopping = false;
 
 	private static final Object fsLock = new Object();
@@ -61,6 +62,7 @@ public class Worker implements Runnable {
 	private CuratorFramework curator;
 	private static final String ZK_ROOT = "/kaboom";
 	private String zkPath;
+	private String zkPath_offSetTimestamp;
 
 	private String topic;
 	private int partition;
@@ -254,6 +256,7 @@ public class Worker implements Runnable {
 	public void run() {
 		try {
 			zkPath = ZK_ROOT + "/topics/" + topic + "/" + partition;
+			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
 
 			try {
 				offset = getOffset();
@@ -279,7 +282,6 @@ public class Worker implements Runnable {
 
 			byte[] bytes = new byte[1024 * 1024];
 			int length = -1;
-			long timestamp;
 
 			byte version = -1;
 
@@ -420,8 +422,9 @@ public class Worker implements Runnable {
 			LOG.info("[{}] Storing processed offsets into ZooKeeper.", partitionId);
 			try {
 				storeOffset();
+				storeOffsetTimestamp();
 			} catch (Exception e) {
-				LOG.error("[{}] Error storing offset in ZooKeeper", partitionId, e);
+				LOG.error("[{}] Error storing offset/timestamp in ZooKeeper", partitionId, e);
 			}
 
 			MetricRegistrySingleton.getInstance().getMetricsRegistry()
@@ -456,7 +459,34 @@ public class Worker implements Runnable {
 			return longFromBytes(curator.getData().forPath(zkPath), 0);
 		}
 	}
+	
+  /** 
+   * Stores the partitions offset timestamp in ZK
+   * @throws Exception
+   */
+  private void storeOffsetTimestamp() throws Exception {
+      if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
+          curator.create().creatingParentsIfNeeded()
+                  .withMode(CreateMode.PERSISTENT).forPath(zkPath_offSetTimestamp, getBytes(timestamp));
+      } else {
+          curator.setData().forPath(zkPath_offSetTimestamp, getBytes(timestamp));
+      }   
 
+  }   
+
+  /** 
+   * Returns the partitions offset timestamp from ZK
+   * @return the offset timestamp  
+   * @throws Exception
+   */
+  private long getOffsetTimestamp() throws Exception {
+      if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
+          return 0L; 
+      } else {
+          return longFromBytes(curator.getData().forPath(zkPath_offSetTimestamp), 0); 
+      }   
+  }  
+  
 	private long longFromBytes(byte[] data, int offset) {
 		return ((long) data[offset] & 0xFFL) << 56 //
 				| ((long) data[offset + 1] & 0xFFL) << 48 //

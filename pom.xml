@@ -4,7 +4,7 @@
   xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.blackberry.kaboom</groupId>
-  <version>0.6.3-CDH4.2.1</version>
+  <version>0.6.4-HDP2.1</version>
   <artifactId>kaboom</artifactId>
   <name>KaBoom</name>
   <url>http://blackberry.com</url>
@@ -14,10 +14,22 @@
   </properties>
 
   <repositories>
-    <!-- Cloudera repo -->
+    <!-- Hortonworks repo -->
     <repository>
-      <id>cloudera</id>
-      <url>https://repository.cloudera.com/artifactory/cloudera-repos/</url>
+      <releases>
+        <enabled>true</enabled>
+        <updatePolicy>always</updatePolicy>
+        <checksumPolicy>warn</checksumPolicy>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+        <updatePolicy>never</updatePolicy>
+        <checksumPolicy>fail</checksumPolicy>
+      </snapshots>
+      <id>HDPReleases</id>
+      <name>HDP Releases</name>
+      <url>http://repo.hortonworks.com/content/repositories/releases/</url>
+      <layout>default</layout>
     </repository>
   </repositories>
 
@@ -26,7 +38,7 @@
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-client</artifactId>
-      <version>2.0.0-cdh4.2.1</version>
+      <version>2.4.0</version>
     </dependency>
 
     <dependency>
