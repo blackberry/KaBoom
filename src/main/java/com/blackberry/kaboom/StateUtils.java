@@ -23,6 +23,45 @@ import org.yaml.snakeyaml.constructor.Constructor;
 public class StateUtils {
 	private static final Logger LOG = LoggerFactory.getLogger(StateUtils.class);
 
+	public static void getTopicParitionMetaData(String kafkaZkConnectionString, 
+			String kafkaSeedBrokers, 	
+			Map<String, List<PartitionMetadata>> topicsWithPartitions) throws Exception {
+		List<String> topics = new ArrayList<String>();
+		StateUtils.readTopicsFromZooKeeper(kafkaZkConnectionString, topics);
+		LOG.debug("Getting partition meta data for topics: {}", topics);
+
+		// Iterate through all the seed brokers
+		
+		for (String seed : kafkaSeedBrokers.split(",")) {
+			String seedHost = seed.split(":")[0];
+			int seedPort = Integer.parseInt(seed.split(":")[1]);
+			LOG.debug("Trying broker @ {}:{}", seedHost, seedPort);
+			SimpleConsumer consumer = null;
+			try {
+				
+				// Create a consumer for the broker and request metadata for the topics			
+				consumer = new SimpleConsumer(seedHost, seedPort, 100000, 64 * 1024, "leaderLookup");
+				TopicMetadataRequest req = new TopicMetadataRequest(topics);
+				kafka.javaapi.TopicMetadataResponse resp = consumer.send(req);
+				
+				// Iterate through the topic metadata list and populate topicsWithPartitions
+				for (TopicMetadata topicMetadata : resp.topicsMetadata()) {
+					String topicName = topicMetadata.topic();
+					topicsWithPartitions.put(topicName, topicMetadata.partitionsMetadata());
+				}
+			} catch (Exception e) {
+				LOG.error("Error getting meta data", e);
+				continue;
+			} finally {
+				if (consumer != null)
+					consumer.close();
+			}
+
+			LOG.debug("Successfully got topic parition meta data");
+			return;
+		}
+	}
+
 	public static void getPartitionHosts(String kafkaSeedBrokers,
 			List<String> topics, Map<String, String> partitionToHost,
 			Map<String, List<String>> hostToPartition) {

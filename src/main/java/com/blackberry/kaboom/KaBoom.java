@@ -234,7 +234,7 @@ public class KaBoom {
 
 		// Start leader election thread.
 		// The leader assigns work to each instance
-		LoadBalancer loadBalancer = new LoadBalancer(props);
+		LoadBalancer loadBalancer = new LoadBalancer(props, topicFileLocation);
 		final LeaderSelector leaderSelector = new LeaderSelector(curator,
 				"/kaboom/leader", loadBalancer);
 		leaderSelector.autoRequeue();
