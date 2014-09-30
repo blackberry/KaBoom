@@ -13,6 +13,7 @@ import java.util.Random;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.leader.LeaderSelectorListenerAdapter;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
@@ -26,17 +27,19 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 	private static final Charset UTF8 = Charset.forName("UTF-8");
 	private static final Random rand = new Random();
 
+	private Configuration hConf;
 	private String kafkaZkConnectionString;
 	private String kafkaSeedBrokers;
 	private ReadyFlagWriter readyFlagWriter;
 	private Thread readyFlagThread;
 	private Map<String, String> topicFileLocation;
 
-	public LoadBalancer(Properties props, Map<String, String> topicFileLocation) {
+	public LoadBalancer(Properties props, Map<String, String> topicFileLocation, Configuration hConf) {
 		kafkaZkConnectionString = props
 				.getProperty("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = props.getProperty("metadata.broker.list");
 		this.topicFileLocation = topicFileLocation; 
+		this.hConf = hConf;
 	}
 	
 	@Override
@@ -227,12 +230,12 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			 */
 			
 			if (readyFlagThread == null || !readyFlagThread.isAlive()) {
-				LOG.info("[ready flag writer] thread doesn't exist or is not running");
-				readyFlagWriter = new ReadyFlagWriter(kafkaZkConnectionString, kafkaSeedBrokers, curator, topicFileLocation);
+				LOG.debug("[ready flag writer] thread doesn't exist or is not running");
+				readyFlagWriter = new ReadyFlagWriter(kafkaZkConnectionString, kafkaSeedBrokers, curator, topicFileLocation, hConf);
 				readyFlagWriter.addListener(this);
 				readyFlagThread = new Thread(readyFlagWriter);
 				readyFlagThread.start();
-				LOG.info("[ready flag writer] thread created and started");
+				LOG.debug("[ready flag writer] thread created and started");
 			}						
 			
 			Thread.sleep(10 * 60 * 1000);

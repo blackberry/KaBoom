@@ -29,21 +29,17 @@ public class StateUtils {
 		List<String> topics = new ArrayList<String>();
 		StateUtils.readTopicsFromZooKeeper(kafkaZkConnectionString, topics);
 		LOG.debug("Getting partition meta data for topics: {}", topics);
-
-		// Iterate through all the seed brokers
-		
+		// Iterate through all the seed brokers		
 		for (String seed : kafkaSeedBrokers.split(",")) {
 			String seedHost = seed.split(":")[0];
 			int seedPort = Integer.parseInt(seed.split(":")[1]);
 			LOG.debug("Trying broker @ {}:{}", seedHost, seedPort);
 			SimpleConsumer consumer = null;
-			try {
-				
+			try {				
 				// Create a consumer for the broker and request metadata for the topics			
 				consumer = new SimpleConsumer(seedHost, seedPort, 100000, 64 * 1024, "leaderLookup");
 				TopicMetadataRequest req = new TopicMetadataRequest(topics);
-				kafka.javaapi.TopicMetadataResponse resp = consumer.send(req);
-				
+				kafka.javaapi.TopicMetadataResponse resp = consumer.send(req);				
 				// Iterate through the topic metadata list and populate topicsWithPartitions
 				for (TopicMetadata topicMetadata : resp.topicsMetadata()) {
 					String topicName = topicMetadata.topic();
@@ -51,12 +47,12 @@ public class StateUtils {
 				}
 			} catch (Exception e) {
 				LOG.error("Error getting meta data", e);
+				//continue allows us to attempt consuming from the next broker 
 				continue;
 			} finally {
 				if (consumer != null)
 					consumer.close();
 			}
-
 			LOG.debug("Successfully got topic parition meta data");
 			return;
 		}
