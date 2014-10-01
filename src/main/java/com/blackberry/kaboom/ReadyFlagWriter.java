@@ -35,15 +35,39 @@ public class ReadyFlagWriter extends NotifyingThread {
 	private Configuration hConf;
 	private static final String ZK_ROOT = "/kaboom"; 	//TODO: This is currently a duplicate hard coded variable...  Also exists in Worker.java
 	public static final String READY_FLAG = "_KAFKA_READY";
+	public static final String FLAG_DIR = "/incoming";
+	public static final String LOG_TAG = "[ready flag writer]";
 	
-	public ReadyFlagWriter(String kafkaZkConnection, 
+	public ReadyFlagWriter(String kafkaZkConnectionString, 
 			String kafkaSeedBrokers, 
 			CuratorFramework curator, 
 			Map<String, String> topicFileLocation,
 			Configuration hConf) throws Exception {
+		this.kafkaZkConnectionString = kafkaZkConnectionString;
+		this.kafkaSeedBrokers = kafkaSeedBrokers;
 		this.curator = curator;
 		this.topicFileLocation = topicFileLocation;
 		this.hConf = hConf;
+	}
+	
+	/*
+	 * Takes an HDFS (or template)
+	 * Looks for the last occurrence of a directory 
+	 * Truncates after the last occurrence of the directory 
+	 */
+	
+	public static String flagRootFromHdfsPath(String hdfsPath)	 
+	{		
+		String flagRoot = new String();
+		int lastCharPos = hdfsPath.lastIndexOf(FLAG_DIR);
+		//Check to see if last occurrence of FLAG_DIR is the end of the string
+		if (hdfsPath.length() == lastCharPos + FLAG_DIR.length()) {
+			flagRoot = hdfsPath;
+		}
+		else {
+			flagRoot = hdfsPath.substring(0, lastCharPos + FLAG_DIR.length());
+		}		
+		return flagRoot;
 	}
 
 	/*
@@ -63,7 +87,8 @@ public class ReadyFlagWriter extends NotifyingThread {
 	 *      		
 	 */	
 	@Override
-	public void doRun() throws Exception {	
+	public void doRun() throws Exception 
+	{	
 		Map<String, List<PartitionMetadata>> topicsWithPartitions = new HashMap<String, List<PartitionMetadata>>();
 		StateUtils.getTopicParitionMetaData(kafkaZkConnectionString, kafkaSeedBrokers, topicsWithPartitions);
 		
@@ -76,60 +101,62 @@ public class ReadyFlagWriter extends NotifyingThread {
 		Calendar previousHourCal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
 		previousHourCal.setTimeInMillis(prevHourStartTimestmap);		
 
-		for (Map.Entry<String, List<PartitionMetadata>> entry : topicsWithPartitions.entrySet())
+		for (Map.Entry<String, List<PartitionMetadata>> entry : topicsWithPartitions.entrySet()) 
 		{
-			LOG.debug("[ready_flag_writer] Checking {} partition(s) in topic={} for offset timestamps...", 
-					entry.getValue().size(), entry.getKey());
-
+			LOG.debug(LOG_TAG + " Checking {} partition(s) in topic={} for offset timestamps...", entry.getValue().size(), entry.getKey());
 			String hdfsFlagTemplate = topicFileLocation.get(entry.getKey());			
-			// Remove the %l at the end of the HDFS path template and add the READY_FLAG			
-			hdfsFlagTemplate = hdfsFlagTemplate.substring(0, hdfsFlagTemplate.length() - 2) + READY_FLAG;			
-			// Populate the template with the previous hour's timestamp						
-			Path hdfsFlagPath = new Path(Converter.timestampTemplateBuilder(prevHourStartTimestmap, hdfsFlagTemplate));
 			
-			LOG.debug("The HDFS path for the ready flag is: {}", hdfsFlagPath.toString());			
+			if (hdfsFlagTemplate == null) {
+				LOG.error(LOG_TAG + " HDFS path property for topic={} is not defined in configuraiton, skipping topic", entry.getKey());
+				continue;
+			}
+			
+			LOG.debug(LOG_TAG + " original hdfsFlagTemplate={}", hdfsFlagTemplate);			
+			hdfsFlagTemplate = flagRootFromHdfsPath(hdfsFlagTemplate);
+			LOG.debug(LOG_TAG + " flagRootFromHdfsPath returns {}", hdfsFlagTemplate);
+			hdfsFlagTemplate = hdfsFlagTemplate + "/" + READY_FLAG;
+			Path hdfsFlagPath = new Path(Converter.timestampTemplateBuilder(prevHourStartTimestmap, hdfsFlagTemplate));
+			LOG.debug(LOG_TAG + " HDFS path for the ready flag is: {}", hdfsFlagPath.toString());			
 						
 			synchronized (fsLock) {
 				try {
 					fs = hdfsFlagPath.getFileSystem(this.hConf);
 				} catch (IOException e) {
-					LOG.error("Error getting File System for path {}, error: {}.", hdfsFlagPath.toString(), e);
+					LOG.error(LOG_TAG + " Error getting File System for path {}, error: {}.", hdfsFlagPath.toString(), e);
 				}
 			}
 			
-			LOG.debug("[ready_flag_writer] Opening {}.", hdfsFlagPath.toString());
+			LOG.debug("[ready_flag_writer] Opening {}", hdfsFlagPath.toString());
 			
 			if(fs.exists(hdfsFlagPath)) {
-				LOG.debug("The flag {} already exists at {}", READY_FLAG, hdfsFlagPath.toString());
+				LOG.debug(LOG_TAG + " flag {} already exists at {}", READY_FLAG, hdfsFlagPath.toString());
 				continue;
 			}
 			
-			long oldestTimestamp = -1;						
-			for (PartitionMetadata partition : entry.getValue())
-			{
+			long oldestTimestamp = -1;
+			
+			for (PartitionMetadata partition : entry.getValue()) {
 				String zk_offset_path = ZK_ROOT + "/topics/" + entry.getKey() + "/" + partition.partitionId() + "/offset_timestamp";				
 				Stat stat = curator.checkExists().forPath(zk_offset_path);
 				if (stat != null) {
 					Long thisTimestamp = Converter.longFromBytes(curator.getData().forPath(zk_offset_path), 0);
-					LOG.debug("[ready_flag_writer] Found topic={} partition={} offset timestamp={}", 
+					LOG.debug(LOG_TAG + " found topic={} partition={} offset timestamp={}", 
 							entry.getKey(), partition.partitionId(), thisTimestamp);					
 					if (thisTimestamp < oldestTimestamp || oldestTimestamp == -1) {
 						oldestTimestamp = thisTimestamp;						
 					}
 					stat = null;					
-				}
-				else
-				{
-					LOG.error("[ready_flag_writer] cannot get stat for path {}", zk_offset_path);
+				} else {
+					LOG.error(LOG_TAG + " cannot get stat for path {}", zk_offset_path);
 				}				
-			}			
-			LOG.debug("[ready_flag_writer] Oldest timestamp for topic={} is {}", 
-					entry.getKey(), oldestTimestamp);			
+			}
 			
-			// Write the flag (for previous hour) if the oldest timestamp is within the current hour
+			LOG.debug(LOG_TAG + " oldest timestamp for topic={} is {}", entry.getKey(), oldestTimestamp);			
 			
 			if (oldestTimestamp > startOfHourTimestamp) {
+				LOG.debug(LOG_TAG + " oldest timestamp is within the current hour, flag write required");
 				fs.create(hdfsFlagPath).close();
+				LOG.debug(LOG_TAG + " flag {} written", hdfsFlagPath.toString());
 			}			
 		}		
 	}

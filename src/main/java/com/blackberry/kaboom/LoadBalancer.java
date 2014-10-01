@@ -253,6 +253,11 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			Exception e) {
 		LOG.info("[ready flag writer] thread finished");
 		
+		if (e != null)
+		{
+			LOG.error("[ready flag writer] Exception raised in thread: {}", e);
+		}
+		
 	}
 
 }
