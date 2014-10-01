@@ -102,61 +102,65 @@ public class ReadyFlagWriter extends NotifyingThread {
 		previousHourCal.setTimeInMillis(prevHourStartTimestmap);		
 
 		for (Map.Entry<String, List<PartitionMetadata>> entry : topicsWithPartitions.entrySet()) 
-		{
-			LOG.debug(LOG_TAG + " Checking {} partition(s) in topic={} for offset timestamps...", entry.getValue().size(), entry.getKey());
-			String hdfsFlagTemplate = topicFileLocation.get(entry.getKey());			
-			
-			if (hdfsFlagTemplate == null) {
-				LOG.error(LOG_TAG + " HDFS path property for topic={} is not defined in configuraiton, skipping topic", entry.getKey());
-				continue;
-			}
-			
-			LOG.debug(LOG_TAG + " original hdfsFlagTemplate={}", hdfsFlagTemplate);			
-			hdfsFlagTemplate = flagRootFromHdfsPath(hdfsFlagTemplate);
-			LOG.debug(LOG_TAG + " flagRootFromHdfsPath returns {}", hdfsFlagTemplate);
-			hdfsFlagTemplate = hdfsFlagTemplate + "/" + READY_FLAG;
-			Path hdfsFlagPath = new Path(Converter.timestampTemplateBuilder(prevHourStartTimestmap, hdfsFlagTemplate));
-			LOG.debug(LOG_TAG + " HDFS path for the ready flag is: {}", hdfsFlagPath.toString());			
-						
-			synchronized (fsLock) {
-				try {
-					fs = hdfsFlagPath.getFileSystem(this.hConf);
-				} catch (IOException e) {
-					LOG.error(LOG_TAG + " Error getting File System for path {}, error: {}.", hdfsFlagPath.toString(), e);
+		{			
+			try {
+				LOG.debug(LOG_TAG + " Checking {} partition(s) in topic={} for offset timestamps...", entry.getValue().size(), entry.getKey());
+				String hdfsFlagTemplate = topicFileLocation.get(entry.getKey());			
+				
+				if (hdfsFlagTemplate == null) {
+					LOG.error(LOG_TAG + " HDFS path property for topic={} is not defined in configuraiton, skipping topic", entry.getKey());
+					continue;
 				}
-			}
-			
-			LOG.debug("[ready_flag_writer] Opening {}", hdfsFlagPath.toString());
-			
-			if(fs.exists(hdfsFlagPath)) {
-				LOG.debug(LOG_TAG + " flag {} already exists at {}", READY_FLAG, hdfsFlagPath.toString());
-				continue;
-			}
-			
-			long oldestTimestamp = -1;
-			
-			for (PartitionMetadata partition : entry.getValue()) {
-				String zk_offset_path = ZK_ROOT + "/topics/" + entry.getKey() + "/" + partition.partitionId() + "/offset_timestamp";				
-				Stat stat = curator.checkExists().forPath(zk_offset_path);
-				if (stat != null) {
-					Long thisTimestamp = Converter.longFromBytes(curator.getData().forPath(zk_offset_path), 0);
-					LOG.debug(LOG_TAG + " found topic={} partition={} offset timestamp={}", 
-							entry.getKey(), partition.partitionId(), thisTimestamp);					
-					if (thisTimestamp < oldestTimestamp || oldestTimestamp == -1) {
-						oldestTimestamp = thisTimestamp;						
+				
+				LOG.debug(LOG_TAG + " original hdfsFlagTemplate={}", hdfsFlagTemplate);			
+				hdfsFlagTemplate = flagRootFromHdfsPath(hdfsFlagTemplate);
+				LOG.debug(LOG_TAG + " flagRootFromHdfsPath returns {}", hdfsFlagTemplate);
+				hdfsFlagTemplate = hdfsFlagTemplate + "/" + READY_FLAG;
+				Path hdfsFlagPath = new Path(Converter.timestampTemplateBuilder(prevHourStartTimestmap, hdfsFlagTemplate));
+				LOG.debug(LOG_TAG + " HDFS path for the ready flag is: {}", hdfsFlagPath.toString());			
+							
+				synchronized (fsLock) {
+					try {
+						fs = hdfsFlagPath.getFileSystem(this.hConf);
+					} catch (IOException e) {
+						LOG.error(LOG_TAG + " Error getting File System for path {}, error: {}.", hdfsFlagPath.toString(), e);
 					}
-					stat = null;					
-				} else {
-					LOG.error(LOG_TAG + " cannot get stat for path {}", zk_offset_path);
-				}				
-			}
-			
-			LOG.debug(LOG_TAG + " oldest timestamp for topic={} is {}", entry.getKey(), oldestTimestamp);			
-			
-			if (oldestTimestamp > startOfHourTimestamp) {
-				LOG.debug(LOG_TAG + " oldest timestamp is within the current hour, flag write required");
-				fs.create(hdfsFlagPath).close();
-				LOG.debug(LOG_TAG + " flag {} written", hdfsFlagPath.toString());
+				}
+				
+				LOG.debug(LOG_TAG + " opening {}", hdfsFlagPath.toString());
+				
+				if(fs.exists(hdfsFlagPath)) {
+					LOG.debug(LOG_TAG + " flag {} already exists at {}", READY_FLAG, hdfsFlagPath.toString());
+					continue;
+				}
+				
+				long oldestTimestamp = -1;
+				
+				for (PartitionMetadata partition : entry.getValue()) {
+					String zk_offset_path = ZK_ROOT + "/topics/" + entry.getKey() + "/" + partition.partitionId() + "/offset_timestamp";				
+					Stat stat = curator.checkExists().forPath(zk_offset_path);
+					if (stat != null) {
+						Long thisTimestamp = Converter.longFromBytes(curator.getData().forPath(zk_offset_path), 0);
+						LOG.debug(LOG_TAG + " found topic={} partition={} offset timestamp={}", 
+								entry.getKey(), partition.partitionId(), thisTimestamp);					
+						if (thisTimestamp < oldestTimestamp || oldestTimestamp == -1) {
+							oldestTimestamp = thisTimestamp;						
+						}
+						stat = null;					
+					} else {
+						LOG.error(LOG_TAG + " cannot get stat for path {}", zk_offset_path);
+					}				
+				}
+				
+				LOG.debug(LOG_TAG + " oldest timestamp for topic={} is {}", entry.getKey(), oldestTimestamp);			
+				
+				if (oldestTimestamp > startOfHourTimestamp) {
+					LOG.debug(LOG_TAG + " oldest timestamp is within the current hour, flag write required");
+					fs.create(hdfsFlagPath).close();
+					LOG.debug(LOG_TAG + " flag {} written", hdfsFlagPath.toString());
+				}
+			} catch (Exception e) {
+				LOG.error(LOG_TAG + " error occured processing a partition: {}", e);
 			}			
 		}		
 	}
