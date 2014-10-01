@@ -34,7 +34,7 @@ public class ReadyFlagWriter extends NotifyingThread {
 	private FileSystem fs;
 	private Configuration hConf;
 	private static final String ZK_ROOT = "/kaboom"; 	//TODO: This is currently a duplicate hard coded variable...  Also exists in Worker.java
-	private static final String READY_FLAG = "_KAFKA_READY";
+	public static final String READY_FLAG = "_KAFKA_READY";
 	
 	public ReadyFlagWriter(String kafkaZkConnection, 
 			String kafkaSeedBrokers, 
@@ -81,27 +81,26 @@ public class ReadyFlagWriter extends NotifyingThread {
 			LOG.debug("[ready_flag_writer] Checking {} partition(s) in topic={} for offset timestamps...", 
 					entry.getValue().size(), entry.getKey());
 
-			String hdfsFlagTemplate = topicFileLocation.get(entry.getKey());
-			
-			// Remove the %l at the end of the HDFS path template and add the READY_FLAG
-			
-			hdfsFlagTemplate = hdfsFlagTemplate.substring(0, hdfsFlagTemplate.length() - 2) + READY_FLAG;
-			
-			// Populate the template with the previous hour's timestamp			
-			
+			String hdfsFlagTemplate = topicFileLocation.get(entry.getKey());			
+			// Remove the %l at the end of the HDFS path template and add the READY_FLAG			
+			hdfsFlagTemplate = hdfsFlagTemplate.substring(0, hdfsFlagTemplate.length() - 2) + READY_FLAG;			
+			// Populate the template with the previous hour's timestamp						
 			Path hdfsFlagPath = new Path(Converter.timestampTemplateBuilder(prevHourStartTimestmap, hdfsFlagTemplate));
+			
+			LOG.debug("The HDFS path for the ready flag is: {}", hdfsFlagPath.toString());			
 						
 			synchronized (fsLock) {
 				try {
 					fs = hdfsFlagPath.getFileSystem(this.hConf);
 				} catch (IOException e) {
-					LOG.error("Error getting File System for path {}.", hdfsFlagPath, e);
+					LOG.error("Error getting File System for path {}, error: {}.", hdfsFlagPath.toString(), e);
 				}
 			}
 			
-			LOG.debug("[ready_flag_writer] Opening {}.", hdfsFlagPath);
+			LOG.debug("[ready_flag_writer] Opening {}.", hdfsFlagPath.toString());
 			
 			if(fs.exists(hdfsFlagPath)) {
+				LOG.debug("The flag {} already exists at {}", READY_FLAG, hdfsFlagPath.toString());
 				continue;
 			}
 			
