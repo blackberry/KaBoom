@@ -213,20 +213,20 @@ public class KaBoom {
 			writer.close();
 			byte[] nodeContents = nodeOutputStream.toByteArray();
 			long backoff = 1000;
-			long retries = 6;
+			long retries = 8;
 			for (int i = 0; i < retries; i++) {
 				try {
 					curator.create().withMode(CreateMode.EPHEMERAL)
 							.forPath("/kaboom/clients/" + kaboomId, nodeContents);
 					break;
 				} catch (Exception e) {
-					if (i < retries - 1) {
-						LOG.warn("Failed to register with ZooKeeper.  Retrying.", e);
+					if (i <= retries) {
+						LOG.warn("Failed attempt {}/{} to register with ZooKeeper.  Retrying in {} seconds", i, retries, (backoff/1000), e);
 						Thread.sleep(backoff);
 						backoff *= 2;
 						continue;
 					} else {
-						throw new Exception("Failed to register with ZooKeeper.", e);
+						throw new Exception("Failed to register with ZooKeeper, no retries left--giving up", e);
 					}
 				}
 			}
