@@ -33,12 +33,14 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 	private ReadyFlagWriter readyFlagWriter;
 	private Thread readyFlagThread;
 	private Map<String, String> topicFileLocation;
+	private Map<String, String> topicToProxyUser;
 
-	public LoadBalancer(Properties props, Map<String, String> topicFileLocation, Configuration hConf) {
+	public LoadBalancer(Properties props, Map<String, String> topicFileLocation, Configuration hConf, Map<String, String> topicToProxyUser) {
 		kafkaZkConnectionString = props
 				.getProperty("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = props.getProperty("metadata.broker.list");
 		this.topicFileLocation = topicFileLocation; 
+		this.topicToProxyUser = topicToProxyUser;
 		this.hConf = hConf;
 	}
 	
@@ -231,7 +233,7 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			
 			if (readyFlagThread == null || !readyFlagThread.isAlive()) {
 				LOG.debug("[ready flag writer] thread doesn't exist or is not running");
-				readyFlagWriter = new ReadyFlagWriter(kafkaZkConnectionString, kafkaSeedBrokers, curator, topicFileLocation, hConf);
+				readyFlagWriter = new ReadyFlagWriter(kafkaZkConnectionString, kafkaSeedBrokers, curator, topicFileLocation, hConf, topicToProxyUser);
 				readyFlagWriter.addListener(this);
 				readyFlagThread = new Thread(readyFlagWriter);
 				readyFlagThread.start();
