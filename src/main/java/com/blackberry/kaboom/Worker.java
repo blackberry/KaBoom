@@ -457,7 +457,7 @@ public class Worker implements Runnable {
 							length - pos);
 					
 					/*
-					 * Let's track the oldest timestamp and write that to ZK for the 
+					 * Let's track the max timestamp and write that to ZK for the 
 					 * partitions oldest offset timestamp.  Previously we used the last
 					 * message's timestamp however that could lead to problems if there
 					 * was ever corruption of the timestamp or if there's significant
