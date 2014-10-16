@@ -406,7 +406,7 @@ public class Worker implements Runnable {
 					// inserted a version in the log line.
 					if (ver.parseVersion(bytes, pos, length - pos)) {
 						// Skip the length of the version and the following space.
-						pos += ver.getVersionLength() + 1;
+						pos += ver.getVersionLength() + 1; 
 					}
 
 					tsp.parse(bytes, pos, length - pos);
