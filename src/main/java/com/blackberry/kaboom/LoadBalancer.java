@@ -34,6 +34,7 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 	private Thread readyFlagThread;
 	private Map<String, String> topicFileLocation;
 	private Map<String, String> topicToProxyUser;
+	private Properties props;
 
 	public LoadBalancer(Properties props, Map<String, String> topicFileLocation, Configuration hConf, Map<String, String> topicToProxyUser) {
 		kafkaZkConnectionString = props
@@ -42,12 +43,16 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 		this.topicFileLocation = topicFileLocation; 
 		this.topicToProxyUser = topicToProxyUser;
 		this.hConf = hConf;
+		this.props = props;
 	}
 	
 	@Override
 	public void takeLeadership(CuratorFramework curator) throws Exception {
 		// After start up, wait 30 seconds. I assume that something has happened
 		// that has caused a leader change, and we want to give that time to settle.
+		
+		LOG.debug("a new leader has been elected: kaboom.id={}", this.props.get("kaboom.id"));
+		
 		Thread.sleep(30 * 1000);
 
 		while (true) {

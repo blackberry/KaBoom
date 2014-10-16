@@ -143,7 +143,7 @@ public class ReadyFlagWriter extends NotifyingThread
 		long prevHourStartTimestmap = startOfHourTimestamp - (60 * 60 * 1000);		
 		
 		previousHourCal.setTimeInMillis(prevHourStartTimestmap);
-
+		
 		for (Map.Entry<String, List<PartitionMetadata>> entry : topicsWithPartitions.entrySet()) {
 			
 			String topicName = entry.getKey();
@@ -188,7 +188,7 @@ public class ReadyFlagWriter extends NotifyingThread
 							}
 						});				
 
-				if (fs.exists(incomingDirectory)) {
+				if (!fs.exists(incomingDirectory)) {
 					LOG.debug(LOG_TAG + "skipping {} since incoming directory {} doesn't exist (no data)", topicName, incomingDirectory.toString());
 					continue;
 				}
