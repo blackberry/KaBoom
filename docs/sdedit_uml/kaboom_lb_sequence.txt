@@ -1,0 +1,103 @@
+kaboom:kaboom[a] "KaBoom"
+/lb:LeaderSelectorListenerAdapter "loadBalancer"
+su:su "StateUtils"
+zk:zk "ZooKeeper"
+kafka:kafka "Kafa"
+/rfw:rfw "ReadyFlagWriter"
+
+kaboom:kaboom.initalize()
+kaboom:lb.new()
+lb:lb.takeLeadership(curatorFramework)
+lb:
+[c:loop:_while(true)_//_instance_is_leader]
+	lb:
+	lb:partitionToHost = HashMap<String, String>
+	lb:hostToPartition = HashMap<String, List<String>>
+	lb:clients = HashMap<String, KaBoomNodeInfo>
+	lb:clientToPartitions = HashMap<String, List<String>>
+	lb:partitionToClient = HashMap<String, String>
+	lb:topics = ArrayList<String>()
+	lb:
+	lb:su.readTopicsFromZooKeeper(topics)
+	su:topics=zk.getData("/brokers/topics")
+	lb:partitionToHostsMap=su.getPartitionHosts(topics, partitionToHost, hostToPartition)
+	su:metaData=kafka.getPartitionMetaData(topics)
+	su:HashMap<host, List<partition>>
+	lb:clients=su.getActiveClients()
+	su:clents=zk.getData("/kaboom/clients")
+	[c:loop:_for(partition:partitionToHost)]
+		lb:client=zk.client = get("/kaboom/assignments/" + partition)
+		[c:alt clients.containsKey(client) // client connected]
+		lb:partitionToClient\.put(partition, client);
+		lb:partitions = clientToPartitions\.get(client)
+		lb:partitions\.add(partition)
+		--else // client not connected
+		lb:zk.delete("/kaboom/assignments/" + partition);
+		[/c]		
+	[/c]
+	lb:su.calculateLoad(partitionToHost, clients, clientToPartitions)
+	su:totalPartitions = partitionToHost\.size()
+	su:totalWeight = 0
+	*1 lb
+	// no return since objects modified within method
+	*1
+	[c:loop:_for(client:clients)]
+	su:totalWeight += client\.getLoad()
+	[/c]
+	[c:loop:_for(client:clients)]
+	su:client\.setTargetLoad(totalPartitions * (1\.0 * info\.getWeight() / totalWeight))
+	su:partitions = clientToPartitions\.get(client)
+	su:client\.setLoad(partitions\.size())
+	[/c]
+	[c:loop:_for(client:clients)]
+		[c:if:_load_>_targetLoad while load > targetLoad]		
+		lb:partitionToDelete = null
+		*2 lb
+		- create two arrays for storing partions (local, remote)
+		- loop though client's partitions add to appropriate array
+		- if remote.size > 0 partitionToDelete = random remote
+		- else partitionToDelete = random local		
+		- remove from appropriate array
+		*2
+		lb:client\.setLoad(client\.getLoad() - 1)
+		lb:zk.delete("/kaboom/assignments/" + partitionToDelete)
+		[/c]
+	[/c]
+	lb:comparator = new Comparator() // to sort by percent load
+	lb:sortedClients = new ArrayList<String>
+	lb:sortedClients\.addAll(clients\.keySet())
+	[c:loop:_for(partition:partitionToHost)]
+		lb:// Skip if the partition is assigned	
+		lb:Collections\.sort(sortedClients, comparator);
+		lb:chosenClient = null
+		[c:loop:_for(client:sortedClients)]
+			*3 lb
+			Find clients for unassigned partitions:
+			  - Prefer local clients under target load
+			  - Assign first (least loaded) when 
+			*3
+			[c:alt client.getLoad() > client.getTargetLoad()] 
+				lb:chosenClient = sortedClients\.get(0);
+				lb:break
+			--client.getHostname() == partitionToHost(partition)
+				lb:chosenClient = client;
+				lb:break
+			--else
+				lb:continue				
+			[/c]
+		[/c]
+		lb:if (chosenClient == null) then chosenClient = sortedClients\.get(0);
+		lb:zk.create("/kaboom/assignments/" + partition, chosenClient)
+		lb:partitions = clientToPartitions\.get(chosenClient)
+		lb:partitions\.add(partition)
+		lb:partitionToClient\.put(partition, chosenClient)
+		lb:chosenClient\.setLoad(chosenClient\.getLoad() + 1)
+	[/c]
+	[c:alt readyFlagThread == null || !readyFlagThread.isAlive()]
+		lb:readyFlagWriter=rfw.new()
+		lb:readyFlagThread = new Thread(readyFlagWriter)
+		lb:readyFlagThread\.start();
+	[/c]
+	lb:Thread\.sleep(10 * 60 * 1000)
+	
+[/c]

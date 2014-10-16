@@ -4,7 +4,7 @@
   xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.blackberry.kaboom</groupId>
-  <version>6.0.1-HDP2.1</version>
+  <version>0.6.4-HDP2.1</version>
   <artifactId>kaboom</artifactId>
   <name>KaBoom</name>
   <url>http://blackberry.com</url>
@@ -69,7 +69,7 @@
     <dependency>
       <groupId>com.blackberry.krackle</groupId>
       <artifactId>krackle</artifactId>
-      <version>0.6.2</version>
+      <version>0.7.4</version>
     </dependency>
     <dependency>
       <groupId>org.apache.kafka</groupId>
@@ -88,6 +88,11 @@
       <artifactId>junit</artifactId>
       <version>4.11</version>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+    	<groupId>com.blackberry.common</groupId>
+    	<artifactId>common</artifactId>
+    	<version>0.0.1</version>
     </dependency>
   </dependencies>
 

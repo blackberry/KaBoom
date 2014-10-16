@@ -12,105 +12,105 @@ import com.blackberry.kaboom.TimestampParser;
 
 public class TimestampParserTest {
 
-  @Test
-  public void testNonZeroOffet() throws UnsupportedEncodingException {
-    String testString = "12345678902014-06-02T17:56:12.219+0000 this is a test";
-    TimestampParser tsp = new TimestampParser();
-    tsp.parse(testString.getBytes("UTF-8"), 10, testString.length() - 10);
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1401731772219L, tsp.getTimestamp());
-  }
+	@Test
+	public void testNonZeroOffet() throws UnsupportedEncodingException {
+		String testString = "12345678902014-06-02T17:56:12.219+0000 this is a test";
+		TimestampParser tsp = new TimestampParser();
+		tsp.parse(testString.getBytes("UTF-8"), 10, testString.length() - 10);
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1401731772219L, tsp.getTimestamp());
+	}
 
-  @Test
-  public void testParser() {
-    // we need the current year for some of this
-    Calendar c = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-    c.setTimeInMillis(System.currentTimeMillis());
-    int currentYear = c.get(Calendar.YEAR);
+	@Test
+	public void testParser() {
+		// we need the current year for some of this
+		Calendar c = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+		c.setTimeInMillis(System.currentTimeMillis());
+		int currentYear = c.get(Calendar.YEAR);
 
-    TimestampParser tsp = new TimestampParser();
-    String timestamp;
+		TimestampParser tsp = new TimestampParser();
+		String timestamp;
 
-    // Start off easy
-    timestamp = "2014-05-07T17:05:08.123 This is a test";
-    tsp.parse(timestamp.getBytes(), 0, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1399482308123L, tsp.getTimestamp());
-    assertEquals(23, tsp.getLength());
+		// Start off easy
+		timestamp = "2014-05-07T17:05:08.123 This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1399482308123L, tsp.getTimestamp());
+		assertEquals(23, tsp.getLength());
 
-    timestamp = "2014-05-07T17:05:08.123000 This is a test";
-    tsp.parse(timestamp.getBytes(), 0, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1399482308123L, tsp.getTimestamp());
-    assertEquals(26, tsp.getLength());
+		timestamp = "2014-05-07T17:05:08.123000 This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1399482308123L, tsp.getTimestamp());
+		assertEquals(26, tsp.getLength());
 
-    timestamp = "2014-05-07T17:05:08.12 This is a test";
-    tsp.parse(timestamp.getBytes(), 0, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1399482308120L, tsp.getTimestamp());
-    assertEquals(22, tsp.getLength());
+		timestamp = "2014-05-07T17:05:08.12 This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1399482308120L, tsp.getTimestamp());
+		assertEquals(22, tsp.getLength());
 
-    timestamp = "2014-05-07T17:05:08.1 This is a test";
-    tsp.parse(timestamp.getBytes(), 0, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1399482308100L, tsp.getTimestamp());
-    assertEquals(21, tsp.getLength());
+		timestamp = "2014-05-07T17:05:08.1 This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1399482308100L, tsp.getTimestamp());
+		assertEquals(21, tsp.getLength());
 
-    timestamp = "2014-05-07T17:05:08. This is a test";
-    tsp.parse(timestamp.getBytes(), 0, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1399482308000L, tsp.getTimestamp());
-    assertEquals(20, tsp.getLength());
+		timestamp = "2014-05-07T17:05:08. This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1399482308000L, tsp.getTimestamp());
+		assertEquals(20, tsp.getLength());
 
-    timestamp = "2014-05-07T17:05:08 This is a test";
-    tsp.parse(timestamp.getBytes(), 0, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1399482308000L, tsp.getTimestamp());
-    assertEquals(19, tsp.getLength());
+		timestamp = "2014-05-07T17:05:08 This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1399482308000L, tsp.getTimestamp());
+		assertEquals(19, tsp.getLength());
 
-    timestamp = "May 07 17:05:08.123 This is a test";
-    tsp.parse(timestamp.getBytes(), 0, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-    cal.setTimeInMillis(1399482308123L);
-    cal.set(Calendar.YEAR, currentYear);
-    assertEquals(cal.getTimeInMillis(), tsp.getTimestamp());
-    assertEquals(19, tsp.getLength());
+		timestamp = "May 07 17:05:08.123 This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+		cal.setTimeInMillis(1399482308123L);
+		cal.set(Calendar.YEAR, currentYear);
+		assertEquals(cal.getTimeInMillis(), tsp.getTimestamp());
+		assertEquals(19, tsp.getLength());
 
-    timestamp = "<1>1 2014-05-07T17:05:08 This is a test";
-    tsp.parse(timestamp.getBytes(), 5, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1399482308000L, tsp.getTimestamp());
-    assertEquals(19, tsp.getLength());
+		timestamp = "<1>1 2014-05-07T17:05:08 This is a test";
+		tsp.parse(timestamp.getBytes(), 5, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1399482308000L, tsp.getTimestamp());
+		assertEquals(19, tsp.getLength());
 
-    timestamp = "2014-05-07T17:05:08Z This is a test";
-    tsp.parse(timestamp.getBytes(), 0, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1399482308000L, tsp.getTimestamp());
-    assertEquals(20, tsp.getLength());
+		timestamp = "2014-05-07T17:05:08Z This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1399482308000L, tsp.getTimestamp());
+		assertEquals(20, tsp.getLength());
 
-    timestamp = "2014-05-07T17:05:08+01 This is a test";
-    tsp.parse(timestamp.getBytes(), 0, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1399478708000L, tsp.getTimestamp());
-    assertEquals(22, tsp.getLength());
+		timestamp = "2014-05-07T17:05:08+01 This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1399478708000L, tsp.getTimestamp());
+		assertEquals(22, tsp.getLength());
 
-    timestamp = "2014-05-07T17:05:08+0130 This is a test";
-    tsp.parse(timestamp.getBytes(), 0, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1399476908000L, tsp.getTimestamp());
-    assertEquals(24, tsp.getLength());
+		timestamp = "2014-05-07T17:05:08+0130 This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1399476908000L, tsp.getTimestamp());
+		assertEquals(24, tsp.getLength());
 
-    timestamp = "2014-05-07T17:05:08+01:30 This is a test";
-    tsp.parse(timestamp.getBytes(), 0, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1399476908000L, tsp.getTimestamp());
-    assertEquals(25, tsp.getLength());
+		timestamp = "2014-05-07T17:05:08+01:30 This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1399476908000L, tsp.getTimestamp());
+		assertEquals(25, tsp.getLength());
 
-    timestamp = "2014-05-07T17:05:08-01:30 This is a test";
-    tsp.parse(timestamp.getBytes(), 0, timestamp.length());
-    assertEquals(TimestampParser.NO_ERROR, tsp.getError());
-    assertEquals(1399487708000L, tsp.getTimestamp());
-    assertEquals(25, tsp.getLength());
-  }
+		timestamp = "2014-05-07T17:05:08-01:30 This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		assertEquals(1399487708000L, tsp.getTimestamp());
+		assertEquals(25, tsp.getLength());
+	}
 }
