@@ -163,8 +163,8 @@ public class ReadyFlagWriter extends NotifyingThread
 				
 				final Path topicRoot = new Path(parentFromPath(hdfsPath, INCOMING_DIR));
 				final Path mergeReadyFlag = new Path(topicRoot + "/" + MERGE_READY_FLAG);
-				final Path kafkaReadyFlag = new Path(topicRoot + "/" + KAFKA_READY_FLAG);				
 				final Path incomingDirectory = new Path(topicRoot + "/"  + INCOMING_DIR);
+				final Path kafkaReadyFlag = new Path(incomingDirectory.toString() + "/" + KAFKA_READY_FLAG);
 				
 				LOG.debug(LOG_TAG + "HDFS path for topic root is: {}", topicRoot.toString());
 				LOG.debug(LOG_TAG + "HDFS path for merge ready flag is: {}", mergeReadyFlag.toString());				
