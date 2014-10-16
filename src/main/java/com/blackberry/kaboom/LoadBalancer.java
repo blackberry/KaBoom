@@ -13,29 +13,46 @@ import java.util.Random;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.leader.LeaderSelectorListenerAdapter;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class LoadBalancer extends LeaderSelectorListenerAdapter {
+import com.blackberry.common.threads.NotifyingThread;
+import com.blackberry.common.threads.ThreadCompleteListener;
+
+public class LoadBalancer extends LeaderSelectorListenerAdapter implements ThreadCompleteListener {
 	private static final Logger LOG = LoggerFactory.getLogger(LoadBalancer.class);
 	private static final Charset UTF8 = Charset.forName("UTF-8");
 	private static final Random rand = new Random();
 
+	private Configuration hConf;
 	private String kafkaZkConnectionString;
 	private String kafkaSeedBrokers;
+	private ReadyFlagWriter readyFlagWriter;
+	private Thread readyFlagThread;
+	private Map<String, String> topicFileLocation;
+	private Map<String, String> topicToProxyUser;
+	private Properties props;
 
-	public LoadBalancer(Properties props) {
+	public LoadBalancer(Properties props, Map<String, String> topicFileLocation, Configuration hConf, Map<String, String> topicToProxyUser) {
 		kafkaZkConnectionString = props
 				.getProperty("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = props.getProperty("metadata.broker.list");
+		this.topicFileLocation = topicFileLocation; 
+		this.topicToProxyUser = topicToProxyUser;
+		this.hConf = hConf;
+		this.props = props;
 	}
-
+	
 	@Override
 	public void takeLeadership(CuratorFramework curator) throws Exception {
 		// After start up, wait 30 seconds. I assume that something has happened
 		// that has caused a leader change, and we want to give that time to settle.
+		
+		LOG.debug("a new leader has been elected: kaboom.id={}", this.props.get("kaboom.id"));
+		
 		Thread.sleep(30 * 1000);
 
 		while (true) {
@@ -210,8 +227,44 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter {
 				}
 			}
 
+			/*
+			 *  Check to see if the kafka_ready flag writer thread exists and is alive:
+			 *  
+			 *  If it doesn't exist or isn't running, start it.  This is designed to 
+			 *  work well when the load balancer sleeps for 10 minutes after assigning 
+			 *  work.  If that behavior changes then additional logic will be required
+			 *  to ensure this isn't executed too often  
+			 */
+			
+			if (readyFlagThread == null || !readyFlagThread.isAlive()) {
+				LOG.debug("[ready flag writer] thread doesn't exist or is not running");
+				readyFlagWriter = new ReadyFlagWriter(kafkaZkConnectionString, kafkaSeedBrokers, curator, topicFileLocation, hConf, topicToProxyUser);
+				readyFlagWriter.addListener(this);
+				readyFlagThread = new Thread(readyFlagWriter);
+				readyFlagThread.start();
+				LOG.debug("[ready flag writer] thread created and started");
+			}						
+			
 			Thread.sleep(10 * 60 * 1000);
 		}
+	}
+	
+	/*
+	 * This method is called when the ready flag writer thread finishes.  There is 
+	 * currently nothing special that needs to happen, but later we may wish to have 
+	 * greater control over when threads start/stop and when they need to be ran 
+	 * again
+	 */
+	@Override
+	public void notifyOfThreadComplete(NotifyingThread notifyingThread,
+			Exception e) {
+		LOG.info("[ready flag writer] thread finished");
+		
+		if (e != null)
+		{
+			LOG.error("[ready flag writer] Exception raised in thread: {}", e);
+		}
+		
 	}
 
 }

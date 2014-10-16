@@ -30,6 +30,8 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 
+import com.blackberry.common.conversion.Converter;
+
 public class Worker implements Runnable {
 	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
 	private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
@@ -82,6 +84,8 @@ public class Worker implements Runnable {
 	private static Set<Worker> workers = new HashSet<Worker>();
 	private static Object workersLock = new Object();
 
+	
+	
 	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
 				.register("kaboom:total:max message lag sec", new Gauge<Integer>() {
@@ -125,6 +129,57 @@ public class Worker implements Runnable {
 							for (Worker w : workers) {
 								count++;
 								sumLag += w.getLagSec();
+							}
+						}
+						long avgLag = sumLag/count;
+						return avgLag;
+					}
+				});
+	}
+	
+	static {
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				.register("kaboom:total:max message lag", new Gauge<Long>() {
+					@Override
+					public Long getValue() {
+						long maxLag = 0;
+						synchronized (workersLock) {
+							for (Worker w : workers) {
+								maxLag = Math.max(maxLag, w.getLag());
+							}
+						}
+						return maxLag;
+					}
+				});
+	}
+	
+	static {
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				.register("kaboom:total:sum message lag", new Gauge<Long>() {
+					@Override
+					public Long getValue() {
+						long sumLag = 0;
+						synchronized (workersLock) {
+							for (Worker w : workers) {
+								sumLag += w.getLag();
+							}
+						}
+						return sumLag;
+					}
+				});
+	}
+	
+	static {
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				.register("kaboom:total:avg message lag", new Gauge<Long>() {
+					@Override
+					public Long getValue() {
+						long sumLag = 0;
+						int count = 0;
+						synchronized (workersLock) {
+							for (Worker w : workers) {
+								count++;
+								sumLag += w.getLag();
 							}
 						}
 						long avgLag = sumLag/count;
@@ -289,6 +344,8 @@ public class Worker implements Runnable {
 			PriParser pri = new PriParser();
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();
+			
+			long maxTimestamp = -1;
 
 			while (System.currentTimeMillis() < endTime) {
 				try {
@@ -349,7 +406,7 @@ public class Worker implements Runnable {
 					// inserted a version in the log line.
 					if (ver.parseVersion(bytes, pos, length - pos)) {
 						// Skip the length of the version and the following space.
-						pos += ver.getVersionLength() + 1;
+						pos += ver.getVersionLength() + 1; 
 					}
 
 					tsp.parse(bytes, pos, length - pos);
@@ -375,7 +432,7 @@ public class Worker implements Runnable {
 							LOG.debug(
 									"[{}] Failed to parse timestamp.  Using stored timestamp",
 									partitionId);
-							timestamp = longFromBytes(bytes, 2);
+							timestamp = Converter.longFromBytes(bytes, 2);
 						} else {
 							LOG.error("[{}] Error parsing timestamp.", partitionId);
 							timestamp = System.currentTimeMillis();
@@ -398,6 +455,19 @@ public class Worker implements Runnable {
 
 					getBoomWriter(timestamp).writeLine(timestamp, bytes, pos,
 							length - pos);
+					
+					/*
+					 * Let's track the max timestamp and write that to ZK for the 
+					 * partitions oldest offset timestamp.  Previously we used the last
+					 * message's timestamp however that could lead to problems if there
+					 * was ever corruption of the timestamp or if there's significant
+					 * skew in the log's time.
+					 */
+					
+					if (timestamp > maxTimestamp || maxTimestamp == -1) {
+						maxTimestamp = timestamp;
+					}
+					
 
 				} catch (Throwable t) {
 					LOG.error("[{}] Error processing message.", partitionId, t);
@@ -422,7 +492,7 @@ public class Worker implements Runnable {
 			LOG.info("[{}] Storing processed offsets into ZooKeeper.", partitionId);
 			try {
 				storeOffset();
-				storeOffsetTimestamp();
+				storeOffsetTimestamp(maxTimestamp);
 			} catch (Exception e) {
 				LOG.error("[{}] Error storing offset/timestamp in ZooKeeper", partitionId, e);
 			}
@@ -445,9 +515,9 @@ public class Worker implements Runnable {
 	private void storeOffset() throws Exception {
 		if (curator.checkExists().forPath(zkPath) == null) {
 			curator.create().creatingParentsIfNeeded()
-					.withMode(CreateMode.PERSISTENT).forPath(zkPath, getBytes(offset));
+					.withMode(CreateMode.PERSISTENT).forPath(zkPath, Converter.getBytes(offset));
 		} else {
-			curator.setData().forPath(zkPath, getBytes(offset));
+			curator.setData().forPath(zkPath, Converter.getBytes(offset));
 		}
 
 	}
@@ -456,7 +526,7 @@ public class Worker implements Runnable {
 		if (curator.checkExists().forPath(zkPath) == null) {
 			return 0L;
 		} else {
-			return longFromBytes(curator.getData().forPath(zkPath), 0);
+			return Converter.longFromBytes(curator.getData().forPath(zkPath), 0);
 		}
 	}
 	
@@ -464,12 +534,12 @@ public class Worker implements Runnable {
    * Stores the partitions offset timestamp in ZK
    * @throws Exception
    */
-  private void storeOffsetTimestamp() throws Exception {
+  private void storeOffsetTimestamp(long offsetTimestamp) throws Exception {
       if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
           curator.create().creatingParentsIfNeeded()
-                  .withMode(CreateMode.PERSISTENT).forPath(zkPath_offSetTimestamp, getBytes(timestamp));
+                  .withMode(CreateMode.PERSISTENT).forPath(zkPath_offSetTimestamp, Converter.getBytes(offsetTimestamp));
       } else {
-          curator.setData().forPath(zkPath_offSetTimestamp, getBytes(timestamp));
+          curator.setData().forPath(zkPath_offSetTimestamp, Converter.getBytes(offsetTimestamp));
       }   
 
   }   
@@ -483,11 +553,12 @@ public class Worker implements Runnable {
       if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
           return 0L; 
       } else {
-          return longFromBytes(curator.getData().forPath(zkPath_offSetTimestamp), 0); 
+          return Converter.longFromBytes(curator.getData().forPath(zkPath_offSetTimestamp), 0); 
       }   
   }  
   
-	private long longFromBytes(byte[] data, int offset) {
+	@Deprecated
+  private long longFromytes(byte[] data, int offset) {
 		return ((long) data[offset] & 0xFFL) << 56 //
 				| ((long) data[offset + 1] & 0xFFL) << 48 //
 				| ((long) data[offset + 2] & 0xFFL) << 40 //
@@ -499,6 +570,7 @@ public class Worker implements Runnable {
 
 	}
 
+	@Deprecated
 	private byte[] getBytes(long l) {
 		return new byte[] //
 		{ (byte) (l >> 56), //
@@ -535,7 +607,7 @@ public class Worker implements Runnable {
 		private OutputStream out;
 
 		public OutputFile(long hour) {
-			dir = fillInTemplate(hour);
+			dir = Converter.timestampTemplateBuilder(hour, template);
 
 			/*
 			 * Related to IPGBD-1028 Output topic-partitionId-offset-incrementval.bm
@@ -642,6 +714,7 @@ public class Worker implements Runnable {
 		}
 	}
 
+	@Deprecated
 	private String fillInTemplate(long timestamp) {
 		Calendar cal = Calendar.getInstance();
 		cal.setTimeZone(UTC);
