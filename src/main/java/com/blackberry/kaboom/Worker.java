@@ -340,6 +340,10 @@ public class Worker implements Runnable {
 			if(highwatermark < offset) {
 				LOG.warn("[{}] has a lower High Water Mark {} than we're trying to consume from {}.  Likely this is caused by a non-ISR taking leadership.  Resetting offset to High Water Mark", partitionId, highwatermark, offset);
 				offset = highwatermark;
+				
+				//get rid of the old consumer and start a new one
+				consumer = new Consumer(consumerConfig, clientId, topic, partition,
+						offset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
 			}
 
 			byte[] bytes = new byte[1024 * 1024];
