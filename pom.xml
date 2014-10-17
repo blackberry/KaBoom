@@ -156,4 +156,5 @@
     </pluginManagement>
   </build>
 
+  <description>This is KaBoom</description>
 </project>
