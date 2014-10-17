@@ -335,16 +335,7 @@ public class Worker implements Runnable {
 			LOG.info("[{}] Created worker.  Starting at offset {}.", partitionId,
 					topic, partition, offset);
 			
-			//mbruce: Adding check to ensure that the latest offset in Kafka is not less than where we are.
-			long highwatermark = consumer.getHighWaterMark(); 
-			if(highwatermark < offset) {
-				LOG.warn("[{}] has a lower High Water Mark {} than we're trying to consume from {}.  Likely this is caused by a non-ISR taking leadership.  Resetting offset to High Water Mark", partitionId, highwatermark, offset);
-				offset = highwatermark;
-				
-				//get rid of the old consumer and start a new one
-				consumer = new Consumer(consumerConfig, clientId, topic, partition,
-						offset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
-			}
+			
 
 			byte[] bytes = new byte[1024 * 1024];
 			int length = -1;
@@ -389,6 +380,13 @@ public class Worker implements Runnable {
 
 					lag = consumer.getHighWaterMark() - offset;
 					offset = consumer.getNextOffset();
+					
+				//mbruce: Adding check to ensure that the latest offset in Kafka is not less than where we are.
+					long highwatermark = consumer.getHighWaterMark(); 
+					if(highwatermark < offset) {
+						LOG.warn("[{}] has a lower High Water Mark {} than we're trying to consume from {}.  Likely this is caused by a non-ISR taking leadership", partitionId, highwatermark, offset);
+												
+					}
 
 					// Check for version
 					if (bytes[0] == (byte) 0xFE) {
