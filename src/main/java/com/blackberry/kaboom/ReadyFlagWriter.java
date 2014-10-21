@@ -37,7 +37,8 @@ public class ReadyFlagWriter extends NotifyingThread
 	private static final String ZK_ROOT = "/kaboom"; 
 	public static final String MERGE_READY_FLAG = "_READY";
 	public static final String KAFKA_READY_FLAG = "_KAFKA_READY";
-	public static final String INCOMING_DIR = "/incoming";
+	public static final String INCOMING_DIR = "incoming";
+	public static final String WORKING_DIR = "working";
 	public static final String LOG_TAG = "[ready flag writer] ";
 
 	public ReadyFlagWriter(String kafkaZkConnectionString,
@@ -79,7 +80,7 @@ public class ReadyFlagWriter extends NotifyingThread
 	public static String parentFromPath(String hdfsPath, String dir) 
 	{
 		String result = new String();
-		int lastCharPos = hdfsPath.lastIndexOf(dir);	
+		int lastCharPos = hdfsPath.lastIndexOf("/" + dir);	
 		result = hdfsPath.substring(0, lastCharPos);
 		return result;
 	}
@@ -164,6 +165,7 @@ public class ReadyFlagWriter extends NotifyingThread
 				final Path topicRoot = new Path(parentFromPath(hdfsPath, INCOMING_DIR));
 				final Path mergeReadyFlag = new Path(topicRoot + "/" + MERGE_READY_FLAG);
 				final Path incomingDirectory = new Path(topicRoot + "/"  + INCOMING_DIR);
+				final Path workingDirectory = new Path(topicRoot + "/"  + WORKING_DIR);
 				final Path kafkaReadyFlag = new Path(incomingDirectory.toString() + "/" + KAFKA_READY_FLAG);
 				
 				LOG.debug(LOG_TAG + "HDFS path for topic root is: {}", topicRoot.toString());
@@ -200,6 +202,11 @@ public class ReadyFlagWriter extends NotifyingThread
 				
 				if (fs.exists(kafkaReadyFlag))  {
 					LOG.debug(LOG_TAG + "skipping {} since kafka's ready flag {} already exists", topicName, kafkaReadyFlag.toString());
+					continue;
+				}
+
+				if (fs.exists(workingDirectory))  {
+					LOG.debug(LOG_TAG + "skipping {} since working directory {} already exists", topicName, workingDirectory.toString());
 					continue;
 				}
 				
