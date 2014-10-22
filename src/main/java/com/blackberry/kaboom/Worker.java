@@ -501,7 +501,7 @@ public class Worker implements Runnable {
 			LOG.info("[{}] Storing processed offsets into ZooKeeper.", partitionId);
 			try {
 				storeOffset();
-				storeOffsetTimestamp(maxTimestamp);
+				storeOffsetTimestamp(partitionId, maxTimestamp);
 			} catch (Exception e) {
 				LOG.error("[{}] Error storing offset/timestamp in ZooKeeper", partitionId, e);
 			}
@@ -543,15 +543,23 @@ public class Worker implements Runnable {
    * Stores the partitions offset timestamp in ZK
    * @throws Exception
    */
-  private void storeOffsetTimestamp(long offsetTimestamp) throws Exception {
-      if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
-          curator.create().creatingParentsIfNeeded()
-                  .withMode(CreateMode.PERSISTENT).forPath(zkPath_offSetTimestamp, Converter.getBytes(offsetTimestamp));
-      } else {
-          curator.setData().forPath(zkPath_offSetTimestamp, Converter.getBytes(offsetTimestamp));
-      }   
+	private void storeOffsetTimestamp(String partitionId, long offsetTimestamp) throws Exception {
+		
+		if (offsetTimestamp == -1) {
+			LOG.info("Partition {} has a -1 offsetTime and will not be written to ZK", partitionId);
+			return;
+		}
 
-  }   
+		if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
+			curator.create().creatingParentsIfNeeded()
+					.withMode(CreateMode.PERSISTENT)
+					.forPath(zkPath_offSetTimestamp, Converter.getBytes(offsetTimestamp));
+		} else {
+			curator.setData().forPath(zkPath_offSetTimestamp,
+					Converter.getBytes(offsetTimestamp));
+		}
+
+	}
 
   /** 
    * Returns the partitions offset timestamp from ZK
