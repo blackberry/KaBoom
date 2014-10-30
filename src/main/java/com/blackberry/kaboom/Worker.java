@@ -340,8 +340,6 @@ public class Worker implements Runnable {
 
 			LOG.info("[{}] Created worker.  Starting at offset {}.", partitionId,
 					topic, partition, offset);
-			
-			
 
 			byte[] bytes = new byte[1024 * 1024];
 			int length = -1;
@@ -369,44 +367,72 @@ public class Worker implements Runnable {
 						continue;
 					}
 
-					// What happens when our expected offset for this message is greater than the actual offset?
+					// offset always refers to the next offset we expect to 
+					// since we just called consumer.getMessage() let's see
+					// if the offset of the last message is what we expected
+					// and handle the fun edge cases when it's not
 					
-					if (offset > consumer.getLastOffset())  
+					if (offset == consumer.getLastOffset())
+					{						
+						offset = consumer.getNextOffset();
+					}
+					else if (offset > consumer.getLastOffset())
 					{
+						LOG.warn("[{}] expected offset {} is greater than the last offset {}", 
+							 partitionId, offset, consumer.getLastOffset());
+						
 						if (offset < consumer.getHighWaterMark())
 						{
-							// Skip the message as it could have been received erroneously... Maybe?
-							LOG.warn("[{}] skipping received offset {} (lower than requested ({}) and lower than high watermark ({})",  partitionId, consumer.getLastOffset(), offset, consumer.getHighWaterMark());
+							// "Sometimes the consumer may report data we've already seen." -- Will Chartrand
+							
+							LOG.warn("[{}] skipping last offset {} since it's lower than high watermark {}",  
+								 partitionId, consumer.getLastOffset(), consumer.getHighWaterMark());
+							
 							continue;
 						}
-						else
+						else if (offset > consumer.getHighWaterMark())
 						{
-							/*
-							 *	If our offset is greathan than last offset and higher than the high watermark then perhaps the broker we're 
-							 *	receiving messages from has changed and the new broker has a lower offset because it was behind when
-							 *	the new broker took over... Maybe?
-							 */
-
+							/*	
+							 *	If the expected offset is greater than than actual offset and also higher than the high watermark 
+							 *	then perhaps the broker we're receiving messages from has changed and the new broker has a 
+							 *	lower offset because it was behind when it took over... Maybe?  
+							*/
+							
+							LOG.warn("[{}] last offset {} (expected offset {} and higher  than high watermark ({})",  
+								 partitionId, consumer.getLastOffset(), offset, consumer.getHighWaterMark());
+							
 							if (followLowerOffsets)
 							{
-								LOG.warn("[{}] Resetting to received offset {} which is before requested offset of {} since followLowerOffsets is {}",
-									 partitionId, consumer.getLastOffset(), offset, followLowerOffsets);		
+								LOG.warn("[{}] Resetting offset to high watermark {} since followLowerOffsets is {}", 
+									 partitionId, consumer.getLastOffset(), offset, followLowerOffsets);
+								
+								consumer.setNextOffset((consumer.getHighWaterMark()));
+								offset = consumer.getHighWaterMark();
+								
+								LOG.info("[{}] Successfully set offset to the high watermark of {}", 
+									 partitionId, consumer.getHighWaterMark());
 							}
 							else
 							{
-								LOG.error("[{}] Received offset {} which is before requested offset of {} and followLowerOffsets is {}, ignoring offset and skipping message.", partitionId, consumer.getLastOffset(), offset, followLowerOffsets);
+								LOG.error("[{}] followLowerOffsets is {}, ignoring offset and skipping message.", 
+									 partitionId, consumer.getLastOffset(), offset, followLowerOffsets);
+								
 								continue;
 							}
 						}
+						else
+						{
+							LOG.error("[{}] Unhandled edge case when expected offset is greater than last offset " 
+								 + "and expected offset is also the high watermark");
+						}
 					}
-					else if (offset != consumer.getLastOffset()) 
+					else 
 					{
-						LOG.warn("[{}] Offset anomaly! Expected:{}, Got:{}", partitionId, offset, consumer.getLastOffset());
+						LOG.error("[{}] Offset anomaly! Expected:{}, Got:{}", partitionId, offset, consumer.getLastOffset());
 					}
 
 					linesread++;
 					lag = consumer.getHighWaterMark() - offset;
-					offset = consumer.getNextOffset();
 					
 					// Check for version
 					if (bytes[0] == (byte) 0xFE) {
