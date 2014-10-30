@@ -41,7 +41,7 @@ public class Worker implements Runnable {
 	private Consumer consumer;
 	private long offset;
 	private Boolean allowOffsetOverride = false;
-	private Boolean followLowerOffsets = false;
+	private Boolean sinkToHighWatermark = false;
 	private long timestamp;
 	private boolean stopping = false;
 
@@ -234,7 +234,7 @@ public class Worker implements Runnable {
 
 	public Worker(ConsumerConfiguration consumerConfig, Configuration hConf,
 			CuratorFramework curator, String topic, int partition, long runDuration,
-			String template, String proxyUser, Boolean offsetOverride, Boolean followLowerOffsets) throws Exception {
+			String template, String proxyUser, Boolean offsetOverride, Boolean sinkToHighWatermark) throws Exception {
 		this.endTime = System.currentTimeMillis() + runDuration;
 		this.hConf = hConf;
 		this.template = template;
@@ -246,7 +246,7 @@ public class Worker implements Runnable {
 		this.startTime = System.currentTimeMillis();
 		this.linesread = 0;
 		this.allowOffsetOverride = offsetOverride;
-		this.followLowerOffsets = followLowerOffsets;
+		this.sinkToHighWatermark = sinkToHighWatermark;
 
 		partitionId = topic + "-" + partition;
 
@@ -398,24 +398,26 @@ public class Worker implements Runnable {
 							 *	lower offset because it was behind when it took over... Maybe?  
 							*/
 							
-							LOG.warn("[{}] last offset {} (expected offset {} and higher  than high watermark ({})",  
+							LOG.warn("[{}] last offset {} (expected offset {} and higher than high watermark ({})",  
 								 partitionId, consumer.getLastOffset(), offset, consumer.getHighWaterMark());
 							
-							if (followLowerOffsets)
+							if (sinkToHighWatermark)
 							{
-								LOG.warn("[{}] Resetting offset to high watermark {} since followLowerOffsets is {}", 
-									 partitionId, consumer.getLastOffset(), offset, followLowerOffsets);
+								LOG.warn("[{}] Resetting offset to high watermark {} since sinkToHighWatermark is {}", 
+									 partitionId, consumer.getLastOffset(), offset, sinkToHighWatermark);
 								
 								consumer.setNextOffset((consumer.getHighWaterMark()));
 								offset = consumer.getHighWaterMark();
 								
 								LOG.info("[{}] Successfully set offset to the high watermark of {}", 
 									 partitionId, consumer.getHighWaterMark());
+								
+								continue;
 							}
 							else
 							{
-								LOG.error("[{}] followLowerOffsets is {}, ignoring offset and skipping message.", 
-									 partitionId, consumer.getLastOffset(), offset, followLowerOffsets);
+								LOG.error("[{}] sinkToHighWatermark is {}, ignoring offset and skipping message.", 
+									 partitionId, consumer.getLastOffset(), offset, sinkToHighWatermark);
 								
 								continue;
 							}
