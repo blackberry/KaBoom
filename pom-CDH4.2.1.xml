@@ -61,7 +61,7 @@
     <dependency>
       <groupId>com.blackberry.krackle</groupId>
       <artifactId>krackle</artifactId>
-      <version>0.7.4</version>
+      <version>0.7.6</version>
     </dependency>
     <dependency>
       <groupId>org.apache.kafka</groupId>
