@@ -30,6 +30,7 @@ import org.yaml.snakeyaml.Yaml;
 
 import com.blackberry.krackle.MetricRegistrySingleton;
 import com.blackberry.krackle.consumer.ConsumerConfiguration;
+import com.blackberry.common.props.Parser;
 
 public class KaBoom {
 	private static final Logger LOG = LoggerFactory.getLogger(KaBoom.class);
@@ -306,22 +307,14 @@ public class KaBoom {
 						String proxyUser = topicProxyUserLocation.get(topic);
 						if (proxyUser == null) {
 							proxyUser = "";
-						}
+						}						
 						
-						// Check if we're allowing ZK offset overrides
+						Parser propsParser = new Parser(props);
+						Boolean allowOffsetOverrides = propsParser.parseBoolean("kaboom.allowOffsetOverrides", false);						
+						Boolean followLowerOffsets = propsParser.parseBoolean("kaboom.followLowerOffsets", false);	
 						
-						Boolean allowOffsetOverrides = false;
+						Worker worker = new Worker(consumerConfig, hConf, curator, topic, partition, fileRotateInterval, path, proxyUser, allowOffsetOverrides, followLowerOffsets);
 						
-						if (props.containsKey("kaboom.allowOffsetOverrides"))
-						{
-							String allowOverridesProp = props.getProperty("kaboom.allowOffsetOverrides");
-							if (allowOverridesProp.toLowerCase().equals("true") || allowOverridesProp.toLowerCase().equals("false"))
-							{
-								allowOffsetOverrides = Boolean.parseBoolean(allowOverridesProp);
-							}
-						}
-
-						Worker worker = new Worker(consumerConfig, hConf, curator, topic, partition, fileRotateInterval, path, proxyUser, allowOffsetOverrides);
 						workers.add(worker);
 						Thread t = new Thread(worker);
 						threads.add(t);

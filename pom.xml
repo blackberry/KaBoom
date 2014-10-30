@@ -27,13 +27,13 @@
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-client</artifactId>
       <version>2.0.0-cdh4.2.1</version>
-    </dependency>
- <dependency>
-<groupId>com.blackberry.common</groupId>
-<artifactId>common</artifactId>
-<version>0.0.1</version>
-</dependency>
-    <dependency>
+	</dependency>
+	<dependency>
+		<groupId>com.blackberry.common</groupId>
+		<artifactId>common</artifactId>
+		<version>0.0.2</version>
+	</dependency>
+	<dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
       <version>1.7.7</version>

@@ -41,6 +41,7 @@ public class Worker implements Runnable {
 	private Consumer consumer;
 	private long offset;
 	private Boolean allowOffsetOverride = false;
+	private Boolean followLowerOffsets = false;
 	private long timestamp;
 	private boolean stopping = false;
 
@@ -228,12 +229,12 @@ public class Worker implements Runnable {
 			CuratorFramework curator, String topic, int partition, long runDuration,
 			String template) throws Exception {
 		this(consumerConfig, hConf, curator, topic, partition, runDuration,
-				template, "", false);
+				template, "", false, false);
 	}
 
 	public Worker(ConsumerConfiguration consumerConfig, Configuration hConf,
 			CuratorFramework curator, String topic, int partition, long runDuration,
-			String template, String proxyUser, Boolean offsetOverride) throws Exception {
+			String template, String proxyUser, Boolean offsetOverride, Boolean followLowerOffsets) throws Exception {
 		this.endTime = System.currentTimeMillis() + runDuration;
 		this.hConf = hConf;
 		this.template = template;
@@ -245,6 +246,7 @@ public class Worker implements Runnable {
 		this.startTime = System.currentTimeMillis();
 		this.linesread = 0;
 		this.allowOffsetOverride = offsetOverride;
+		this.followLowerOffsets = followLowerOffsets;
 
 		partitionId = topic + "-" + partition;
 
@@ -362,30 +364,58 @@ public class Worker implements Runnable {
 
 					length = consumer.getMessage(bytes, 0, bytes.length);
 
-					if (length == -1) {
+					if (length == -1)
+					{
 						continue;
 					}
 
-					if (consumer.getLastOffset() < offset) {
-						// Sometimes the consumer may report data we've already seen.
-						LOG.debug(
-								"[{}] Received offset {} which is before requested offset of {}.  Skipping message.",
-								partitionId, consumer.getLastOffset(), offset);
-						continue;
+					/*
+					 * What's our offset relative to the offset after having just called consumer.getMessage()?
+					 * 
+					 *	If our offset is less but higher than the high watermark then perhaps the broker we're receiving
+					 *	messages from has changed and the new broker has a lower offset because it was behind when
+					 *	the new broker took over... Maybe?
+					 *
+					 *	If our offset is less, but lower than the high water mark then we can likely log  and disregard the 
+					 *	message as it could have been received erroneously... Maybe?
+					 *
+					*/
+					
+					if (offset > consumer.getLastOffset())  
+					{
+						if (offset < consumer.getHighWaterMark())
+						{
+							LOG.warn("[{}] skipping offset {} (lower than requested ({}) and lower than high watermark ({})", 
+								 partitionId, consumer.getLastOffset(), offset, consumer.getHighWaterMark());
+							continue;
+						}
+						else
+						{
+							if (followLowerOffsets)
+							{
+								LOG.warn("[{}] Received offset {} which is before requested offset of {} and followLowerOffsets is {}, resetting offset.",
+									 partitionId, consumer.getLastOffset(), offset, followLowerOffsets);								
+								offset = consumer.getLastOffset();
+							}
+							else
+							{
+								LOG.error("[{}] Received offset {} which is before requested offset of {} and followLowerOffsets is {}, ignoring offset and skipping message.", partitionId, consumer.getLastOffset(), offset, followLowerOffsets);
+								continue;
+							}
+						}
 					}
 
-					// LOG.info("Read message: {}", new String(bytes, 0, length, "UTF8"));
 					linesread++;
 
-					if (offset != consumer.getLastOffset()) {
-						LOG.info("[{}] Offset anomaly! Expected:{}, Got:{}", partitionId,
-								offset, consumer.getLastOffset());
+					if (offset != consumer.getLastOffset()) 
+					{
+						LOG.warn("[{}] Offset anomaly! Expected:{}, Got:{}", partitionId, offset, consumer.getLastOffset());
 					}
 
 					lag = consumer.getHighWaterMark() - offset;
 					offset = consumer.getNextOffset();
 					
-				//mbruce: Adding check to ensure that the latest offset in Kafka is not less than where we are.
+					//mbruce: Adding check to ensure that the latest offset in Kafka is not less than where we are.
 					long highwatermark = consumer.getHighWaterMark(); 
 					if(highwatermark < offset) {
 						LOG.warn("[{}] has a lower High Water Mark {} than we're trying to consume from {}.  Likely this is caused by a non-ISR taking leadership", partitionId, highwatermark, offset);
