@@ -369,33 +369,28 @@ public class Worker implements Runnable {
 						continue;
 					}
 
-					/*
-					 * What's our offset relative to the offset after having just called consumer.getMessage()?
-					 * 
-					 *	If our offset is less but higher than the high watermark then perhaps the broker we're receiving
-					 *	messages from has changed and the new broker has a lower offset because it was behind when
-					 *	the new broker took over... Maybe?
-					 *
-					 *	If our offset is less, but lower than the high water mark then we can likely log  and disregard the 
-					 *	message as it could have been received erroneously... Maybe?
-					 *
-					*/
+					// What happens when our expected offset for this message is greater than the actual offset?
 					
 					if (offset > consumer.getLastOffset())  
 					{
 						if (offset < consumer.getHighWaterMark())
 						{
-							LOG.warn("[{}] skipping offset {} (lower than requested ({}) and lower than high watermark ({})", 
-								 partitionId, consumer.getLastOffset(), offset, consumer.getHighWaterMark());
+							// Skip the message as it could have been received erroneously... Maybe?
+							LOG.warn("[{}] skipping received offset {} (lower than requested ({}) and lower than high watermark ({})",  partitionId, consumer.getLastOffset(), offset, consumer.getHighWaterMark());
 							continue;
 						}
 						else
 						{
+							/*
+							 *	If our offset is greathan than last offset and higher than the high watermark then perhaps the broker we're 
+							 *	receiving messages from has changed and the new broker has a lower offset because it was behind when
+							 *	the new broker took over... Maybe?
+							 */
+
 							if (followLowerOffsets)
 							{
-								LOG.warn("[{}] Received offset {} which is before requested offset of {} and followLowerOffsets is {}, resetting offset.",
-									 partitionId, consumer.getLastOffset(), offset, followLowerOffsets);								
-								offset = consumer.getLastOffset();
+								LOG.warn("[{}] Resetting to received offset {} which is before requested offset of {} since followLowerOffsets is {}",
+									 partitionId, consumer.getLastOffset(), offset, followLowerOffsets);		
 							}
 							else
 							{
@@ -404,24 +399,15 @@ public class Worker implements Runnable {
 							}
 						}
 					}
-
-					linesread++;
-
-					if (offset != consumer.getLastOffset()) 
+					else if (offset != consumer.getLastOffset()) 
 					{
 						LOG.warn("[{}] Offset anomaly! Expected:{}, Got:{}", partitionId, offset, consumer.getLastOffset());
 					}
 
+					linesread++;
 					lag = consumer.getHighWaterMark() - offset;
 					offset = consumer.getNextOffset();
 					
-					//mbruce: Adding check to ensure that the latest offset in Kafka is not less than where we are.
-					long highwatermark = consumer.getHighWaterMark(); 
-					if(highwatermark < offset) {
-						LOG.warn("[{}] has a lower High Water Mark {} than we're trying to consume from {}.  Likely this is caused by a non-ISR taking leadership", partitionId, highwatermark, offset);
-												
-					}
-
 					// Check for version
 					if (bytes[0] == (byte) 0xFE) {
 						version = bytes[1];
