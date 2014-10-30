@@ -108,6 +108,8 @@ public class KaBoom {
 				topicProxyUserLocation.put(m.group(1), e.getValue().toString());
 			}
 		}
+		
+				
 
 		// Consumer config
 		ConsumerConfiguration consumerConfig = new ConsumerConfiguration(props);
@@ -305,9 +307,21 @@ public class KaBoom {
 						if (proxyUser == null) {
 							proxyUser = "";
 						}
+						
+						// Check if we're allowing ZK offset overrides
+						
+						Boolean allowOffsetOverrides = false;
+						
+						if (props.containsKey("kaboom.allowOffsetOverrides"))
+						{
+							String allowOverridesProp = props.getProperty("kaboom.allowOffsetOverrides");
+							if (allowOverridesProp.toLowerCase().equals("true") || allowOverridesProp.toLowerCase().equals("false"))
+							{
+								allowOffsetOverrides = Boolean.parseBoolean(allowOverridesProp);
+							}
+						}
 
-						Worker worker = new Worker(consumerConfig, hConf, curator, topic,
-								partition, fileRotateInterval, path, proxyUser);
+						Worker worker = new Worker(consumerConfig, hConf, curator, topic, partition, fileRotateInterval, path, proxyUser, allowOffsetOverrides);
 						workers.add(worker);
 						Thread t = new Thread(worker);
 						threads.add(t);

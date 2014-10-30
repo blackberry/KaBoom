@@ -40,6 +40,7 @@ public class Worker implements Runnable {
 
 	private Consumer consumer;
 	private long offset;
+	private Boolean allowOffsetOverride = false;
 	private long timestamp;
 	private boolean stopping = false;
 
@@ -65,6 +66,7 @@ public class Worker implements Runnable {
 	private static final String ZK_ROOT = "/kaboom";
 	private String zkPath;
 	private String zkPath_offSetTimestamp;
+	private String zkPath_offSetOverride;
 
 	private String topic;
 	private int partition;
@@ -226,12 +228,12 @@ public class Worker implements Runnable {
 			CuratorFramework curator, String topic, int partition, long runDuration,
 			String template) throws Exception {
 		this(consumerConfig, hConf, curator, topic, partition, runDuration,
-				template, "");
+				template, "", false);
 	}
 
 	public Worker(ConsumerConfiguration consumerConfig, Configuration hConf,
 			CuratorFramework curator, String topic, int partition, long runDuration,
-			String template, String proxyUser) throws Exception {
+			String template, String proxyUser, Boolean offsetOverride) throws Exception {
 		this.endTime = System.currentTimeMillis() + runDuration;
 		this.hConf = hConf;
 		this.template = template;
@@ -242,6 +244,7 @@ public class Worker implements Runnable {
 		this.consumerConfig = consumerConfig;
 		this.startTime = System.currentTimeMillis();
 		this.linesread = 0;
+		this.allowOffsetOverride = offsetOverride;
 
 		partitionId = topic + "-" + partition;
 
@@ -312,6 +315,7 @@ public class Worker implements Runnable {
 		try {
 			zkPath = ZK_ROOT + "/topics/" + topic + "/" + partition;
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
+			zkPath_offSetOverride = zkPath + "/offset_override";
 
 			try {
 				offset = getOffset();
@@ -531,11 +535,38 @@ public class Worker implements Runnable {
 
 	}
 
-	private long getOffset() throws Exception {
-		if (curator.checkExists().forPath(zkPath) == null) {
+	/*
+	 * Get the offset in ZK, but if an override exists, perfer it instead.
+	 */
+	private long getOffset() throws Exception 
+	{
+		if (curator.checkExists().forPath(zkPath) == null) 
+		{
 			return 0L;
-		} else {
-			return Converter.longFromBytes(curator.getData().forPath(zkPath), 0);
+		} 
+		else 
+		{		
+			long zkOffset = Converter.longFromBytes(curator.getData().forPath(zkPath), 0);
+			
+			if (curator.checkExists().forPath(zkPath_offSetOverride) != null) 
+			{
+				long zkOffsetOverride = Converter.longFromBytes(curator.getData().forPath(zkPath_offSetOverride), 0);				
+				
+				if (allowOffsetOverride)
+				{
+					LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}", this.partitionId, zkOffset, zkOffsetOverride, allowOffsetOverride);					
+					curator.delete().forPath(zkPath_offSetOverride);
+					LOG.info("{} successfully deleted offset override ZK path: {}", this.partitionId,  zkPath_offSetOverride);			
+					return zkOffsetOverride;					
+				}
+				else
+				{
+					LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}", this.partitionId, zkOffset, zkOffsetOverride, allowOffsetOverride);
+					return zkOffset;
+				}				
+			}
+			
+			return zkOffset;
 		}
 	}
 	
