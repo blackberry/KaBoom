@@ -313,7 +313,7 @@ public class KaBoom {
 						Boolean allowOffsetOverrides = propsParser.parseBoolean("kaboom.allowOffsetOverrides", false);						
 						Boolean sinkToHighWatermark = propsParser.parseBoolean("kaboom.sinkToHighWatermark", false);	
 						
-						Worker worker = new Worker(consumerConfig, hConf, curator, topic, partition, fileRotateInterval, path, proxyUser, allowOffsetOverrides, followLowerOffsets);
+						Worker worker = new Worker(consumerConfig, hConf, curator, topic, partition, fileRotateInterval, path, proxyUser, allowOffsetOverrides, sinkToHighWatermark);
 						
 						workers.add(worker);
 						Thread t = new Thread(worker);
