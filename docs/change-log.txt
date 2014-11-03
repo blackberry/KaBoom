@@ -13,3 +13,4 @@ Changes in 0.6.10
 - Adds  feature and configuration property to sink to lower offsets when offsets surpass the high watermark
 - Re-writes the offset handling code for when last offsets do not match expected offset
 - Adds new dependency to the new com.blackberry.common.props that simplifies parsing property files and will eventually be enhanced with ZK support
+	
