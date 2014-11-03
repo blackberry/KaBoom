@@ -5,7 +5,6 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.security.PrivilegedExceptionAction;
-import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -87,7 +86,7 @@ public class Worker implements Runnable
 	private String lowerOffsetsGaugeName;
 
 	private static Set<Worker> workers = new HashSet<Worker>();
-	private static Object workersLock = new Object();
+	private static final Object workersLock = new Object();
 
 	static 
 	{
@@ -359,6 +358,7 @@ public class Worker implements Runnable
 		
 		synchronized (workersLock)
 		{
+			// NetBeans considers this unsafe: See https://www.google.ca/#q=leaking+this+in+constructor
 			workers.add(this);
 		}
 		
@@ -402,9 +402,9 @@ public class Worker implements Runnable
 			LOG.info("[{}] Created worker.  Starting at offset {}.", partitionId, offset);
 
 			byte[] bytes = new byte[1024 * 1024];
-			int length = -1;
-			byte version = -1;
-			int pos = 0;			
+			int length;
+			byte version;
+			int pos;			
 			PriParser pri = new PriParser();
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();

@@ -73,8 +73,6 @@ public class KaBoom {
 			MetricRegistrySingleton.getInstance().enableConsole();
 		}
 
-		// props.list(System.out);
-
 		// My ID
 		if (props.get("kaboom.id") == null) {
 			LOG.error("Missing required property: kaboom.id");

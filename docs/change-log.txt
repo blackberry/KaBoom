@@ -1,0 +1,15 @@
+Worker.java
+-----------
+
+Changes in 0.7.0
+
+- Fixes synchronization on non-final workersLock object (used when instantiating metrics)
+- Removes unused import java.util.Calendar
+
+Changes in 0.6.10
+
+- Re-formats source for Kaboom and Worker class 
+- Adds offset overrides feature for single partitions to be set to specific offsets in ZK
+- Adds  feature and configuration property to sink to lower offsets when offsets surpass the high watermark
+- Re-writes the offset handling code for when last offsets do not match expected offset
+- Adds new dependency to the new com.blackberry.common.props that simplifies parsing property files and will eventually be enhanced with ZK support
