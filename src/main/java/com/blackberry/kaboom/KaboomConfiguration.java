@@ -1,9 +1,6 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package com.blackberry.kaboom;
+
+import java.util.Map;
 
 /**
  *
@@ -11,5 +8,14 @@ package com.blackberry.kaboom;
  */
 public class KaboomConfiguration
 {
+	private int kaboomId;
+	private long fileRotateInterval;
+	private int weight;
+	private Map<String, String> topicFileLocation;
+	private Map<String, String> topicProxyUserLocation;
+	private String kerberosPrincipal;
+	private String kerberosKeytab;
 	
+	
+		 
 }

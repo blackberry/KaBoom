@@ -22,7 +22,8 @@ import org.slf4j.LoggerFactory;
 import com.blackberry.common.threads.NotifyingThread;
 import com.blackberry.common.threads.ThreadCompleteListener;
 
-public class LoadBalancer extends LeaderSelectorListenerAdapter implements ThreadCompleteListener {
+public class LoadBalancer extends LeaderSelectorListenerAdapter implements ThreadCompleteListener
+{
 	private static final Logger LOG = LoggerFactory.getLogger(LoadBalancer.class);
 	private static final Charset UTF8 = Charset.forName("UTF-8");
 	private static final Random rand = new Random();
@@ -36,26 +37,28 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 	private Map<String, String> topicToProxyUser;
 	private Properties props;
 
-	public LoadBalancer(Properties props, Map<String, String> topicFileLocation, Configuration hConf, Map<String, String> topicToProxyUser) {
-		kafkaZkConnectionString = props
-				.getProperty("kafka.zookeeper.connection.string");
+	public LoadBalancer(Properties props, Map<String, String> topicFileLocation, Configuration hConf, Map<String, String> topicToProxyUser)
+	{
+		kafkaZkConnectionString = props.getProperty("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = props.getProperty("metadata.broker.list");
-		this.topicFileLocation = topicFileLocation; 
+		this.topicFileLocation = topicFileLocation;
 		this.topicToProxyUser = topicToProxyUser;
 		this.hConf = hConf;
 		this.props = props;
 	}
-	
+
 	@Override
-	public void takeLeadership(CuratorFramework curator) throws Exception {
+	public void takeLeadership(CuratorFramework curator) throws Exception
+	{
 		// After start up, wait 30 seconds. I assume that something has happened
 		// that has caused a leader change, and we want to give that time to settle.
-		
-		LOG.debug("a new leader has been elected: kaboom.id={}", this.props.get("kaboom.id"));
-		
+
+		LOG.info("a new leader has been elected: kaboom.id={}", this.props.get("kaboom.id"));
+
 		Thread.sleep(30 * 1000);
 
-		while (true) {
+		while (true)
+		{
 			Map<String, String> partitionToHost = new HashMap<String, String>();
 			Map<String, List<String>> hostToPartition = new HashMap<String, List<String>>();
 			final Map<String, KaBoomNodeInfo> clients = new HashMap<String, KaBoomNodeInfo>();
@@ -67,36 +70,41 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			StateUtils.readTopicsFromZooKeeper(kafkaZkConnectionString, topics);
 
 			// Map partition to host and host to partition
-			StateUtils.getPartitionHosts(kafkaSeedBrokers, topics, partitionToHost,
-					hostToPartition);
+			StateUtils.getPartitionHosts(kafkaSeedBrokers, topics, partitionToHost, hostToPartition);
 
 			// Get a list of active clients from zookeeper
 			StateUtils.getActiveClients(curator, clients);
 
 			// Get a list of current assignments
-
 			// Get a list of current assignments
-			for (String partition : partitionToHost.keySet()) {
-				Stat stat = curator.checkExists().forPath(
-						"/kaboom/assignments/" + partition);
-				if (stat != null) {
-					// check if the client is still connected, and delete node if it is
-					// not.
-					String client = new String(curator.getData().forPath(
-							"/kaboom/assignments/" + partition), UTF8);
-					if (clients.containsKey(client)) {
-						LOG.debug("Partition {} : client {} is connected", partition,
-								client);
-						partitionToClient.put(partition, client);
+			
+			for (String partition : partitionToHost.keySet())
+			{
+				Stat stat = curator.checkExists().forPath("/kaboom/assignments/" + partition);
+				
+				if (stat != null)
+				{
+					// check if the client is still connected, and delete node if it is not.
+					
+					String client = new String(curator.getData().forPath("/kaboom/assignments/" + partition), UTF8);
+					
+					if (clients.containsKey(client))
+					{
+						LOG.debug("Partition {} : client {} is connected", partition, client);
+						
+						partitionToClient.put(partition, client);						
 						List<String> parts = clientToPartitions.get(client);
-						if (parts == null) {
+						
+						if (parts == null)
+						{
 							parts = new ArrayList<String>();
 							clientToPartitions.put(client, parts);
 						}
 						parts.add(partition);
-					} else {
+					} else
+					{
 						LOG.debug("Partition {} : client {} is not connected", partition,
-								client);
+							 client);
 						curator.delete().forPath("/kaboom/assignments/" + partition);
 						stat = null;
 					}
@@ -108,41 +116,49 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 
 			// If any node is over its target by at least one, then unassign
 			// partitions until it is at or below its target
-			for (Entry<String, KaBoomNodeInfo> e : clients.entrySet()) {
+			for (Entry<String, KaBoomNodeInfo> e : clients.entrySet())
+			{
 				String client = e.getKey();
 				KaBoomNodeInfo info = e.getValue();
 
-				if (info.getLoad() >= info.getTargetLoad() + 1) {
+				if (info.getLoad() >= info.getTargetLoad() + 1)
+				{
 					List<String> localPartitions = new ArrayList<String>();
 					List<String> remotePartitions = new ArrayList<String>();
 
-					for (String partition : clientToPartitions.get(client)) {
-						if (partitionToHost.get(partition).equals(info.getHostname())) {
+					for (String partition : clientToPartitions.get(client))
+					{
+						if (partitionToHost.get(partition).equals(info.getHostname()))
+						{
 							localPartitions.add(partition);
-						} else {
+						} else
+						{
 							remotePartitions.add(partition);
 						}
 					}
 
-					while (info.getLoad() > info.getTargetLoad()) {
+					while (info.getLoad() > info.getTargetLoad())
+					{
 						String partitionToDelete;
-						if (remotePartitions.size() > 0) {
+						if (remotePartitions.size() > 0)
+						{
 							partitionToDelete = remotePartitions.remove(rand
-									.nextInt(remotePartitions.size()));
-						} else {
+								 .nextInt(remotePartitions.size()));
+						} else
+						{
 							partitionToDelete = localPartitions.remove(rand
-									.nextInt(localPartitions.size()));
+								 .nextInt(localPartitions.size()));
 						}
 
 						LOG.info("Unassgning {} from overloaded client {}",
-								partitionToDelete, client);
+							 partitionToDelete, client);
 						partitionToClient.remove(partitionToDelete);
 						clientToPartitions.get(client).remove(partitionToDelete);
 
 						info.setLoad(info.getLoad() - 1);
 
 						curator.delete()
-								.forPath("/kaboom/assignments/" + partitionToDelete);
+							 .forPath("/kaboom/assignments/" + partitionToDelete);
 					}
 				}
 			}
@@ -151,29 +167,39 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			// lowest loaded client
 			{
 				List<String> sortedClients = new ArrayList<String>();
-				Comparator<String> comparator = new Comparator<String>() {
+				Comparator<String> comparator = new Comparator<String>()
+				{
 					@Override
-					public int compare(String a, String b) {
+					public int compare(String a, String b)
+					{
 						KaBoomNodeInfo infoA = clients.get(a);
 						double valA = infoA.getLoad() / infoA.getTargetLoad();
 
 						KaBoomNodeInfo infoB = clients.get(b);
 						double valB = infoB.getLoad() / infoB.getTargetLoad();
 
-						if (valA == valB) {
+						if (valA == valB)
+						{
 							return 0;
-						} else if (valA > valB) {
-							return 1;
-						} else {
-							return -1;
+						} else
+						{
+							if (valA > valB)
+							{
+								return 1;
+							} else
+							{
+								return -1;
+							}
 						}
 					}
 				};
 				sortedClients.addAll(clients.keySet());
 
-				for (String partition : partitionToHost.keySet()) {
+				for (String partition : partitionToHost.keySet())
+				{
 					// If it's already assigned, skip it.
-					if (partitionToClient.containsKey(partition)) {
+					if (partitionToClient.containsKey(partition))
+					{
 						continue;
 					}
 					Collections.sort(sortedClients, comparator);
@@ -184,37 +210,46 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 					// first node.
 					LOG.info("Going to assign {}", partition);
 					String chosenClient = null;
-					for (String client : sortedClients) {
+					for (String client : sortedClients)
+					{
 						LOG.info("- Checking {}", client);
 						KaBoomNodeInfo info = clients.get(client);
 						LOG.info("- Current load = {}, Target load =  {}", info.getLoad(),
-								info.getTargetLoad());
-						if (info.getLoad() >= info.getTargetLoad()) {
+							 info.getTargetLoad());
+						if (info.getLoad() >= info.getTargetLoad())
+						{
 							chosenClient = sortedClients.get(0);
 							break;
-						} else if (clients.get(client).getHostname()
-								.equals(partitionToHost.get(partition))) {
-							chosenClient = client;
-							break;
-						} else {
-							continue;
+						} else
+						{
+							if (clients.get(client).getHostname()
+								 .equals(partitionToHost.get(partition)))
+							{
+								chosenClient = client;
+								break;
+							} else
+							{
+								continue;
+							}
 						}
 					}
-					if (chosenClient == null) {
+					if (chosenClient == null)
+					{
 						chosenClient = sortedClients.get(0);
 					}
 
 					LOG.info("Assigning partition {} to client {}", partition,
-							chosenClient);
+						 chosenClient);
 
 					curator
-							.create()
-							.withMode(CreateMode.PERSISTENT)
-							.forPath("/kaboom/assignments/" + partition,
-									chosenClient.getBytes(UTF8));
+						 .create()
+						 .withMode(CreateMode.PERSISTENT)
+						 .forPath("/kaboom/assignments/" + partition,
+							  chosenClient.getBytes(UTF8));
 
 					List<String> parts = clientToPartitions.get(chosenClient);
-					if (parts == null) {
+					if (parts == null)
+					{
 						parts = new ArrayList<String>();
 						clientToPartitions.put(chosenClient, parts);
 					}
@@ -223,7 +258,7 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 					partitionToClient.put(partition, chosenClient);
 
 					clients.get(chosenClient).setLoad(
-							clients.get(chosenClient).getLoad() + 1);
+						 clients.get(chosenClient).getLoad() + 1);
 				}
 			}
 
@@ -235,20 +270,20 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			 *  work.  If that behavior changes then additional logic will be required
 			 *  to ensure this isn't executed too often  
 			 */
-			
-			if (readyFlagThread == null || !readyFlagThread.isAlive()) {
+			if (readyFlagThread == null || !readyFlagThread.isAlive())
+			{
 				LOG.info("[ready flag writer] thread doesn't exist or is not running");
 				readyFlagWriter = new ReadyFlagWriter(kafkaZkConnectionString, kafkaSeedBrokers, curator, topicFileLocation, hConf, topicToProxyUser);
 				readyFlagWriter.addListener(this);
 				readyFlagThread = new Thread(readyFlagWriter);
 				readyFlagThread.start();
 				LOG.info("[ready flag writer] thread created and started");
-			}						
-			
+			}
+
 			Thread.sleep(10 * 60 * 1000);
 		}
 	}
-	
+
 	/*
 	 * This method is called when the ready flag writer thread finishes.  There is 
 	 * currently nothing special that needs to happen, but later we may wish to have 
@@ -257,14 +292,15 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 	 */
 	@Override
 	public void notifyOfThreadComplete(NotifyingThread notifyingThread,
-			Exception e) {
+		 Exception e)
+	{
 		LOG.info("[ready flag writer] thread finished");
-		
+
 		if (e != null)
 		{
 			LOG.error("[ready flag writer] Exception raised in thread: {}", e);
 		}
-		
+
 	}
 
 }

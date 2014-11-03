@@ -1,12 +1,18 @@
 Worker.java
 -----------
 
-Changes in 0.7.0
+Changes in 0.7.0:
+
+
+
+Minor Bug Fixes::
 
 - Fixes synchronization on non-final workersLock object (used when instantiating metrics)
 - Removes unused import java.util.Calendar
+- Worker.java, int length; byte version; int pos; are no longer initialized with default values that are never used
 
-Changes in 0.6.10
+
+Changes in 0.6.10:
 
 - Re-formats source for Kaboom and Worker class 
 - Adds offset overrides feature for single partitions to be set to specific offsets in ZK
