@@ -461,26 +461,22 @@ public class Worker implements Runnable
 									 *	lower offset because it was behind when it took over... Maybe?  
 									 */
 
-									LOG.warn("[{}] last offset {} (expected offset {} and higher than high watermark ({})",
-										 partitionId, consumer.getLastOffset(), offset, consumer.getHighWaterMark());
-
 									if (sinkToHighWatermark)
 									{
-										LOG.warn("[{}] Resetting offset to high watermark {} since sinkToHighWatermark is {}",
-											 partitionId, consumer.getLastOffset(), offset, sinkToHighWatermark);
-
+										LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
+											 partitionId, offset, consumer.getHighWaterMark(), sinkToHighWatermark);
+										
 										consumer.setNextOffset((consumer.getHighWaterMark()));
 										offset = consumer.getHighWaterMark();
 
-										LOG.info("[{}] Successfully set offset to the high watermark of {}",
-											 partitionId, consumer.getHighWaterMark());
+										LOG.info("[{}] Successfully set offset to the high watermark of {}", partitionId, consumer.getHighWaterMark());
 
 										continue;
 									} 
 									else
 									{
-										LOG.error("[{}] sinkToHighWatermark is {}, ignoring offset and skipping message.",
-											 partitionId, consumer.getLastOffset(), offset, sinkToHighWatermark);
+										LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
+											 partitionId, offset, consumer.getHighWaterMark(), sinkToHighWatermark);
 
 										continue;
 									}
