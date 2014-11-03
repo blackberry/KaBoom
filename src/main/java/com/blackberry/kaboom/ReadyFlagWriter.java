@@ -101,7 +101,7 @@ public class ReadyFlagWriter extends NotifyingThread
 			
 			if (stat != null) {
 				Long thisTimestamp = Converter.longFromBytes(curator.getData().forPath(zk_offset_path), 0);
-				LOG.debug(LOG_TAG + "found topic={} partition={} offset timestamp={}",topicName, partition.partitionId(), thisTimestamp);
+				LOG.info(LOG_TAG + "found topic={} partition={} offset timestamp={}",topicName, partition.partitionId(), thisTimestamp);
 				if (thisTimestamp < oldestTimestamp || oldestTimestamp == -1) {
 					oldestTimestamp = thisTimestamp;
 				}
@@ -151,7 +151,7 @@ public class ReadyFlagWriter extends NotifyingThread
 			
 			try {
 				
-				LOG.debug(LOG_TAG + "Checking {} partition(s) in topic={} for offset timestamps...", entry.getValue().size(), topicName);
+				LOG.info(LOG_TAG + "Checking {} partition(s) in topic={} for offset timestamps...", entry.getValue().size(), topicName);
 
 				String hdfsTemplate = topicFileLocation.get(topicName);
 
@@ -168,11 +168,11 @@ public class ReadyFlagWriter extends NotifyingThread
 				final Path workingDirectory = new Path(topicRoot + "/"  + WORKING_DIR);
 				final Path kafkaReadyFlag = new Path(incomingDirectory.toString() + "/" + KAFKA_READY_FLAG);
 				
-				LOG.debug(LOG_TAG + "HDFS path for topic root is: {}", topicRoot.toString());
-				LOG.debug(LOG_TAG + "HDFS path for merge ready flag is: {}", mergeReadyFlag.toString());				
-				LOG.debug(LOG_TAG + "HDFS path for kafka ready flag is: {}", kafkaReadyFlag.toString());
-				LOG.debug(LOG_TAG + "HDFS path for incoming directory is: {}", incomingDirectory.toString());
-				LOG.debug(LOG_TAG + "opening {}", topicRoot.toString());
+				LOG.info(LOG_TAG + "HDFS path for topic root is: {}", topicRoot.toString());
+				LOG.info(LOG_TAG + "HDFS path for merge ready flag is: {}", mergeReadyFlag.toString());				
+				LOG.info(LOG_TAG + "HDFS path for kafka ready flag is: {}", kafkaReadyFlag.toString());
+				LOG.info(LOG_TAG + "HDFS path for incoming directory is: {}", incomingDirectory.toString());
+				LOG.info(LOG_TAG + "opening {}", topicRoot.toString());
 				
 				Authenticator.getInstance().runPrivileged(topicToProxyUser.get(topicName),
 						new PrivilegedExceptionAction<Void>() 
@@ -191,32 +191,32 @@ public class ReadyFlagWriter extends NotifyingThread
 						});				
 
 				if (!fs.exists(incomingDirectory)) {
-					LOG.debug(LOG_TAG + "skipping {} since incoming directory {} doesn't exist (no data)", topicName, incomingDirectory.toString());
+					LOG.info(LOG_TAG + "skipping {} since incoming directory {} doesn't exist (no data)", topicName, incomingDirectory.toString());
 					continue;
 				}
 				
 				if (fs.exists(mergeReadyFlag))  {
-					LOG.debug(LOG_TAG + "skipping {} since merge's ready flag {} already exists", topicName, mergeReadyFlag.toString());
+					LOG.info(LOG_TAG + "skipping {} since merge's ready flag {} already exists", topicName, mergeReadyFlag.toString());
 					continue;
 				}
 				
 				if (fs.exists(kafkaReadyFlag))  {
-					LOG.debug(LOG_TAG + "skipping {} since kafka's ready flag {} already exists", topicName, kafkaReadyFlag.toString());
+					LOG.info(LOG_TAG + "skipping {} since kafka's ready flag {} already exists", topicName, kafkaReadyFlag.toString());
 					continue;
 				}
 
 				if (fs.exists(workingDirectory))  {
-					LOG.debug(LOG_TAG + "skipping {} since working directory {} already exists", topicName, workingDirectory.toString());
+					LOG.info(LOG_TAG + "skipping {} since working directory {} already exists", topicName, workingDirectory.toString());
 					continue;
 				}
 				
-				LOG.debug(LOG_TAG + "topic {} might be candidate for kafka ready flag (incoming data exists, no other flags exist)", topicName);
+				LOG.info(LOG_TAG + "topic {} might be candidate for kafka ready flag (incoming data exists, no other flags exist)", topicName);
 				long oldestTimestamp = oldestPartitionOffsetForTopic(topicName, entry.getValue());
-				LOG.debug(LOG_TAG + "oldest timestamp for topic={} is {}", topicName, oldestTimestamp);
+				LOG.info(LOG_TAG + "oldest timestamp for topic={} is {}", topicName, oldestTimestamp);
 
 				if (oldestTimestamp > startOfHourTimestamp) {
-					LOG.debug(LOG_TAG + "topic {} oldest timestamp is within the current hour, flag write required", topicName);
-					LOG.debug(LOG_TAG + "topic {} need to write {} as proxy user {}", topicName, kafkaReadyFlag.toString(), topicToProxyUser.get(topicName));
+					LOG.info(LOG_TAG + "topic {} oldest timestamp is within the current hour, flag write required", topicName);
+					LOG.info(LOG_TAG + "topic {} need to write {} as proxy user {}", topicName, kafkaReadyFlag.toString(), topicToProxyUser.get(topicName));
 					synchronized (fsLock) {
 						try {
 							fs.create(kafkaReadyFlag).close();
@@ -224,7 +224,7 @@ public class ReadyFlagWriter extends NotifyingThread
 							LOG.error("Error getting File System: {}", e.toString());
 						}
 					}
-					LOG.debug(LOG_TAG + "topic {} flag {} written as {}", topicName, kafkaReadyFlag.toString(), topicToProxyUser.get(topicName));
+					LOG.info(LOG_TAG + "topic {} flag {} written as {}", topicName, kafkaReadyFlag.toString(), topicToProxyUser.get(topicName));
 				}
 				
 			} 
@@ -232,7 +232,7 @@ public class ReadyFlagWriter extends NotifyingThread
 				LOG.error(LOG_TAG + "topic {} error occured processing a partition: {}", topicName, e.toString());
 			}
 
-			LOG.debug(LOG_TAG + "finished {} topic(s) after {} seconds", topicsWithPartitions.size(), (cal.getTimeInMillis() - currentTimestamp) / 1000);
+			LOG.info(LOG_TAG + "finished {} topic(s) after {} seconds", topicsWithPartitions.size(), (cal.getTimeInMillis() - currentTimestamp) / 1000);
 		}
 	}
 }

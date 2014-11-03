@@ -4,7 +4,7 @@
   xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.blackberry.kaboom</groupId>
-  <version>0.6.9-CDH4.2.1</version>
+  <version>0.6.10-CDH4.2.1</version>
   <artifactId>kaboom</artifactId>
   <name>KaBoom</name>
   <url>http://blackberry.com</url>
@@ -27,13 +27,13 @@
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-client</artifactId>
       <version>2.0.0-cdh4.2.1</version>
-    </dependency>
- <dependency>
-<groupId>com.blackberry.common</groupId>
-<artifactId>common</artifactId>
-<version>0.0.1</version>
-</dependency>
-    <dependency>
+	</dependency>
+	<dependency>
+		<groupId>com.blackberry.common</groupId>
+		<artifactId>common</artifactId>
+		<version>0.0.2</version>
+	</dependency>
+	<dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
       <version>1.7.7</version>
@@ -61,7 +61,7 @@
     <dependency>
       <groupId>com.blackberry.krackle</groupId>
       <artifactId>krackle</artifactId>
-      <version>0.7.4</version>
+      <version>0.7.6</version>
     </dependency>
     <dependency>
       <groupId>org.apache.kafka</groupId>

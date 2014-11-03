@@ -30,6 +30,7 @@ import org.yaml.snakeyaml.Yaml;
 
 import com.blackberry.krackle.MetricRegistrySingleton;
 import com.blackberry.krackle.consumer.ConsumerConfiguration;
+import com.blackberry.common.props.Parser;
 
 public class KaBoom {
 	private static final Logger LOG = LoggerFactory.getLogger(KaBoom.class);
@@ -108,6 +109,8 @@ public class KaBoom {
 				topicProxyUserLocation.put(m.group(1), e.getValue().toString());
 			}
 		}
+		
+				
 
 		// Consumer config
 		ConsumerConfiguration consumerConfig = new ConsumerConfiguration(props);
@@ -304,10 +307,14 @@ public class KaBoom {
 						String proxyUser = topicProxyUserLocation.get(topic);
 						if (proxyUser == null) {
 							proxyUser = "";
-						}
-
-						Worker worker = new Worker(consumerConfig, hConf, curator, topic,
-								partition, fileRotateInterval, path, proxyUser);
+						}						
+						
+						Parser propsParser = new Parser(props);
+						Boolean allowOffsetOverrides = propsParser.parseBoolean("kaboom.allowOffsetOverrides", false);						
+						Boolean sinkToHighWatermark = propsParser.parseBoolean("kaboom.sinkToHighWatermark", false);	
+						
+						Worker worker = new Worker(consumerConfig, hConf, curator, topic, partition, fileRotateInterval, path, proxyUser, allowOffsetOverrides, sinkToHighWatermark);
+						
 						workers.add(worker);
 						Thread t = new Thread(worker);
 						threads.add(t);

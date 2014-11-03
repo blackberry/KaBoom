@@ -237,12 +237,12 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			 */
 			
 			if (readyFlagThread == null || !readyFlagThread.isAlive()) {
-				LOG.debug("[ready flag writer] thread doesn't exist or is not running");
+				LOG.info("[ready flag writer] thread doesn't exist or is not running");
 				readyFlagWriter = new ReadyFlagWriter(kafkaZkConnectionString, kafkaSeedBrokers, curator, topicFileLocation, hConf, topicToProxyUser);
 				readyFlagWriter.addListener(this);
 				readyFlagThread = new Thread(readyFlagWriter);
 				readyFlagThread.start();
-				LOG.debug("[ready flag writer] thread created and started");
+				LOG.info("[ready flag writer] thread created and started");
 			}						
 			
 			Thread.sleep(10 * 60 * 1000);
