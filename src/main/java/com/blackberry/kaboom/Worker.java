@@ -432,11 +432,7 @@ public class Worker implements Runnable
 					// if the offset of the last message is what we expected
 					// and handle the fun edge cases when it's not
 					
-					if (offset == consumer.getLastOffset())
-					{
-						offset = consumer.getNextOffset();
-					} 
-					else
+					if (offset != consumer.getLastOffset())
 					{
 						if (offset > consumer.getLastOffset())
 						{
@@ -511,6 +507,7 @@ public class Worker implements Runnable
 					}
 
 					linesread++;
+					offset = consumer.getNextOffset();
 					lag = consumer.getHighWaterMark() - offset;
 
 					// Check for version
@@ -717,7 +714,6 @@ public class Worker implements Runnable
 				{
 					LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}", 
 						 this.partitionId, zkOffset, zkOffsetOverride, allowOffsetOverride);
-					return zkOffset;
 				}
 			}
 
