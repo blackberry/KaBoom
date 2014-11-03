@@ -5,7 +5,6 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.security.PrivilegedExceptionAction;
-import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -87,7 +86,7 @@ public class Worker implements Runnable
 	private String lowerOffsetsGaugeName;
 
 	private static Set<Worker> workers = new HashSet<Worker>();
-	private static Object workersLock = new Object();
+	private static final Object workersLock = new Object();
 
 	static 
 	{
@@ -359,6 +358,7 @@ public class Worker implements Runnable
 		
 		synchronized (workersLock)
 		{
+			// NetBeans considers this unsafe: See https://www.google.ca/#q=leaking+this+in+constructor
 			workers.add(this);
 		}
 		
@@ -402,9 +402,9 @@ public class Worker implements Runnable
 			LOG.info("[{}] Created worker.  Starting at offset {}.", partitionId, offset);
 
 			byte[] bytes = new byte[1024 * 1024];
-			int length = -1;
-			byte version = -1;
-			int pos = 0;			
+			int length;
+			byte version;
+			int pos;			
 			PriParser pri = new PriParser();
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();
@@ -434,9 +434,11 @@ public class Worker implements Runnable
 					
 					if (offset != consumer.getLastOffset())
 					{
+						long highWatermark = consumer.getHighWaterMark();
+						
 						if (offset > consumer.getLastOffset())
 						{
-							if (offset < consumer.getHighWaterMark())
+							if (offset < highWatermark)
 							{
 								/* 
 								 * When using SNAPPY compression in Krackle's consumer there will be messages received
@@ -446,48 +448,45 @@ public class Worker implements Runnable
 								*/
 
 								LOG.debug("[{}] skipping last offset {} since it's lower than high watermark {}",
-									 partitionId, consumer.getLastOffset(), consumer.getHighWaterMark());
+									 partitionId, consumer.getLastOffset(), highWatermark);
 								
 								lowerOffsetsReceived++;
 								continue;
 							} 
-							else
+							else if (offset > highWatermark)
 							{
-								if (offset > consumer.getHighWaterMark())
+								/*	
+								 *	If the expected offset is greater than than actual offset and also higher than the high watermark 
+								 *	then perhaps the broker we're receiving messages from has changed and the new broker has a 
+								 *	lower offset because it was behind when it took over... Maybe?  
+								 */
+
+								if (sinkToHighWatermark)
 								{
-									/*	
-									 *	If the expected offset is greater than than actual offset and also higher than the high watermark 
-									 *	then perhaps the broker we're receiving messages from has changed and the new broker has a 
-									 *	lower offset because it was behind when it took over... Maybe?  
-									 */
+									LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
+										 partitionId, offset, highWatermark, sinkToHighWatermark);
 
-									if (sinkToHighWatermark)
-									{
-										LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
-											 partitionId, offset, consumer.getHighWaterMark(), sinkToHighWatermark);
-										
-										consumer.setNextOffset((consumer.getHighWaterMark()));
-										offset = consumer.getHighWaterMark();
+									consumer.setNextOffset(highWatermark);
+									offset = highWatermark;
 
-										LOG.info("[{}] Successfully set offset to the high watermark of {}", partitionId, consumer.getHighWaterMark());
+									LOG.info("[{}] Successfully set offset to the high watermark of {}", partitionId, highWatermark);
 
-										continue;
-									} 
-									else
-									{
-										LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
-											 partitionId, offset, consumer.getHighWaterMark(), sinkToHighWatermark);
-
-										continue;
-									}
+									continue;
 								} 
 								else
 								{
-									// TODO: Should this continue or not?
-									
-									LOG.error("[{}] Unhandled edge case when expected offset is greater than last offset "
-										 + "and expected offset is also the high watermark");
-								}
+									LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
+										 partitionId, offset, highWatermark, sinkToHighWatermark);
+
+									continue;
+								}		
+							} 
+							else
+							{
+								// TODO: Should this continue or not?
+
+								LOG.error("[{}] Unhandled edge case when expected offset is greater than last offset "
+									 + "and expected offset is also the high watermark");
 							}
 						} 
 						else
