@@ -19,6 +19,7 @@ public class KaboomConfiguration
 	private String kerberosKeytab;
 	private String hostname;
 	private String kaboomZkConnectionString;
+	private String kafkaZkConnectionString;
 	private Boolean allowOffsetOverrides;
 	private Boolean sinkToHighWatermark;
 	private ConsumerConfiguration consumerConfiguration;
@@ -26,8 +27,6 @@ public class KaboomConfiguration
 	private String kafkaSeedBrokers;
 	private Integer readyFlagPrevHoursCheck;
 	
-	
-
 	/**
 	 * @return the kaboomId
 	 */
@@ -266,5 +265,21 @@ public class KaboomConfiguration
 	public void setReadyFlagPrevHoursCheck(Integer readyFlagPrevHoursCheck)
 	{
 		this.readyFlagPrevHoursCheck = readyFlagPrevHoursCheck;
+	}
+
+	/**
+	 * @return the kafkaZkConnectionString
+	 */
+	public String getKafkaZkConnectionString()
+	{
+		return kafkaZkConnectionString;
+	}
+
+	/**
+	 * @param kafkaZkConnectionString the kafkaZkConnectionString to set
+	 */
+	public void setKafkaZkConnectionString(String kafkaZkConnectionString)
+	{
+		this.kafkaZkConnectionString = kafkaZkConnectionString;
 	}
 }

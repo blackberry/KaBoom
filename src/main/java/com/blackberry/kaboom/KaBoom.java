@@ -231,6 +231,7 @@ public class KaBoom
 					config.setHadoopConfiguration(getHadoopConfiguration());
 					config.setHostname(propsParser.parseString("kaboom.hostname", InetAddress.getLocalHost().getHostName()));
 					config.setKaboomZkConnectionString(propsParser.parseString("zookeeper.connection.string"));
+					config.setKafkaZkConnectionString(propsParser.parseString("kafka.zookeeper.connection.string"));
 					config.setKafkaSeedBrokers(propsParser.parseString("metadata.broker.list"));					
 					config.setReadyFlagPrevHoursCheck(propsParser.parseInteger("kaboom.readyflag.prevhours", 24));
 				}

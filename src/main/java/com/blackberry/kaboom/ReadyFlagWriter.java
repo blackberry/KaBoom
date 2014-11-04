@@ -122,7 +122,7 @@ public class ReadyFlagWriter extends NotifyingThread
 	public void doRun() throws Exception
 	{
 		Map<String, List<PartitionMetadata>> topicsWithPartitions = new HashMap<String, List<PartitionMetadata>>();
-		StateUtils.getTopicParitionMetaData(config.getKaboomZkConnectionString(), config.getKafkaSeedBrokers(), topicsWithPartitions);
+		StateUtils.getTopicParitionMetaData(config.getKafkaZkConnectionString(), config.getKafkaSeedBrokers(), topicsWithPartitions);
 
 		Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
 		Calendar previousHourCal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));

@@ -28,7 +28,7 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 
 	private ReadyFlagWriter readyFlagWriter;
 	private Thread readyFlagThread;
-	private KaboomConfiguration config;
+	final private KaboomConfiguration config;
 
 	public LoadBalancer(KaboomConfiguration config)
 	{
@@ -56,7 +56,7 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			List<String> topics = new ArrayList<String>();
 
 			// Get a full set of metadata from Kafka
-			StateUtils.readTopicsFromZooKeeper(config.getKaboomZkConnectionString(), topics);
+			StateUtils.readTopicsFromZooKeeper(config.getKafkaZkConnectionString(), topics);
 
 			// Map partition to host and host to partition
 			StateUtils.getPartitionHosts(config.getKafkaSeedBrokers(), topics, partitionToHost, hostToPartition);
@@ -93,8 +93,7 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 					} 
 					else
 					{
-						LOG.debug("Partition {} : client {} is not connected", partition,
-							 client);
+						LOG.debug("Partition {} : client {} is not connected", partition, client);
 						curator.delete().forPath("/kaboom/assignments/" + partition);
 						stat = null;
 					}
