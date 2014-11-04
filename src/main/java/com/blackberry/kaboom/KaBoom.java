@@ -31,72 +31,33 @@ import org.yaml.snakeyaml.Yaml;
 import com.blackberry.krackle.MetricRegistrySingleton;
 import com.blackberry.krackle.consumer.ConsumerConfiguration;
 import com.blackberry.common.props.Parser;
+import java.io.FileNotFoundException;
 
 public class KaBoom
 {
+	private static final String defaultProperyFile = "kaboom.properties";
 	private static final Logger LOG = LoggerFactory.getLogger(KaBoom.class);
-	private static final Charset UTF8 = Charset.forName("UTF-8");
-	
-	boolean shutdown = false;
-	
+	private static final Charset UTF8 = Charset.forName("UTF-8");	
+	boolean shutdown = false;	
+	private KaboomConfiguration config = new KaboomConfiguration();
+
 	public static void main(String[] args) throws Exception
 	{
-		new KaBoom(args).run();
+		new KaBoom().run();
 	}
 	
-	public KaBoom(String[] args) throws Exception
-	{
+	public KaBoom() throws Exception
+	{		
 	}
 	
-	private void run() throws Exception
+	/**
+	 * Creates the topic to HDFS paths Map
+	 *
+	 * @param props Properties to parse for topics and paths
+	 * @return Map<String, String>
+	 */
+	private Map<String, String> getTopicToHdfsPathFromProps(Properties props)
 	{
-		// Read in properties file and configure
-		Properties props = new Properties();
-		try
-		{
-			InputStream propsIn = null;
-			if (System.getProperty("kaboom.configuration") != null)
-			{
-				propsIn = new FileInputStream(
-					 System.getProperty("kaboom.configuration"));
-				props.load(propsIn);
-			} 
-			else
-			{
-				LOG.info("Loading configs from {}", KaBoom.class.getClassLoader()
-					 .getResource("kaboom.properties"));
-				propsIn = KaBoom.class.getClassLoader().getResourceAsStream(
-					 "kaboom.properties");
-				props.load(propsIn);
-			}
-		}
-		catch (Throwable t)
-		{
-			System.err.println("Error getting config file.");
-			t.printStackTrace();
-			System.exit(1);
-		}
-
-		// Check to see if we need to enable console reporting
-		if (Boolean.parseBoolean(System.getProperty("metrics.to.console", "false").trim()))
-		{
-			MetricRegistrySingleton.getInstance().enableConsole();
-		}
-
-		// My ID
-		if (props.get("kaboom.id") == null)
-		{
-			LOG.error("Missing required property: kaboom.id");
-			return;
-		}
-		
-		final int kaboomId = Integer.parseInt(props.getProperty("kaboom.id"));
-
-		// Various configs
-		long fileRotateInterval = Long.parseLong(props.getProperty("file.rotate.interval", "" + (3 * 60 * 1000)));
-		int weight = Integer.parseInt(props.getProperty("kaboom.weighting", "" + Runtime.getRuntime().availableProcessors()));
-
-		// Mapping to topics to output locations
 		Pattern topicPathPattern = Pattern.compile("^topic\\.([^\\.]+)\\.path$");
 		Map<String, String> topicFileLocation = new HashMap<String, String>();
 		for (Entry<Object, Object> e : props.entrySet())
@@ -107,88 +68,121 @@ public class KaBoom
 				topicFileLocation.put(m.group(1), e.getValue().toString());
 			}
 		}
-
-		// Also proxy users
-		Pattern topicProxyUserPattern = Pattern.compile("^topic\\.([^\\.]+)\\.proxy.user$");
-		Map<String, String> topicProxyUserLocation = new HashMap<String, String>();
 		
+		return topicFileLocation;
+	}
+	
+	/**
+	 * Creates the topic to proxy user Map
+	 *
+	 * @param props Properties to parse for topics and users
+	 * @return Map<String, String>
+	 */
+	private Map<String, String> getTopicToProxyUserFromProps(Properties props) 
+	{
+		Pattern topicProxyUsersPattern = Pattern.compile("^topic\\.([^\\.]+)\\.proxy.user$");
+		Map<String, String> topicProxyUsers = new HashMap<String, String>();
+
 		for (Entry<Object, Object> e : props.entrySet())
 		{
-			Matcher m = topicProxyUserPattern.matcher(e.getKey().toString());
+			Matcher m = topicProxyUsersPattern.matcher(e.getKey().toString());
 			if (m.matches())
 			{
-				topicProxyUserLocation.put(m.group(1), e.getValue().toString());
+				topicProxyUsers.put(m.group(1), e.getValue().toString());
 			}
 		}
-
-		// Consumer config
-		ConsumerConfiguration consumerConfig = new ConsumerConfiguration(props);
-
-		// Kerberos config		
-		if (props.containsKey("kerberos.principal") && props.containsKey("kerberos.keytab"))
+		
+		return topicProxyUsers;
+	}
+	
+	/**
+	 * Instantiates properties from either the specified configuration file or the default for the class
+	 *
+	 * @param props Properties to parse for topics and users
+	 * @return Properties
+	 */
+	private Properties getProperties()
+	{
+		Properties props = new Properties();
+		try
 		{
-			LOG.info("Using Kerberos authentication.");
-			LOG.info("  kerberos.principal = {}", props.getProperty("kerberos.principal"));
-			LOG.info("  kerberos.keytab = {}", props.getProperty("kerberos.keytab"));			
-			Authenticator.getInstance().setKerbConfPrincipal(props.getProperty("kerberos.principal"));
-			Authenticator.getInstance().setKerbKeytab(props.getProperty("kerberos.keytab"));
+			InputStream propsIn;
+			
+			if (System.getProperty("kaboom.configuration") != null)
+			{
+				propsIn = new FileInputStream(System.getProperty("kaboom.configuration"));
+				props.load(propsIn);
+			} 
+			else
+			{
+				LOG.info("Loading configs from default properties file {}", KaBoom.class.getClassLoader().getResource(defaultProperyFile));
+				propsIn = KaBoom.class.getClassLoader().getResourceAsStream(defaultProperyFile);
+				props.load(propsIn);
+			}
+		}
+		catch (Throwable t)
+		{
+			System.err.println("Error getting config file:");
+			System.err.printf("stacktrace: %s" , t.getStackTrace().toString());
+			System.exit(1);
 		}
 
-		// Hadoop config
-		final Configuration hConf = new Configuration();
-		// Add standard configs
+		return props;		
+	}
+	
+	/**
+	 * Instantiates properties from either the specified configuration file or
+	 * the default for class
+	 *
+	 * @return Configuration
+	 */
+	public Configuration getHadoopConfiguration() throws FileNotFoundException
+	{		
+		final Configuration hadoopConfiguration = new Configuration();
+	
 		if (new File("/etc/hadoop/conf/core-site.xml").exists())
 		{
-			hConf.addResource(new FileInputStream("/etc/hadoop/conf/core-site.xml"));
+			hadoopConfiguration.addResource(new FileInputStream("/etc/hadoop/conf/core-site.xml"));
 		}
+		
 		if (new File("/etc/hadoop/conf/hdfs-site.xml").exists())
 		{
-			hConf.addResource(new FileInputStream("/etc/hadoop/conf/hdfs-site.xml"));
+			hadoopConfiguration.addResource(new FileInputStream("/etc/hadoop/conf/hdfs-site.xml"));
 		}
-		// Add any more standard configs we find in the classpath
-		for (String file : new String[]
+		
+		// Adds any more standard configs we find in the classpath
+		
+		for (String file : new String[] { "core-site.xml", "hdfs-site.xml"	})
 		{
-			"core-site.xml", "hdfs-site.xml"
-		})
-		{
-			InputStream in = this.getClass().getClassLoader()
-				 .getResourceAsStream(file);
+			InputStream in = this.getClass().getClassLoader().getResourceAsStream(file);
+			
 			if (in != null)
 			{
-				hConf.addResource(in);
+				hadoopConfiguration.addResource(in);
 			}
 		}
 		
-		hConf.setBoolean("fs.automatic.close", false);
-
-		// Start monitoring
-		MetricRegistrySingleton.getInstance().enableJmx();
-
-		// Check for local hostname
-		String hostname = props.getProperty("kaboom.hostname", InetAddress.getLocalHost().getHostName());
-
-		// Register existence with ZooKeeper
-		String zookeeperConnectionString = null;
+		hadoopConfiguration.setBoolean("fs.automatic.close", false);
 		
-		if (props.containsKey("zookeeper.connection.string"))
-		{
-			zookeeperConnectionString = props
-				 .getProperty("zookeeper.connection.string");
-		} 
-		else
-		{
-			LOG.error("Missing required property: zookeeper.connection.string");
-			return;
-		}
-		
+		return hadoopConfiguration;
+	}
+	
+	/**
+	 * Returns an instantiated curator framework object
+	 * 
+	 * @return CuratorFramework
+	 */
+	public CuratorFramework getCuratorFramework()
+	{
 		RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
-		String[] connStringAndPrefix = zookeeperConnectionString.split("/", 2);
+		
+		String[] connStringAndPrefix = config.getKaboomZkConnectionString().split("/", 2);
+		
 		final CuratorFramework curator;
 		
 		if (connStringAndPrefix.length == 1)
 		{
-			curator = CuratorFrameworkFactory.newClient(zookeeperConnectionString,
-				 retryPolicy);
+			curator = CuratorFrameworkFactory.newClient(config.getKaboomZkConnectionString(), retryPolicy);
 		}
 		else
 		{
@@ -199,68 +193,123 @@ public class KaBoom
 		}
 		
 		curator.start();
+		return curator;			
+	}
+	
+	private void run() throws Exception
+	{
 
-		// Ensure the existence of certain nodes
-		
-		if (curator.checkExists().forPath("/kaboom/leader") == null)
+		if (Boolean.parseBoolean(System.getProperty("metrics.to.console", "false").trim()))
 		{
-			try
-			{
-				curator.create().creatingParentsIfNeeded()
-					 .withMode(CreateMode.PERSISTENT).forPath("/kaboom/leader");
-			} 
-			catch (Exception e)
-			{
-				LOG.error("Error creating ZooKeeper node /kaboom/leader", e);
-			}
+			MetricRegistrySingleton.getInstance().enableConsole();
 		}
 		
-		if (curator.checkExists().forPath("/kaboom/clients") == null)
 		{
-			try
+			Properties props = getProperties();
+			Parser propsParser = new Parser(props);	
+			
+			if (propsParser.parseBoolean("configuration.authority.zk", false))
 			{
-				curator.create().creatingParentsIfNeeded()
-					 .withMode(CreateMode.PERSISTENT).forPath("/kaboom/clients");
-			} 
-			catch (Exception e)
-			{
-				LOG.error("Error creating ZooKeeper node /kaboom/clients", e);
+				// TODO: ZK
 			}
+			else
+			{
+				LOG.info("Configuration authority is file based");		
+
+				try
+				{
+					config.setConsumerConfiguration(new ConsumerConfiguration(props));				
+					config.setKaboomId(propsParser.parseInteger("kaboom.id"));
+					config.setFileRotateInterval(propsParser.parseLong("fileRotateInterval"));
+					config.setWeight(propsParser.parseInteger("kaboom.weighting", Runtime.getRuntime().availableProcessors()));
+					config.setAllowOffsetOverrides(propsParser.parseBoolean("kaboom.allowOffsetOverrides", false));
+					config.setSinkToHighWatermark(propsParser.parseBoolean("kaboom.sinkToHighWatermark", false));
+					config.setTopicToHdfsPath(getTopicToHdfsPathFromProps(props));
+					config.setTopicToProxyUser(getTopicToProxyUserFromProps(props));
+					config.setKerberosKeytab(propsParser.parseString("kerberos.keytab"));
+					config.setKerberosPrincipal(propsParser.parseString("kerberos.principal"));
+					config.setHadoopConfiguration(getHadoopConfiguration());
+					config.setHostname(propsParser.parseString("kaboom.hostname", InetAddress.getLocalHost().getHostName()));
+					config.setKaboomZkConnectionString(propsParser.parseString("zookeeper.connection.string"));
+					config.setKafkaSeedBrokers(propsParser.parseString("metadata.broker.list"));					
+					config.setReadyFlagPrevHoursCheck(propsParser.parseInteger("kaboom.readyflag.prevhours", 24));
+				}
+				catch (Exception e)
+				{
+					LOG.error("an error occured while building configuration object: ", e);				
+				}
+
+			}		
+
 		}
 		
-		if (curator.checkExists().forPath("/kaboom/assignments") == null)
+		/*
+		 *
+		 * Configure Kerkberos... This used to be optional as perhaps it was skipped when 
+		 * folks were testing locally on their workstations, however considering how even
+		 * our labs have thee ability to roll with Kerberos, let's make it required
+		 *
+		 */
+		
+		try
 		{
-			try
-			{
-				curator.create().creatingParentsIfNeeded()
-					 .withMode(CreateMode.PERSISTENT).forPath("/kaboom/assignments");
-			} 
-			catch (Exception e)
-			{
-				LOG.error("Error creating ZooKeeper node /kaboom/assignments", e);
-			}
+			LOG.info("using kerberos authentication.");
+			LOG.info("kerberos principal = {}", config.getKerberosPrincipal());
+			LOG.info("kerberos keytab = {}", config.getKerberosKeytab());			
+			
+			Authenticator.getInstance().setKerbConfPrincipal(config.getKerberosPrincipal());
+			Authenticator.getInstance().setKerbKeytab(config.getKerberosKeytab());
+		}
+		catch (Exception e)
+		{
+			LOG.error("there was an error configuring kerberos configuration: ", e);
 		}
 
+		MetricRegistrySingleton.getInstance().enableJmx();
+		
+		/**
+		 * 
+		 * Instantiate the ZK curator and ensure that the required nodes exist
+		 * 
+		 */
+		
+		final CuratorFramework curator = getCuratorFramework();
+		
+		for (String path : new String[] {"/kaboom/leader", "/kaboom/clients", "/kaboom/assignments"})
+		{
+			if (curator.checkExists().forPath(path) == null)
+			{
+				try
+				{
+					curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT).forPath(path);
+				} 
+				catch (Exception e)
+				{
+					LOG.error("Error creating ZooKeeper node {} ", path, e);
+				}
+			}			
+		}
+		
 		// Register my existence
 		{
 			Yaml yaml = new Yaml();
 			ByteArrayOutputStream nodeOutputStream = new ByteArrayOutputStream();
 			OutputStreamWriter writer = new OutputStreamWriter(nodeOutputStream);
+			
 			KaBoomNodeInfo data = new KaBoomNodeInfo();
-			data.setHostname(hostname);
-			data.setWeight(weight);
+			data.setHostname(config.getHostname());
+			data.setWeight(config.getWeight());
 			yaml.dump(data, writer);
 			writer.close();
 			byte[] nodeContents = nodeOutputStream.toByteArray();
 			long backoff = 1000;
 			long retries = 8;
-			for (int i = 0; i < retries; i++)
-				
+			
+			for (int i = 0; i < retries; i++)				
 			{
 				try
 				{
-					curator.create().withMode(CreateMode.EPHEMERAL)
-						 .forPath("/kaboom/clients/" + kaboomId, nodeContents);
+					curator.create().withMode(CreateMode.EPHEMERAL).forPath("/kaboom/clients/" + config.getKaboomId(), nodeContents);
 					break;
 				} 
 				catch (Exception e)
@@ -270,7 +319,6 @@ public class KaBoom
 						LOG.warn("Failed attempt {}/{} to register with ZooKeeper.  Retrying in {} seconds", i, retries, (backoff / 1000), e);
 						Thread.sleep(backoff);
 						backoff *= 2;
-						continue;
 					} 
 					else
 					{
@@ -282,7 +330,7 @@ public class KaBoom
 
 		// Start leader election thread.  The leader assigns work to each instance
 		
-		LoadBalancer loadBalancer = new LoadBalancer(props, topicFileLocation, hConf, topicProxyUserLocation);
+		LoadBalancer loadBalancer = new LoadBalancer(config);
 		final LeaderSelector leaderSelector = new LeaderSelector(curator, "/kaboom/leader", loadBalancer);
 		leaderSelector.autoRequeue();
 		leaderSelector.start();		
@@ -314,7 +362,7 @@ public class KaBoom
 				
 				try
 				{
-					FileSystem.get(hConf).close();
+					FileSystem.get(config.getHadoopConfiguration()).close();
 				} 
 				catch (Throwable t)
 				{
@@ -323,11 +371,11 @@ public class KaBoom
 				
 				try
 				{
-					curator.delete().forPath("/kaboom/clients/" + kaboomId);
+					curator.delete().forPath("/kaboom/clients/" + config.getKaboomId());
 				} 
 				catch (Exception e)
 				{
-					LOG.error("Error deleting /kaboom/clients/{}", kaboomId, e);
+					LOG.error("Error deleting /kaboom/clients/{}", config.getKaboomId(), e);
 				}
 				
 				leaderSelector.close();
@@ -346,7 +394,7 @@ public class KaBoom
 			{
 				String assignee = new String(curator.getData().forPath("/kaboom/assignments/" + node), UTF8);
 				
-				if (assignee.equals(Integer.toString(kaboomId)))
+				if (assignee.equals(Integer.toString(config.getKaboomId())))
 				{
 					LOG.info("Running data pull for {}", node);
 					Matcher m = topicPartitionPattern.matcher(node);
@@ -355,7 +403,7 @@ public class KaBoom
 					{
 						String topic = m.group(1);
 						int partition = Integer.parseInt(m.group(2));						
-						String path = topicFileLocation.get(topic);
+						String path = config.getTopicToHdfsPath().get(topic);
 						
 						if (path == null)
 						{
@@ -363,17 +411,24 @@ public class KaBoom
 							continue;
 						}
 						
-						String proxyUser = topicProxyUserLocation.get(topic);
+						String proxyUser = config.getTopicToProxyUser().get(topic);
 						if (proxyUser == null)
 						{
 							proxyUser = "";
 						}						
 						
-						Parser propsParser = new Parser(props);
-						Boolean allowOffsetOverrides = propsParser.parseBoolean("kaboom.allowOffsetOverrides", false);
-						Boolean sinkToHighWatermark = propsParser.parseBoolean("kaboom.sinkToHighWatermark", false);
-						
-						Worker worker = new Worker(consumerConfig, hConf, curator, topic, partition, fileRotateInterval, path, proxyUser, allowOffsetOverrides, sinkToHighWatermark);
+						Worker worker = new Worker(
+							 config.getConsumerConfiguration(), 
+							 config.getHadoopConfiguration(), 
+							 curator, 
+							 topic, 
+							 partition, 
+							 config.getFileRotateInterval(), 
+							 path, 
+							 proxyUser, 
+							 config.getAllowOffsetOverrides(),
+							 config.getSinkToHighWatermark()
+						);
 						
 						workers.add(worker);
 						Thread t = new Thread(worker);

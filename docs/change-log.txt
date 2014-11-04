@@ -11,6 +11,12 @@ Minor Bug Fixes::
 - Removes unused import java.util.Calendar
 - Worker.java, int length; byte version; int pos; are no longer initialized with default values that are never used
 
+Miscellaneous Improvements:
+
+- New method: private Map<String, String> getTopicPathsFromProps(Properties props)
+- New method: private Map<String, String> getTopicProxyUsersFromProps(Properties props)
+- new method: private Properties getProperties()
+
 
 Changes in 0.6.10:
 

@@ -4,7 +4,7 @@
   xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.blackberry.kaboom</groupId>
-  <version>0.6.10-CDH4.2.1</version>
+  <version>0.7.0-CDH4.2.1</version>
   <artifactId>kaboom</artifactId>
   <name>KaBoom</name>
   <url>http://blackberry.com</url>
@@ -31,7 +31,7 @@
 	<dependency>
 		<groupId>com.blackberry.common</groupId>
 		<artifactId>common</artifactId>
-		<version>0.0.2</version>
+		<version>0.0.3</version>
 	</dependency>
 	<dependency>
       <groupId>org.slf4j</groupId>
