@@ -176,6 +176,8 @@ public class KaBoom
 	{
 		RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
 		
+		LOG.info("attempting to connect to ZK with connection string {}", config.getKaboomZkConnectionString());
+		
 		String[] connStringAndPrefix = config.getKaboomZkConnectionString().split("/", 2);
 		
 		final CuratorFramework curator;
@@ -220,7 +222,7 @@ public class KaBoom
 				{
 					config.setConsumerConfiguration(new ConsumerConfiguration(props));				
 					config.setKaboomId(propsParser.parseInteger("kaboom.id"));
-					config.setFileRotateInterval(propsParser.parseLong("fileRotateInterval"));
+					config.setFileRotateInterval(propsParser.parseLong("fileRotateInterval", 60L * 3L * 1000L));
 					config.setWeight(propsParser.parseInteger("kaboom.weighting", Runtime.getRuntime().availableProcessors()));
 					config.setAllowOffsetOverrides(propsParser.parseBoolean("kaboom.allowOffsetOverrides", false));
 					config.setSinkToHighWatermark(propsParser.parseBoolean("kaboom.sinkToHighWatermark", false));
@@ -237,7 +239,8 @@ public class KaBoom
 				}
 				catch (Exception e)
 				{
-					LOG.error("an error occured while building configuration object: ", e);				
+					LOG.error("an error occured while building configuration object: ", e);
+					throw e;
 				}
 
 			}		
@@ -282,7 +285,9 @@ public class KaBoom
 			{
 				try
 				{
+					LOG.warn("the path {} was not found in ZK and needs to be created", path);
 					curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT).forPath(path);
+					LOG.warn("path {} created in ZK", path);
 				} 
 				catch (Exception e)
 				{

@@ -128,6 +128,7 @@ public class ReadyFlagWriter extends NotifyingThread
 		Calendar previousHourCal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
 
 		long currentTimestamp = cal.getTimeInMillis();
+		long startOfHourTimestamp = currentTimestamp - currentTimestamp % (60 * 60 * 1000);
 		
 		for (Integer hourNum = 0; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
 		{
@@ -137,11 +138,7 @@ public class ReadyFlagWriter extends NotifyingThread
 			 * starts at 0 so we're not skipping the immediate previous hour
 			 */
 			
-			currentTimestamp -= hourNum * 60 * 60 * 1000;
-			
-			long startOfHourTimestamp = currentTimestamp - currentTimestamp % (60 * 60 * 1000);
 			long prevHourStartTimestmap = startOfHourTimestamp - (60 * 60 * 1000);
-
 			previousHourCal.setTimeInMillis(prevHourStartTimestmap);
 
 			for (Map.Entry<String, List<PartitionMetadata>> entry : topicsWithPartitions.entrySet())
@@ -250,6 +247,9 @@ public class ReadyFlagWriter extends NotifyingThread
 
 				LOG.info(LOG_TAG + "finished {} topic(s) after {} seconds", topicsWithPartitions.size(), (cal.getTimeInMillis() - currentTimestamp) / 1000);
 			}
+			
+			startOfHourTimestamp -= 60 * 60 * 1000;
+
 		}
 	}
 }
