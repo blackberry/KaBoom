@@ -13,7 +13,6 @@ import java.util.Set;
 import java.util.TimeZone;
 
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
@@ -24,7 +23,6 @@ import org.slf4j.LoggerFactory;
 
 import com.blackberry.krackle.MetricRegistrySingleton;
 import com.blackberry.krackle.consumer.Consumer;
-import com.blackberry.krackle.consumer.ConsumerConfiguration;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
@@ -40,8 +38,6 @@ public class Worker implements Runnable
 
 	private Consumer consumer;
 	private long offset;
-	private Boolean allowOffsetOverride = false;
-	private Boolean sinkToHighWatermark = false;
 	private long lowerOffsetsReceived = 0;
 	private long timestamp;
 	private boolean stopping = false;
@@ -51,13 +47,13 @@ public class Worker implements Runnable
 
 	private String hostname;
 	private String template;
+	private String proxyUser;
+	private KaboomConfiguration config;
 
 	private long hour;
 	private OutputFile outputFile;
 	private Map<Long, OutputFile> outputFileMap = new HashMap<Long, OutputFile>();
 
-	private Configuration hConf;
-	private String proxyUserName;
 	private FsPermission permissions = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);
 	private int bufferSize = 16 * 1024;
 	private short replicas = 3;
@@ -71,7 +67,6 @@ public class Worker implements Runnable
 
 	private String topic;
 	private int partition;
-	private ConsumerConfiguration consumerConfig;
 
 	private long startTime;
 	private long endTime;
@@ -264,30 +259,19 @@ public class Worker implements Runnable
 			 });
 	}
 
-	public Worker(ConsumerConfiguration consumerConfig, Configuration hConf,
-		 CuratorFramework curator, String topic, int partition, long runDuration,
-		 String template) throws Exception
+	//Worker worker = new Worker(config, 	curator, topic, partition);
+	
+	public Worker(KaboomConfiguration config, CuratorFramework curator, String topic, int partition) throws Exception
 	{
-		this(consumerConfig, hConf, curator, topic, partition, runDuration,
-			 template, "", false, false);
-	}
-
-	public Worker(ConsumerConfiguration consumerConfig, Configuration hConf,
-		 CuratorFramework curator, String topic, int partition, long runDuration,
-		 String template, String proxyUser, Boolean offsetOverride, Boolean sinkToHighWatermark) throws Exception
-	{
-		this.endTime = System.currentTimeMillis() + runDuration;
-		this.hConf = hConf;
-		this.template = template;
+		this.config = config;
+		this.endTime = System.currentTimeMillis() + config.getFileRotateInterval();
 		this.curator = curator;
-		this.proxyUserName = proxyUser;
 		this.topic = topic;
 		this.partition = partition;
-		this.consumerConfig = consumerConfig;
 		this.startTime = System.currentTimeMillis();
 		this.linesread = 0;
-		this.allowOffsetOverride = offsetOverride;
-		this.sinkToHighWatermark = sinkToHighWatermark;
+		this.template = config.getTopicToHdfsPath().get(topic);
+		this.proxyUser = config.getTopicToProxyUser().get(topic);
 
 		partitionId = topic + "-" + partition;
 
@@ -372,8 +356,7 @@ public class Worker implements Runnable
 		{
 			zkPath = ZK_ROOT + "/topics/" + topic + "/" + partition;
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
-			zkPath_offSetOverride = zkPath + "/offset_override";
-						
+			zkPath_offSetOverride = zkPath + "/offset_override";						
 
 			try
 			{
@@ -397,7 +380,7 @@ public class Worker implements Runnable
 
 			String clientId = "kaboom-" + hostname;
 
-			consumer = new Consumer(consumerConfig, clientId, topic, partition,offset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
+			consumer = new Consumer(config.getConsumerConfiguration(), clientId, topic, partition,offset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
 
 			LOG.info("[{}] Created worker.  Starting at offset {}.", partitionId, offset);
 
@@ -461,10 +444,10 @@ public class Worker implements Runnable
 								 *	lower offset because it was behind when it took over... Maybe?  
 								 */
 
-								if (sinkToHighWatermark)
+								if (config.getSinkToHighWatermark())
 								{
 									LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
-										 partitionId, offset, highWatermark, sinkToHighWatermark);
+										 partitionId, offset, highWatermark, config.getSinkToHighWatermark());
 
 									consumer.setNextOffset(highWatermark);
 									offset = highWatermark;
@@ -476,7 +459,7 @@ public class Worker implements Runnable
 								else
 								{
 									LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
-										 partitionId, offset, highWatermark, sinkToHighWatermark);
+										 partitionId, offset, highWatermark, config.getSinkToHighWatermark());
 
 									continue;
 								}		
@@ -694,10 +677,10 @@ public class Worker implements Runnable
 			{
 				long zkOffsetOverride = Converter.longFromBytes(curator.getData().forPath(zkPath_offSetOverride), 0);
 
-				if (allowOffsetOverride)
+				if (config.getAllowOffsetOverrides())
 				{
 					LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}", 
-						 this.partitionId, zkOffset, zkOffsetOverride, allowOffsetOverride);
+						 this.partitionId, zkOffset, zkOffsetOverride, config.getAllowOffsetOverrides());
 					
 					curator.delete().forPath(zkPath_offSetOverride);
 					
@@ -708,7 +691,7 @@ public class Worker implements Runnable
 				else
 				{
 					LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}", 
-						 this.partitionId, zkOffset, zkOffsetOverride, allowOffsetOverride);
+						 this.partitionId, zkOffset, zkOffsetOverride, config.getAllowOffsetOverrides());
 				}
 			}
 
@@ -803,7 +786,7 @@ public class Worker implements Runnable
 
 			try
 			{
-				Authenticator.getInstance().runPrivileged(proxyUserName, new PrivilegedExceptionAction<Void>()
+				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>()
 				 {
 					 @Override
 					 public Void run() throws Exception
@@ -812,7 +795,7 @@ public class Worker implements Runnable
 						 {
 							 try
 							 {
-								 fs = tmpPath.getFileSystem(hConf);
+								 fs = tmpPath.getFileSystem(config.getHadoopConfiguration());
 							 } 
 							 catch (IOException e)
 							 {
@@ -865,7 +848,7 @@ public class Worker implements Runnable
 			{
 				try
 				{
-					fs = tmpPath.getFileSystem(hConf);
+					fs = tmpPath.getFileSystem(config.getHadoopConfiguration());
 					fs.delete(new Path(tmpdir), true);
 				} 
 				catch (IOException e)
@@ -888,7 +871,7 @@ public class Worker implements Runnable
 
 			try
 			{
-				Authenticator.getInstance().runPrivileged(proxyUserName, new PrivilegedExceptionAction<Void>()
+				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>()
 				 {
 					 @Override
 					 public Void run() throws Exception
@@ -897,7 +880,7 @@ public class Worker implements Runnable
 						 {
 							 try
 							 {
-								 fs = tmpPath.getFileSystem(hConf);
+								 fs = tmpPath.getFileSystem(config.getHadoopConfiguration());
 							 } 
 							 catch (IOException e)
 							 {
