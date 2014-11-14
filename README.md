@@ -62,6 +62,31 @@ Below is an example configuration for running a KLogger instance that receives m
         fi
     done
 
+
+Specifically, we always use a compression codec of 'deflate' and we always use the following Schema:
+
+    {
+      "type": "record",
+      "name": "logBlock",
+      "fields": [
+        { "name": "second",      "type": "long" },
+        { "name": "createTime",  "type": "long" },
+        { "name": "blockNumber", "type": "long" },
+        { "name": "logLines", "type": {
+          "type": "array",
+            "items": {
+              "type": "record",
+              "name": "messageWithMillis",
+              "fields": [ 
+                { "name": "ms",      "type": "long" },
+                { "name": "eventId", "type": "int", "default": 0 },
+                { "name": "message", "type": "string" }
+              ]
+            }
+        }}
+      ]
+    }
+
 * /opt/klogger/config/klogger.properties (defines Klogger configuration, topics, and ports)
 
 	metadata.broker.list=kafka1.site.dc1:9092,kafka2.site.dc1:9092,kafka3.site.dc1:9092
