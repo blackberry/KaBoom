@@ -27,6 +27,8 @@ Below is an example configuration for running a KLogger instance that receives m
 
 * /opt/klogger/config/klogger-env.sh (defines runtime configuration and JVM properties)
 
+Here's the config:
+
 	JAVA=``which java``
 	BASEDIR=/opt/klogger
 	CONFIGDIR="$BASEDIR/config"
