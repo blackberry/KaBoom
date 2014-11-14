@@ -1,155 +1,148 @@
-# KaBoom - A High Performance Producer Client for Kafka
+# KaBoom - A High Performance Consumer Client for Kafka
+KaBoom uses Krackle to consume from partitions of topics in Kafka and write them to boom files in HDFS.  
 
-Klogger is a simple service that uses Krackle to receive messages and produce them to Kafka topics. 
+## Features
+* Uses the [Curator Framework](http://curator.apache.org/) for  [Apache Zookeeper](zookeeper.apache.org) to distribute work amongst multiple servers
+* Supports writing to secured Hadoop clusters via Kerberos based secure impersonation (conveniently pulled from [Flume](http://flume.apache.org/))
+* Recovers from Kafka server failures (even when newly elected leaders weren't in-sync when elected)
+* Supports consuming with either GZIP or Snappy compression
+* Configurable: Each topic can be configured with a unique HDFS path template with date/time variable substitution
+* Supports flagging timestamp template HDFS directories as 'Ready' when all a topic's partition's messages have been written for a given hour
 
-**Design Goals**
-
-* Basic: Small code base with few dependencies and external requirements
-* Efficient: Consideration placed on minimizing object instantiation to reduce effects of GC
-* Configurable: Resource consumption can be configured to tune performance 
-
-**Limitations**
-
-* Security: Klogger is not intended to be distributed outside a trusted security administration domain--a fancy way of saying that Klogger should be deployed only to hosts intended to have direct access to produce for your Kafka topics.  There is no built-in access control or authentication.
-
-**Author(s)** 
-
+## Author(s)
 * Will Chartrand (original author)
 * [Dave Ariens](<mailto:dariens@blackberry.com>) (current maintainer)
 
-**Building**
+## Building
+Performing a Maven install produces a RPM package that currently installs on Cent OS based Linux distributions..
 
-Performing a Maven install produces a Debian package that currently installs on Ubuntu based Linux distributions that support upstart-enabled services.
+## Configuring
+Below is an example configuration for running a KaBoom instance that consumes messages in two topics (topic1, topic2) and writes them to HDFS paths owned by different HDFS users.
 
-**Configuring**
+/opt/kaboom/config/kaboom-env.sh (defines runtime configuration and JVM properties)
 
-Below is an example configuration for running a KLogger instance that receives messages for two topics (topic1, topic2) on ports 2001, 2002 respectively.  It uses 4GB  worth of heap and will buffer up to a GB of messages for both topics (in the event Kafka cannot ack) before dropping.
+```
+JAVA=`which java`
+BASEDIR=/opt/kaboom
+BINDIR="$BASEDIR/bin"
+LIBDIR="$BASEDIR/lib"
+LOGDIR="/var/log/kaboom"
+CONFIGDIR="$BASEDIR/config"
+JMXPORT=9580
+LOG4JPROPERTIES=$CONFIGDIR/log4j.properties
+PIDBASE=/var/run/kaboom
+KABOOM_USER=kafka
 
-* /opt/klogger/config/klogger-env.sh (defines runtime configuration and JVM properties)
+JAVA_OPTS=""
+JAVA_OPTS="$JAVA_OPTS -server"
+JAVA_OPTS="$JAVA_OPTS -Xms6G -Xmx6G"
+JAVA_OPTS="$JAVA_OPTS -XX:+UseParNewGC -XX:+UseConcMarkSweepGC"
+JAVA_OPTS="$JAVA_OPTS -XX:+UseCMSInitiatingOccupancyOnly -XX:+CMSConcurrentMTEnabled -XX:+CMSScavengeBeforeRemark"
+JAVA_OPTS="$JAVA_OPTS -XX:CMSInitiatingOccupancyFraction=30"
 
-Here's the config:
+JAVA_OPTS="$JAVA_OPTS -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintTenuringDistribution"
+JAVA_OPTS="$JAVA_OPTS -Xloggc:$LOGDIR/gc.log -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=10M"
 
-	JAVA=``which java``
-	BASEDIR=/opt/klogger
-	CONFIGDIR="$BASEDIR/config"
-	LOGDIR="$BASEDIR/logs"
-	PIDFILE="/var/run/klogger/klogger.pid"
-	KLOGGER_USER="kafka"
-	JMXPORT=9010
-	LOG4JPROPERTIES=$CONFIGDIR/log4j.properties
-	JAVA_OPTS=""
-	JAVA_OPTS="$JAVA_OPTS -server"
-	JAVA_OPTS="$JAVA_OPTS -Xms4G -Xmx4G"
-	JAVA_OPTS="$JAVA_OPTS -XX:+UseParNewGC -XX:+UseConcMarkSweepGC"
-	JAVA_OPTS="$JAVA_OPTS -XX:+UseCMSInitiatingOccupancyOnly -XX:+CMSConcurrentMTEnabled -XX:+CMSScavengeBeforeRemark"
-	JAVA_OPTS="$JAVA_OPTS -XX:CMSInitiatingOccupancyFraction=80"
-	JAVA_OPTS="$JAVA_OPTS -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintTenuringDistribution"
-	JAVA_OPTS="$JAVA_OPTS -Xloggc:$LOGDIR/gc.log"
-	JAVA_OPTS="$JAVA_OPTS -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=10M"
-	JAVA_OPTS="$JAVA_OPTS -Djava.awt.headless=true"
-	JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote"
-	JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.authenticate=false"
-	JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.ssl=false"
-	JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.port=$JMXPORT"
-	JAVA_OPTS="$JAVA_OPTS -Dlog4j.configuration=file:$LOG4JPROPERTIES"
+JAVA_OPTS="$JAVA_OPTS -Djava.awt.headless=true"
+JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote"
+JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.authenticate=false"
+JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.ssl=false"
+JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.port=$JMXPORT"
 
-    CLASSPATH=$CONFIGDIR
-    for file in ``find $BASEDIR -name "*.jar"``
-    do
-        if [[ "x$CLASSPATH" == "x" ]]
-        then
-            CLASSPATH=$file
-        else
-            CLASSPATH="$CLASSPATH:$file"
-        fi
-    done
+JAVA_OPTS="$JAVA_OPTS -Dlog4j.configuration=file:$LOG4JPROPERTIES"
 
+JAVA_OPTS="$JAVA_OPTS -Dkaboom.logs.dir=$LOGDIR"
 
-Specifically, we always use a compression codec of 'deflate' and we always use the following Schema:
+CLASSPATH=$CONFIGDIR:/etc/hadoop/conf:$LIBDIR/*
 
-    {
-      "type": "record",
-      "name": "logBlock",
-      "fields": [
-        { "name": "second",      "type": "long" },
-        { "name": "createTime",  "type": "long" },
-        { "name": "blockNumber", "type": "long" },
-        { "name": "logLines", "type": {
-          "type": "array",
-            "items": {
-              "type": "record",
-              "name": "messageWithMillis",
-              "fields": [ 
-                { "name": "ms",      "type": "long" },
-                { "name": "eventId", "type": "int", "default": 0 },
-                { "name": "message", "type": "string" }
-              ]
-            }
-        }}
-      ]
-    }
+```
 
-* /opt/klogger/config/klogger.properties (defines Klogger configuration, topics, and ports)
+/opt/klogger/config/klogger.properties (defines Klogger configuration, topics, and ports)
 
-	metadata.broker.list=kafka1.site.dc1:9092,kafka2.site.dc1:9092,kafka3.site.dc1:9092
-	compression.codec=snappy
-	queue.enqueue.timeout.ms=0
-	use.shared.buffers=true
-	kafka.rotate=true
-	num.buffers=1000
-	#This should be a unique character/string per klogger host.
-	kafka.key="
-	sources=topic1,topic2
-	source.topic1.port=2001
-	source.topic1=topic1
-	source.topic2.port=2002
-	source.topic2=topic2
+```
+# This must be unique amongst all KaBoom instances
+kaboom.id=282000100
 
-* /opt/klogger/config/log4j.properties (logging)
+kerberos.principal = flume@AD0.BBLABS
+kerberos.keytab = /opt/kaboom/config/kaboom.keytab
+kaboom.readyflag.prevhours = 30
 
-	klogger.logs.dir=/var/log/klogger
-	log4j.rootLogger=INFO, kloggerAppender
+zookeeper.connection.string=kaboom1.site.dc1:2181,kaboom2.site.dc1:2181,kaboom3.site.dc1:2181/KaBoom
 
-	log4j.appender.stdout=org.apache.log4j.ConsoleAppender
-	log4j.appender.stdout.layout=org.apache.log4j.PatternLayout
-	log4j.appender.stdout.layout.ConversionPattern=[%d] %p %m (%c)n
+kafka.zookeeper.connection.string=kafka1.site.dc1:2181,kafka2.site.dc1:2181,kafka3.site.dc1:2181
+fetch.wait.max.ms=5000
+auto.offset.reset=smallest
+socket.receive.buffer.bytes=1048576
+fetch.message.max.bytes=10485760
+kaboom.sinkToHighWatermark=true
+kaboom.allowOffsetOverrides=true
 
-	# rolling log file
-	log4j.appender.kloggerAppender=org.apache.log4j.RollingFileAppender
-	log4j.appender.kloggerAppender.maxFileSize=20MB
-	log4j.appender.kloggerAppender.maxBackupIndex=5
-	log4j.appender.kloggerAppender.layout=org.apache.log4j.PatternLayout
-	log4j.appender.kloggerAppender.layout.ConversionPattern=%5p [%t] %d{ISO8601} %m%n
-	log4j.appender.kloggerAppender.File=${klogger.logs.dir}/server.log
+metadata.broker.list=kafka1.site.dc1:9092,kafka2.site.dc1:9092,kafka3.site.dc1:9092
 
-**Running**
+topic.topic1.path=hdfs://nameservice1/service/dc1/testing/logs/%y%M%d/%H/topic1/incoming/%l
+topic.topic1.proxy.user=username1
 
-After configuration simply start the service 'klogger start'.  The package also creates a symbolic from /lib/init/upstart-job to /etc/init.d/klogger so existing 'service' configurations are respected.
+topic.topic1.path=hdfs://nameservice1/service/dc1/testing/logs/%y%M%d/%H/topic2/incoming/%l
+topic.topic1.proxy.user=username2
+```
 
-**Monitoring**
+/opt/klogger/config/log4j.properties (logging)
 
-Exposed via (Coda Hale's Metric's)[https://github.com/dropwizard/metrics] are:
+```
+kaboom.logs.dir=/var/log/kaboom
+log4j.rootLogger=INFO, kaboomAppender
 
-Klogger:
+log4j.appender.stdout=org.apache.log4j.ConsoleAppender
+log4j.appender.stdout.layout=org.apache.log4j.PatternLayout
+log4j.appender.stdout.layout.ConversionPattern=[%d] %p %m (%c)n
 
-* Meter: bytesReceived
-* Meter: bytesReceivedTotal
+log4j.appender.kaboomAppender=org.apache.log4j.DailyRollingFileAppender
+log4j.appender.kaboomAppender.DatePattern='.'yyy-MM-dd-HH
+log4j.appender.kaboomAppender.File=${kaboom.logs.dir}/server.log
+log4j.appender.kaboomAppender.layout=org.apache.log4j.PatternLayout
+log4j.appender.kaboomAppender.layout.ConversionPattern=[%d] %p %m (%c)%n
+```
+
+## Running
+After configuration simply start the kaboom service 'service kabom start'.
+
+## Monitoring
+Exposed via [Coda Hale's Metric's](https://github.com/dropwizard/metrics) are metrics for monitoring message count, size, and lag (measure of how far behind KaBoom is compared to most recent message in Kafka--both in offset count and seconds):
+
+Kaboom (Aggregate metrics--for the KaBoom cluster):
+* Gauge: max message lab sec 
+* Gauge: sum message lag sec 
+* Gauge: avg message lag sec 
+* Gauge: max message lag 
+* Gauge: sum message lag
+* Gauge: avg message lag 
+* Gauge: avg messages written per sec
+* Gauge: total messages written per sec
+
+Kaboom (Instance metrics -- for a KaBoom worker assigned to a topic and partition):
+* Gauge: offset lag
+* Gauge: seconds lag
+* Gauge: messages written per second
+* Gauge: early offsets received (when compression is enabled and messages are included from earlier than requested offset)
 
 Krackle:
+* Meter: MessageRequests
+* Meter: MessageRequestsTotal
+* Meter: MessagesReturned
+* Meter: MessagesReturnedTotal
+* Meter: BytesReturned
+* Meter: BytesReturnedTotal
+* Meter: MessageRequestsNoData
+* Meter: MessageRequestsNoDataTotal
+* Meter: BrokerReadAttempts
+* Meter: BrokerReadAttemptsTotal
+* Meter: BrokerReadSuccess
+* Meter: BrokerReadSuccessTotal
+* Meter: BrokerReadFailure
+* Meter: BrokerReadFailureTotal
 
-* Meter: received
-* Meter: receivedTotal
-* Meter: sent
-* Meter: sentTotal 
-* Meter: doppedQueueFull
-* Meter: doppedQueueFullTotal
-* Meter: doppedSendFail
-* Meter: droppedSendFailTotal
-
-**Contributing**
-
+## Contributing
 To contribute code to this repository you must be [signed up as an official contributor](http://blackberry.github.com/howToContribute.html).
 
 ## Disclaimer
-
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
