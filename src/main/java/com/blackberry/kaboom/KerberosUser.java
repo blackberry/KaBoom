@@ -1,4 +1,6 @@
 /**
+ * Copyright 2014 BlackBerry, Limited.
+ * 
  * The contents of this class were taken from the Apache Flume project.
  * 
  * Licensed to the Apache Software Foundation (ASF) under one or more

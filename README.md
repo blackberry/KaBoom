@@ -110,6 +110,7 @@ After configuration simply start the kaboom service 'service kabom start'.
 Exposed via [Coda Hale's Metric's](https://github.com/dropwizard/metrics) are metrics for monitoring message count, size, and lag (measure of how far behind KaBoom is compared to most recent message in Kafka--both in offset count and seconds):
 
 Kaboom (Aggregate metrics--for the KaBoom cluster):
+
 * Gauge: max message lab sec 
 * Gauge: sum message lag sec 
 * Gauge: avg message lag sec 
@@ -120,12 +121,14 @@ Kaboom (Aggregate metrics--for the KaBoom cluster):
 * Gauge: total messages written per sec
 
 Kaboom (Instance metrics -- for a KaBoom worker assigned to a topic and partition):
+
 * Gauge: offset lag
 * Gauge: seconds lag
 * Gauge: messages written per second
 * Gauge: early offsets received (when compression is enabled and messages are included from earlier than requested offset)
 
 Krackle:
+
 * Meter: MessageRequests
 * Meter: MessageRequestsTotal
 * Meter: MessagesReturned
