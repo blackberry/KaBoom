@@ -143,7 +143,7 @@ Krackle:
 
 ## Boom Files
 
-This section is a copy of the description of Boom from the [hadoop-logdriver](https://github.com/blackberry/hadoop-logdriver) project
+This section contains portions from the [hadoop-logdriver](https://github.com/blackberry/hadoop-logdriver) project's description of Boom files.
 
 A Boom file is a place where we store logs in HDFS.
 
@@ -155,19 +155,6 @@ The goals of Boom are:
 
 ## File extention
 The .bm file extension is used for Boom files.
-
-## Using Boom in MapReduce
-If you don't care about the details, and just want to read the files, use the BoomInputFormat.
-
-BoomInputFormat takes files as usual, and passes <LogLineData, Text> to the mapper.
-
-LogLineData is a class that wraps the timestamp, eventId and various metadata into an object.  The Text is the text of the log line.
-
-If you need to get the timestamp and message for a log line, simply use
-
-    long timestamp = key.getTimestamp();
-    String message = value.toString();
-    String originalLogLine = myDateFormat.format(timestamp) + " " + message;
 
 ## Boom File Format
 A Boom file is a specific type of Avro [Object Container File](http://avro.apache.org/docs/1.6.3/spec.html#Object+Container+Files).  Familiarize yourself with those docs before you keep going.
