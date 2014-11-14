@@ -143,7 +143,7 @@ Krackle:
 
 ## Boom Files
 
-This section is a copy of the description of Boom from the [hadoop-logdriver][https://github.com/blackberry/hadoop-logdriver] project
+This section is a copy of the description of Boom from the [hadoop-logdriver](https://github.com/blackberry/hadoop-logdriver) project
 
 A Boom file is a place where we store logs in HDFS.
 
