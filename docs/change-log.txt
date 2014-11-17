@@ -1,22 +1,13 @@
-Worker.java
------------
-
 Changes in 0.7.0:
 
+- Deprecates all CDH-specific content, configuration, and project files
 - New dependency on Krackle 0.7.7 for configuring socket timeouts
 - New KaboomConfiguration class that encapsulates all the configuration
 - New accessor methods for intantiating CuratorFramework objects
 - Project builds produce an RPM artifact 
-
-
-Minor Bug Fixes::
-
 - Fixes synchronization on non-final workersLock object (used when instantiating metrics)
 - Removes unused import java.util.Calendar
 - Worker.java, int length; byte version; int pos; are no longer initialized with default values that are never used
-
-Miscellaneous Improvements:
-
 - New method: private Map<String, String> getTopicPathsFromProps(Properties props)
 - New method: private Map<String, String> getTopicProxyUsersFromProps(Properties props)
 - new method: private Properties getProperties()
