@@ -3,6 +3,10 @@ Worker.java
 
 Changes in 0.7.0:
 
+- New dependency on Krackle 0.7.7 for configuring socket timeouts
+- New KaboomConfiguration class that encapsulates all the configuration
+- New accessor methods for intantiating CuratorFramework objects
+- Project builds produce an RPM artifact 
 
 
 Minor Bug Fixes::

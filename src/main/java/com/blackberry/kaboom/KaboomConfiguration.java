@@ -16,7 +16,6 @@
 
 package com.blackberry.kaboom;
 
-import com.blackberry.common.props.Parser;
 import java.util.Map;
 import com.blackberry.krackle.consumer.ConsumerConfiguration;
 import java.io.File;
@@ -35,6 +34,7 @@ import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
+import com.blackberry.common.props.Parser;
 
 /**
  *
