@@ -6,7 +6,7 @@
 	<groupId>com.blackberry.kaboom</groupId>
 	<version>0.7.0</version>
 	<artifactId>kaboom</artifactId>
-	<name>KaBoom</name>
+	<name>KaBoom-0.7.0</name>
 	<url>http://blackberry.com</url>
 
 	<properties>
