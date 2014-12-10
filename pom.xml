@@ -215,8 +215,9 @@
 					<!-- Create the user and the group if they do not already exist -->
 					<preinstallScriptlet>
 						<script>
-							getent group kafka >/dev/null || groupadd -r kafkal
-							getent passwd kafka >/dev/null || useradd -r -g kafka -m -s /bin/bash -c "User for sawmill tool." kafka
+							rm /opt/kaboom/lib/*
+							getent group kafka >/dev/null || groupadd -r kafka
+							getent passwd kafka >/dev/null || useradd -r -g kafka -m -s /bin/bash -c "User for kaboom." kafka
 							exit 0
 						</script>
 					</preinstallScriptlet>

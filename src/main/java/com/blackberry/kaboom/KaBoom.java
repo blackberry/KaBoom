@@ -84,14 +84,6 @@ public class KaBoom
 			throw e;
 		}
 		
-		/*
-		 *
-		 * Configure Kerkberos... This used to be optional as perhaps it was skipped when 
-		 * folks were testing locally on their workstations, however considering how even
-		 * our labs have thee ability to roll with Kerberos, let's make it required
-		 *
-		 */
-		
 		try
 		{
 			LOG.info("using kerberos authentication.");

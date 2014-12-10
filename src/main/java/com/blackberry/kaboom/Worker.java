@@ -588,7 +588,8 @@ public class Worker implements Runnable
 
 					if ((length - pos) < 0)
 					{
-						LOG.info("[{}] Length - Offset is < 0: timestamp: {}, pos: {}, length: {}", partitionId, timestamp, pos, length);
+						LOG.info("[{}] Skipping offset as length - Offset is < 0: timestamp: {}, pos: {}, length: {}", partitionId, timestamp, pos, length);
+						continue;
 					}
 
 					getBoomWriter(timestamp).writeLine(timestamp, bytes, pos, length - pos);
