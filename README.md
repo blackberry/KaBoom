@@ -217,8 +217,6 @@ If the order of log lines is important, then the fields can be sorted by compari
 
 This is the default sorting for LogLineData objects.
 
-
-
 ## Contributing
 To contribute code to this repository you must be [signed up as an official contributor](http://blackberry.github.com/howToContribute.html).
 
