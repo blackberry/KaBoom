@@ -70,7 +70,9 @@ public class TimestampParser {
 			else if (bytes[pos] >= 'A' && bytes[pos] <= 'S') {
 				parseMmmDd();
 
-			} else {
+			} 
+			// If we get a bad log line, we have an error and print the position and line
+			else {
 				LOG.info("Can't parse timestamp @ position [{}] for line: {}", pos, new String(bytes, pos, length));
 				error = ERROR;
 				return;
