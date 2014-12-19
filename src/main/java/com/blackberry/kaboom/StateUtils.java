@@ -96,7 +96,21 @@ public class StateUtils {
 				List<TopicMetadata> metaData = resp.topicsMetadata();
 
 				for (TopicMetadata item : metaData) {
+					
+					if (item == null)
+					{
+						LOG.error("A null value topic was found in our TopicMetaData request--skipping!");
+						continue;
+					}
+					
 					for (PartitionMetadata part : item.partitionsMetadata()) {
+						
+						if (part.leader().host() == null)
+						{
+							LOG.error("A null host was found in our PartitonMetaData for topic: {} and partition: {}--skipping!", item.topic(), part.partitionId());
+							continue;
+						}
+						
 						String host = part.leader().host();
 						String partition = item.topic() + "-" + part.partitionId();
 						LOG.debug("Got partition {} ({})", partition, host);
