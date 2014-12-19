@@ -71,7 +71,7 @@ public class TimestampParser {
 				parseMmmDd();
 
 			} else {
-				LOG.info("Can't parse line starting with {}", new String(bytes, pos, 1));
+				LOG.info("Can't parse timestamp @ position [{}] for line: {}", pos, new String(bytes, pos, length));
 				error = ERROR;
 				return;
 			}
