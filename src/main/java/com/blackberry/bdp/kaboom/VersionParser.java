@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.blackberry.kaboom;
+package com.blackberry.bdp.kaboom;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

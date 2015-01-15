@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-package com.blackberry.kaboom;
+package com.blackberry.bdp.kaboom;
 
+import com.blackberry.bdp.kaboom.FastBoomWriter;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;

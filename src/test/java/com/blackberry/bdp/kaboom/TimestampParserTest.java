@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.blackberry.kaboom;
+package com.blackberry.bdp.kaboom;
 
 import static org.junit.Assert.*;
 
@@ -24,7 +24,7 @@ import java.util.TimeZone;
 
 import org.junit.Test;
 
-import com.blackberry.kaboom.TimestampParser;
+import com.blackberry.bdp.kaboom.TimestampParser;
 
 public class TimestampParserTest {
 

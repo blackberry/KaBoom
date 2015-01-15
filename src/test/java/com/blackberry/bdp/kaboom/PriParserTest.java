@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package com.blackberry.kaboom;
+package com.blackberry.bdp.kaboom;
 
 import static org.junit.Assert.*;
 
 import org.junit.Test;
 
-import com.blackberry.kaboom.PriParser;
+import com.blackberry.bdp.kaboom.PriParser;
 
 public class PriParserTest {
 	@Test

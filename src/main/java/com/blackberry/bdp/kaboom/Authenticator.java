@@ -13,7 +13,7 @@
  *  limitations under the License. 
  */
 
-package com.blackberry.kaboom;
+package com.blackberry.bdp.kaboom;
 
 import java.io.IOException;
 import java.security.PrivilegedExceptionAction;

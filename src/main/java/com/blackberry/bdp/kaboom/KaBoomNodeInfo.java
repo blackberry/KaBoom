@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.blackberry.kaboom;
+package com.blackberry.bdp.kaboom;
 
 public class KaBoomNodeInfo {
 	private String hostname;
