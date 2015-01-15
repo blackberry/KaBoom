@@ -95,8 +95,8 @@ limitations under the License.
 			<version>0.7.6</version>
 		</dependency>
 		<dependency>
-			<groupId>com.blackberry.common</groupId>
-			<artifactId>common</artifactId>
+			<groupId>com.blackberry.bdp.common.utils</groupId>
+			<artifactId>common-utils</artifactId>
 			<version>0.0.4</version>
 		</dependency>
 		<dependency>
