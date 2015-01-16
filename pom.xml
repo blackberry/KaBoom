@@ -9,6 +9,13 @@
 	<name>KaBoom</name>
 	<url>http://blackberry.com</url>
 
+	<scm>
+		<connection>scm:git:git@gitlab.rim.net:ipgbd-software/kaboom.git</connection>
+		<developerConnection>scm:git:git@gitlab.rim.net:ipgbd-software/kaboom.git</developerConnection>
+		<url>https://gitlab.rim.net/ipgbd-software/kaboom</url>
+	</scm>
+
+
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
