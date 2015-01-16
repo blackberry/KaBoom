@@ -184,7 +184,6 @@ limitations under the License.
 				</configuration>
 			</plugin>
 
-			
 			<!-- Build an RPM -->
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
