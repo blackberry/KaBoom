@@ -16,7 +16,7 @@
 
 package com.blackberry.bdp.kaboom;
 
-import com.blackberry.common.props.Parser;
+import com.blackberry.bdp.common.utils.props.Parser;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
 
