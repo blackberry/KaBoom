@@ -9,6 +9,8 @@
 	<name>KaBoom</name>
 	<url>http://blackberry.com</url>
 
+
+
 	<scm>
 		<connection>scm:git:git@gitlab.rim.net:ipgbd-software/kaboom.git</connection>
 		<developerConnection>scm:git:git@gitlab.rim.net:ipgbd-software/kaboom.git</developerConnection>
