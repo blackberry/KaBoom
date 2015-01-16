@@ -31,9 +31,9 @@ limitations under the License.
 	</properties>
 
 	<scm>
-		<connection>scm:git:git@gitlab.rim.net:ipgbd-software/krackle.git</connection>
-		<developerConnection>scm:git:git@gitlab.rim.net:ipgbd-software/krackle.git</developerConnection>
-		<url>https://gitlab.rim.net/ipgbd-software/krackle</url>
+		<connection>scm:git:git@gitlab.rim.net:ipgbd-software/kaboom.git</connection>
+		<developerConnection>scm:git:git@gitlab.rim.net:ipgbd-software/kaboom.git</developerConnection>
+		<url>https://gitlab.rim.net/ipgbd-software/kaboom</url>
 	</scm>
 
 	<repositories>
