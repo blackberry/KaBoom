@@ -30,7 +30,7 @@ import org.yaml.snakeyaml.Yaml;
 
 import com.blackberry.krackle.MetricRegistrySingleton;
 import com.blackberry.krackle.consumer.ConsumerConfiguration;
-import com.blackberry.common.props.Parser;
+import com.blackberry.bdp.common.utils.props.Parser;
 
 public class KaBoom {
 	private static final Logger LOG = LoggerFactory.getLogger(KaBoom.class);

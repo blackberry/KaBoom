@@ -19,8 +19,8 @@ import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.blackberry.common.threads.NotifyingThread;
-import com.blackberry.common.threads.ThreadCompleteListener;
+import com.blackberry.bdp.common.utils.threads.NotifyingThread;
+import com.blackberry.bdp.common.utils.threads.ThreadCompleteListener;
 
 public class LoadBalancer extends LeaderSelectorListenerAdapter implements ThreadCompleteListener {
 	private static final Logger LOG = LoggerFactory.getLogger(LoadBalancer.class);

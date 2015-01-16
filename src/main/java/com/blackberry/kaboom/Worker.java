@@ -29,7 +29,7 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 
-import com.blackberry.common.conversion.Converter;
+import com.blackberry.bdp.common.utils.conversion.Converter;
 
 public class Worker implements Runnable
 {
