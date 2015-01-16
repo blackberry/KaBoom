@@ -1,4 +1,4 @@
-/** Copyright 2013 BlackBerry, Inc.
+/** Copyright 2014 BlackBerry, Limited.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  *  limitations under the License. 
  */
 
-package com.blackberry.kaboom;
+package com.blackberry.bdp.kaboom;
 
 import java.io.IOException;
 import java.security.PrivilegedExceptionAction;

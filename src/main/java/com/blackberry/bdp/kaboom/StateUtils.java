@@ -1,4 +1,20 @@
-package com.blackberry.kaboom;
+/**
+ * Copyright 2014 BlackBerry, Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.blackberry.bdp.kaboom;
 
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
@@ -80,7 +96,21 @@ public class StateUtils {
 				List<TopicMetadata> metaData = resp.topicsMetadata();
 
 				for (TopicMetadata item : metaData) {
+					
+					if (item == null)
+					{
+						LOG.error("A null value topic was found in our TopicMetaData request--skipping!");
+						continue;
+					}
+					
 					for (PartitionMetadata part : item.partitionsMetadata()) {
+						
+						if (part.leader().host() == null)
+						{
+							LOG.error("A null host was found in our PartitonMetaData for topic: {} and partition: {}--skipping!", item.topic(), part.partitionId());
+							continue;
+						}
+						
 						String host = part.leader().host();
 						String partition = item.topic() + "-" + part.partitionId();
 						LOG.debug("Got partition {} ({})", partition, host);
