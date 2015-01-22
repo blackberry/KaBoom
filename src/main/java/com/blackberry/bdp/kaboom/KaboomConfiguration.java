@@ -17,7 +17,7 @@
 package com.blackberry.bdp.kaboom;
 
 import java.util.Map;
-import com.blackberry.krackle.consumer.ConsumerConfiguration;
+import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;

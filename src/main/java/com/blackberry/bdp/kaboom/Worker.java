@@ -37,8 +37,8 @@ import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.blackberry.krackle.MetricRegistrySingleton;
-import com.blackberry.krackle.consumer.Consumer;
+import com.blackberry.bdp.krackle.MetricRegistrySingleton;
+import com.blackberry.bdp.krackle.consumer.Consumer;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
