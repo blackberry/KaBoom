@@ -34,7 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 
-import com.blackberry.krackle.MetricRegistrySingleton;
+import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import java.util.Properties;
 
 public class KaBoom
