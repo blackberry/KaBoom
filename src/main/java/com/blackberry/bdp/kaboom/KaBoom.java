@@ -169,8 +169,8 @@ public class KaBoom
 		final LeaderSelector leaderSelector = new LeaderSelector(curator, "/kaboom/leader", loadBalancer);
 		leaderSelector.autoRequeue();
 		leaderSelector.start();		
-		final List<Worker> workers = new ArrayList<Worker>();
-		final List<Thread> threads = new ArrayList<Thread>();
+		final List<Worker> workers = new ArrayList<>();
+		final List<Thread> threads = new ArrayList<>();
 		
 		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable()
 		{
@@ -238,9 +238,9 @@ public class KaBoom
 					{
 						String topic = m.group(1);
 						int partition = Integer.parseInt(m.group(2));						
-						String path = config.getTopicToHdfsPath().get(topic);
+						ArrayList<TimeBasedHdfsOutputPath> paths = config.getTopicToHdfsPaths().get(topic);
 						
-						if (path == null)
+						if (paths == null)
 						{
 							LOG.error("Topic has no configured output path: {}", topic);
 							continue;

@@ -91,7 +91,7 @@ limitations under the License.
 		<dependency>
 			<groupId>com.blackberry.bdp.krackle</groupId>
 			<artifactId>krackle-dev</artifactId>
-			<version>0.7.7</version>
+			<version>0.7.8</version>
 		</dependency>
 		<dependency>
 			<groupId>com.blackberry.bdp.common.utils</groupId>

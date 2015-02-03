@@ -64,12 +64,12 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 
 		while (true)
 		{
-			Map<String, String> partitionToHost = new HashMap<String, String>();
-			Map<String, List<String>> hostToPartition = new HashMap<String, List<String>>();
-			final Map<String, KaBoomNodeInfo> clients = new HashMap<String, KaBoomNodeInfo>();
-			Map<String, List<String>> clientToPartitions = new HashMap<String, List<String>>();
-			Map<String, String> partitionToClient = new HashMap<String, String>();
-			List<String> topics = new ArrayList<String>();
+			Map<String, String> partitionToHost = new HashMap<>();
+			Map<String, List<String>> hostToPartition = new HashMap<>();
+			final Map<String, KaBoomNodeInfo> clients = new HashMap<>();
+			Map<String, List<String>> clientToPartitions = new HashMap<>();
+			Map<String, String> partitionToClient = new HashMap<>();
+			List<String> topics = new ArrayList<>();
 
 			// Get a full set of metadata from Kafka
 			StateUtils.readTopicsFromZooKeeper(config.getKafkaZkConnectionString(), topics);
@@ -80,7 +80,6 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			// Get a list of active clients from zookeeper
 			StateUtils.getActiveClients(curator, clients);
 
-			// Get a list of current assignments
 			// Get a list of current assignments
 			
 			for (String partition : partitionToHost.keySet())
@@ -102,7 +101,7 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 						
 						if (parts == null)
 						{
-							parts = new ArrayList<String>();
+							parts = new ArrayList<>();
 							clientToPartitions.put(client, parts);
 						}
 						parts.add(partition);
@@ -127,8 +126,8 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 
 				if (info.getLoad() >= info.getTargetLoad() + 1)
 				{
-					List<String> localPartitions = new ArrayList<String>();
-					List<String> remotePartitions = new ArrayList<String>();
+					List<String> localPartitions = new ArrayList<>();
+					List<String> remotePartitions = new ArrayList<>();
 
 					for (String partition : clientToPartitions.get(client))
 					{
@@ -166,7 +165,7 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 
 			// Sort the clients by percent load, then add unassigned clients to the lowest loaded client			
 			{
-				List<String> sortedClients = new ArrayList<String>();
+				List<String> sortedClients = new ArrayList<>();
 				Comparator<String> comparator = new Comparator<String>()
 				{
 					@Override

@@ -17,22 +17,13 @@
 package com.blackberry.bdp.kaboom;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.security.PrivilegedExceptionAction;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.TimeZone;
 
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsAction;
-import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,11 +35,11 @@ import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 
 import com.blackberry.bdp.common.utils.conversion.Converter;
+import java.util.ArrayList;
 
 public class Worker implements Runnable
 {
 	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
-	private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
 
 	private String partitionId;
 
@@ -58,22 +49,8 @@ public class Worker implements Runnable
 	private long timestamp;
 	private boolean stopping = false;
 
-	private static final Object fsLock = new Object();
-	private FileSystem fs;
-
 	private String hostname;
-	private String template;
-	private String proxyUser;
 	private KaboomConfiguration config;
-
-	private long hour;
-	private OutputFile outputFile;
-	private Map<Long, OutputFile> outputFileMap = new HashMap<Long, OutputFile>();
-
-	private FsPermission permissions = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);
-	private int bufferSize = 16 * 1024;
-	private short replicas = 3;
-	private long blocksize = 256 * 1024 * 1024;
 
 	private CuratorFramework curator;
 	private static final String ZK_ROOT = "/kaboom";
@@ -85,7 +62,6 @@ public class Worker implements Runnable
 	private int partition;
 
 	private long startTime;
-	private long endTime;
 
 	private long lag = 0;
 	private int lag_sec = 0;
@@ -95,8 +71,10 @@ public class Worker implements Runnable
 	private String lagSecGaugeName;
 	private String msgWrittenGaugeName;
 	private String lowerOffsetsGaugeName;
+	
+	private ArrayList<TimeBasedHdfsOutputPath> hdfsOutputPaths;
 
-	private static Set<Worker> workers = new HashSet<Worker>();
+	private static Set<Worker> workers = new HashSet<>();
 	private static final Object workersLock = new Object();
 
 	static 
@@ -280,21 +258,19 @@ public class Worker implements Runnable
 	public Worker(KaboomConfiguration config, CuratorFramework curator, String topic, int partition) throws Exception
 	{
 		this.config = config;
-		this.endTime = System.currentTimeMillis() + config.getFileRotateInterval();
 		this.curator = curator;
 		this.topic = topic;
 		this.partition = partition;
 		this.startTime = System.currentTimeMillis();
 		this.linesread = 0;
-		this.template = config.getTopicToHdfsPath().get(topic);
-		this.proxyUser = config.getTopicToProxyUser().get(topic);
+		this.hdfsOutputPaths = config.getTopicToHdfsPaths().get(topic);		
 
 		partitionId = topic + "-" + partition;
 
 		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
 		lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
 		msgWrittenGaugeName = "kaboom:partitions:" + partitionId + ":messages written per second";
-		lowerOffsetsGaugeName = "kaboom:partitions:" + partitionId + ":early offsets received";		
+		lowerOffsetsGaugeName = "kaboom:partitions:" + partitionId + ":early offsets received";
 
 		String[] metrics_to_remove = {lagGaugeName, lagSecGaugeName, msgWrittenGaugeName, lowerOffsetsGaugeName};
 
@@ -409,16 +385,10 @@ public class Worker implements Runnable
 			TimestampParser tsp = new TimestampParser();
 			long maxTimestamp = -1;
 			
-			while (System.currentTimeMillis() < endTime)
+			while (stopping == false)
 			{
 				try
 				{
-					if (stopping)
-					{
-						LOG.info("[{}] Stopping Worker.", partitionId);
-						break;
-					}
-
 					length = consumer.getMessage(bytes, 0, bytes.length);
 
 					if (length == -1)
@@ -590,9 +560,18 @@ public class Worker implements Runnable
 					{
 						LOG.info("[{}] Skipping offset as length - Offset is < 0: timestamp: {}, pos: {}, length: {}", partitionId, timestamp, pos, length);
 						continue;
+					}					
+					
+					for (TimeBasedHdfsOutputPath path : hdfsOutputPaths)
+					{
+						if (!path.isConfigured())
+						{
+							String filename = String.format("%s-%08d.bm", partitionId, offset);
+							path.configure(filename, config.getHadoopConfiguration());
+						}
+						
+						path.getBoomWriter(timestamp).writeLine(timestamp, bytes, pos, length - pos);
 					}
-
-					getBoomWriter(timestamp).writeLine(timestamp, bytes, pos, length - pos);
 
 					/*
 					 * Let's track the max timestamp and write that to ZK for the 
@@ -613,29 +592,22 @@ public class Worker implements Runnable
 					LOG.error("[{}] Error processing message.", partitionId, t);
 					LOG.info("[{}] Deleting all tmp files", partitionId);
 					
-					for (Entry<Long, OutputFile> entry : outputFileMap.entrySet())
+					for (TimeBasedHdfsOutputPath path : hdfsOutputPaths)
 					{
-						entry.getValue().abort();
-					}
+						path.abortAll();
+					}								
+					
 					return;
 				}
 			}
-
-			LOG.info("[{}] Closing all output files.", partitionId);
 			
-			for (Entry<Long, OutputFile> entry : outputFileMap.entrySet())
+			LOG.info("[{}] KaBoom client shutting down and closing all output files.", partitionId);
+			
+			for (TimeBasedHdfsOutputPath path : hdfsOutputPaths)
 			{
-				try
-				{
-					entry.getValue().getBoomWriter().close();
-					entry.getValue().close();
-				} 
-				catch (IOException e)
-				{
-					LOG.error("[{}] Error closing output file", partitionId, e);
-				}
-			}
-
+				path.closeAll();
+			}			
+			
 			try
 			{
 				storeOffset();
@@ -645,7 +617,7 @@ public class Worker implements Runnable
 			} 
 			catch (Exception e)
 			{
-				LOG.error("[{}] Error storing offset/timestamp in ZooKeeper", partitionId, e);
+				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper", partitionId, e, offset, maxTimestamp);
 			}
 
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagGaugeName);
@@ -719,7 +691,7 @@ public class Worker implements Runnable
 			return zkOffset;
 		}
 	}
-
+	
 	/**
 	 * Stores the partitions offset timestamp in ZK
 	 *
@@ -763,173 +735,6 @@ public class Worker implements Runnable
 		else
 		{
 			return Converter.longFromBytes(curator.getData().forPath(zkPath_offSetTimestamp), 0);
-		}
-	}
-
-	private FastBoomWriter getBoomWriter(long timestamp) throws IOException
-	{
-		hour = timestamp - timestamp % (60 * 60 * 1000);
-		outputFile = outputFileMap.get(hour);
-		if (outputFile == null)
-		{
-			outputFile = new OutputFile(hour);
-			outputFileMap.put(hour, outputFile);
-		}
-
-		return outputFile.getBoomWriter();
-	}
-
-	private class OutputFile
-	{
-		private String dir;
-		private String tmpdir;
-		private String filename;
-
-		private Path finalPath;
-		private Path tmpPath;
-
-		private FastBoomWriter boomWriter;
-		private OutputStream out;
-
-		public OutputFile(long hour)
-		{
-			dir = Converter.timestampTemplateBuilder(hour, template);
-
-			/*
-			 * Related to IPGBD-1028 Output topic-partitionId-offset-incrementval.bm
-			 */
-			
-			filename = String.format("%s-%08d.bm", partitionId, offset);
-			tmpdir = String.format("%s/_tmp_%s-%08d.bm", dir, partitionId, offset);
-
-			finalPath = new Path(dir + "/" + filename);
-			tmpPath = new Path(tmpdir + "/" + filename);
-
-			try
-			{
-				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>()
-				 {
-					 @Override
-					 public Void run() throws Exception
-					 {
-						 synchronized (fsLock)
-						 {
-							 try
-							 {
-								 fs = tmpPath.getFileSystem(config.getHadoopConfiguration());
-							 } 
-							 catch (IOException e)
-							 {
-								 LOG.error("Error getting File System.", e);
-							 }
-						 }
-
-						 LOG.info("[{}] Opening {}.", partitionId, tmpPath);
-
-						 if (fs.exists(tmpPath))
-						 {
-							 fs.delete(tmpPath, false);
-							 LOG.info("[{}] Removing file from HDFS because it already exists: {}", partitionId, tmpPath.toString());
-						 }
-
-						 out = fs.create(tmpPath, permissions, false, bufferSize, replicas, blocksize, null);
-						 boomWriter = new FastBoomWriter(out);
-						 return null;
-					 }
-				 });
-			} 
-			catch (Exception e)
-			{
-				LOG.error("Error creating file.", e);
-			}
-		}
-
-		public void abort()
-		{
-			LOG.info("[{}] Aborting output file.", partitionId);
-			try
-			{
-				boomWriter.close();
-			} 
-			catch (IOException e)
-			{
-				LOG.error("[{}] Error closing boom writer.", partitionId, e);
-			}
-			
-			try
-			{
-				out.close();
-			} 
-			catch (IOException e)
-			{
-				LOG.error("[{}] Error closing boom writer output file.", partitionId, e);
-			}
-			
-			synchronized (fsLock)
-			{
-				try
-				{
-					fs = tmpPath.getFileSystem(config.getHadoopConfiguration());
-					fs.delete(new Path(tmpdir), true);
-				} 
-				catch (IOException e)
-				{
-					LOG.error("[{}] Error deleting temp files.", partitionId, e);
-				}
-			}
-		}
-
-		public FastBoomWriter getBoomWriter()
-		{
-			return boomWriter;
-		}
-
-		public void close() throws IOException
-		{
-			LOG.info("[{}] Closing {}.", partitionId, tmpPath);
-			boomWriter.close();
-			out.close();
-
-			try
-			{
-				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>()
-				 {
-					 @Override
-					 public Void run() throws Exception
-					 {
-						 synchronized (fsLock)
-						 {
-							 try
-							 {
-								 fs = tmpPath.getFileSystem(config.getHadoopConfiguration());
-							 } 
-							 catch (IOException e)
-							 {
-								 LOG.error("[{}] Error getting File System.", partitionId, e);
-							 }
-						 }
-						 try
-						 {
-							 LOG.info("[{}] Moving {} to {}.", partitionId, tmpPath,
-								  finalPath);
-							 fs.rename(tmpPath, finalPath);
-						 } 
-						 catch (Exception e)
-						 {
-							 LOG.error("[{}] Error renaming file.", partitionId, e);
-							 abort();
-						 }
-						 
-						 fs.delete(new Path(tmpdir), true);
-						 return null;
-					 }
-				 });
-			} 
-			catch (Exception e)
-			{
-				LOG.error("[{}] Error creating file.", partitionId, e);
-			}
-
 		}
 	}
 

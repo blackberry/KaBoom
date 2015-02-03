@@ -35,6 +35,7 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import com.blackberry.bdp.common.utils.props.Parser;
+import java.util.ArrayList;
 
 /**
  *
@@ -47,7 +48,7 @@ public class KaboomConfiguration
 	private int kaboomId;
 	private long fileRotateInterval;
 	private int weight;
-	private Map<String, String> topicToHdfsPath;
+	private final Map<String, ArrayList<TimeBasedHdfsOutputPath>> topicToHdfsPaths;
 	private Map<String, String> topicToProxyUser;
 	private String kerberosPrincipal;
 	private String kerberosKeytab;
@@ -79,11 +80,6 @@ public class KaboomConfiguration
 		LOG.info("kafkaSeedBrokers: {}", getKafkaSeedBrokers());
 		LOG.info("readyFlagPrevHoursCheck: {}", getReadyFlagPrevHoursCheck());
 		
-		for (Map.Entry<String, String> entry : getTopicToHdfsPath().entrySet())
-		{
-			LOG.info("topicToHdfsPath: {} -> {}", entry.getKey(), entry.getValue());
-		}
-
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
 			LOG.info("topicToProxyUser: {} -> {}", entry.getKey(), entry.getValue());
@@ -110,34 +106,63 @@ public class KaboomConfiguration
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
 		
-		topicToHdfsPath = getTopicToHdfsPathFromProps(props);
+		topicToHdfsPaths = getTopicToHdfsPathFromProps(props);
 		topicToProxyUser = getTopicToProxyUserFromProps(props);
 		hadoopConfiguration = buildHadoopConfiguration();
 	}
 	
 	/**
-	 * Creates the topic to HDFS paths Map
+	 * Creates the topic to an HDFS paths Map
+	 * 
+	 * Sample property definition:
+	 * 
+	 * topic.topicName.hdfsPath.1.directory = hdfs://hadoop.lab/service/82/component/logs/%y%M%d/%H/topicName/incoming/%l
+	 * topic.topicName.hdfsPath.1.duration = 180
+	 * 
+	 * topic.topicName.hdfsPath.2.directory = hdfs://hadoop.lab/service/82/component/logs/%y%M%d/%H/topicName/data
+	 * topic.topicName.hdfsPath.2.duration = 3600
 	 *
 	 * @param props Properties to parse for topics and paths
 	 * @return Map<String, String>
 	 */
-	private Map<String, String> getTopicToHdfsPathFromProps(Properties props)
+	private Map<String, ArrayList<TimeBasedHdfsOutputPath>> getTopicToHdfsPathFromProps(Properties props)
 	{
-		Pattern topicPathPattern = Pattern.compile("^topic\\.([^\\.]+)\\.path$");
-		Map<String, String> topicFileLocation = new HashMap<String, String>();
+		Pattern topicPathPattern = Pattern.compile("^topic\\.([^\\.]+)\\.hdfsPath\\.(\\d+)\\.directory$");
+
 		for (Map.Entry<Object, Object> e : props.entrySet())
 		{
 			Matcher m = topicPathPattern.matcher(e.getKey().toString());
 			if (m.matches())
 			{
-				topicFileLocation.put(m.group(1), e.getValue().toString());
+				String topic = m.group(1);
+				String pathNumber = m.group(2);
+				String directory = props.getProperty(e.getKey().toString());
+
+				String durationProperty = String.format("topic.%s.hdfsPath.%d.duration", topic, Integer.parseInt(pathNumber));
+				Integer duration = Integer.parseInt(props.getProperty(durationProperty, "180"));
+
+				LOG.info("HDFS output path property matched topic: {} path number: {} duration: {} directory: {}", topic, pathNumber, duration, directory);					
+				
+				TimeBasedHdfsOutputPath path = new TimeBasedHdfsOutputPath(duration, directory);
+				
+				ArrayList<TimeBasedHdfsOutputPath> paths = topicToHdfsPaths.get(topic);
+				
+				if (paths == null)
+				{
+					paths = new ArrayList<>();
+					topicToHdfsPaths.put(topic, paths);
+				}
+				else
+				{
+					paths.add(path);
+				}
 			}
 		}
 		
-		return topicFileLocation;
+		return topicToHdfsPaths;
 	}
 
-		/**
+	/**
 	 * Creates the topic to proxy user Map
 	 *
 	 * @param props Properties to parse for topics and users
@@ -146,7 +171,7 @@ public class KaboomConfiguration
 	private Map<String, String> getTopicToProxyUserFromProps(Properties props) 
 	{
 		Pattern topicProxyUsersPattern = Pattern.compile("^topic\\.([^\\.]+)\\.proxy.user$");
-		Map<String, String> topicProxyUsers = new HashMap<String, String>();
+		Map<String, String> topicProxyUsers = new HashMap<>();
 
 		for (Map.Entry<Object, Object> e : props.entrySet())
 		{
@@ -163,7 +188,6 @@ public class KaboomConfiguration
 	/**
 	 * Instantiates properties from either the specified configuration file or the default for the class
 	 *
-	 * @param props Properties to parse for topics and users
 	 * @return Properties
 	 */
 	public static Properties getProperties()
@@ -312,19 +336,11 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the topicToHdfsPath
+	 * @return the topicToHdfsPaths
 	 */
-	public Map<String, String> getTopicToHdfsPath()
+	public Map<String, ArrayList<TimeBasedHdfsOutputPath>> getTopicToHdfsPaths()
 	{
-		return topicToHdfsPath;
-	}
-
-	/**
-	 * @param topicToHdfsPath the topicToHdfsPath to set
-	 */
-	public void setTopicToHdfsPath(Map<String, String> topicToHdfsPath)
-	{
-		this.topicToHdfsPath = topicToHdfsPath;
+		return topicToHdfsPaths;
 	}
 
 	/**
