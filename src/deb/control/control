@@ -1,0 +1,7 @@
+Package: [[name]]
+Version: [[version]]
+Section: misc
+Priority: optional
+Architecture: all
+Maintainer: Dave Ariens <dariens@blackberry.com>
+Description: Daemon consumes data from Kafka using Krackle and writes to per-topic HDFS paths
