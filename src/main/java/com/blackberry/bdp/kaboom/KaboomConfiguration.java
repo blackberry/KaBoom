@@ -53,7 +53,7 @@ public class KaboomConfiguration
 	private int kaboomId;
 	private long fileRotateInterval;
 	private int weight;
-	private final Map<String, ArrayList<TimeBasedHdfsOutputPath>> topicToHdfsPaths;
+	private final Map<String, ArrayList<TimeBasedHdfsOutputPath>> topicToHdfsPaths = new HashMap<>();
 	private Map<String, String> topicToProxyUser;
 	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
 	private final Map<String, String> topicToKafkaReadyFlagPath;
@@ -119,6 +119,8 @@ public class KaboomConfiguration
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
 		
+		//TODO: There's a little inconsistency with the naming of methods and using the prefix build when some have return types/others don't
+		
 		topicToKafkaReadyFlagPath = buildTopicToKafkaReadyFlagPath(props);		
 		topicToProxyUser = buildTopicToProxyUserFromProps(props);
 		
@@ -126,7 +128,7 @@ public class KaboomConfiguration
 		
 		buildProxyUserToHadoopFileSystem();
 		
-		topicToHdfsPaths = buildTopicToHdfsPathFromProps(props);
+		buildTopicToHdfsPathFromProps(props);
 	}
 	
 	/**
@@ -143,7 +145,7 @@ public class KaboomConfiguration
 	 * @param props Properties to parse for topics and paths
 	 * @return Map<String, String>
 	 */
-	private Map<String, ArrayList<TimeBasedHdfsOutputPath>> buildTopicToHdfsPathFromProps(Properties props)
+	private void buildTopicToHdfsPathFromProps(Properties props)
 	{
 		Pattern topicPathPattern = Pattern.compile("^topic\\.([^\\.]+)\\.hdfsPath\\.(\\d+)\\.directory$");
 
@@ -178,8 +180,6 @@ public class KaboomConfiguration
 				}
 			}
 		}
-		
-		return topicToHdfsPaths;
 	}
 
 	/**
