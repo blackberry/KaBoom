@@ -223,6 +223,13 @@ public class KaboomConfiguration
 			
 			try
 			{
+				LOG.info("Using kerberos uthentication.");
+				LOG.info("Kerberos principal = {}", getKerberosPrincipal());
+				LOG.info("Kerberos keytab = {}", getKerberosKeytab());			
+			
+				Authenticator.getInstance().setKerbConfPrincipal(getKerberosPrincipal());
+				Authenticator.getInstance().setKerbKeytab(getKerberosKeytab());
+				
 				LOG.info("Attempting to create file system {} for {}", hadoopUrlPath, proxyUser);
 				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>()
 				 {
