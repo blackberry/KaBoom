@@ -123,6 +123,8 @@ public class KaboomConfiguration
 		topicToHdfsPaths = buildTopicToHdfsPathFromProps(props);
 		topicToProxyUser = buildTopicToProxyUserFromProps(props);
 		hadoopConfiguration = buildHadoopConfiguration();
+		
+		buildProxyUserToHadoopFileSystem();
 	}
 	
 	/**
