@@ -50,6 +50,7 @@ public class KaboomConfiguration
 	private int weight;
 	private final Map<String, ArrayList<TimeBasedHdfsOutputPath>> topicToHdfsPaths;
 	private Map<String, String> topicToProxyUser;
+	public Map<String, String> topicToKafkaReadyFlagPath;
 	private String kerberosPrincipal;
 	private String kerberosKeytab;
 	private String hostname;
@@ -85,6 +86,11 @@ public class KaboomConfiguration
 			LOG.info("topicToProxyUser: {} -> {}", entry.getKey(), entry.getValue());
 		}
 		
+		for (Map.Entry<String, String> entry : getTopicToKafkaReadyFlagPath().entrySet())
+		{
+			LOG.info("topicToKrFlagPath: {} -> {}", entry.getKey(), entry.getValue());
+		}
+
 		LOG.info(" *** end dumping configuration *** ");
 	}
 	
@@ -106,6 +112,7 @@ public class KaboomConfiguration
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
 		
+		topicToKafkaReadyFlagPath = getTopicToKafkaReadyFlagPath(props);
 		topicToHdfsPaths = getTopicToHdfsPathFromProps(props);
 		topicToProxyUser = getTopicToProxyUserFromProps(props);
 		hadoopConfiguration = buildHadoopConfiguration();
@@ -180,11 +187,36 @@ public class KaboomConfiguration
 			{
 				topicProxyUsers.put(m.group(1), e.getValue().toString());
 			}
-		}
-		
+		}		
+				
 		return topicProxyUsers;
 	}
 	
+	/**
+	 * Creates the topic to kafka ready flag path Map
+	 * 
+	 * topic.topicName.kafkaReadyFlag.directory = hdfs://hadoop.lab/service/82/component/logs/%y%M%d/%H/topicName/incoming
+	 *
+	 * @param props Properties to parse for topics and users
+	 * @return Map<String, String>
+	 */
+	private Map<String, String> getTopicToKafkaReadyFlagPath(Properties props) 
+	{			
+		Pattern topicKrPattern = Pattern.compile("^topic\\.([^\\.]+)\\.kafkaReadyFlag.directory$");
+		Map<String, String> mapping = new HashMap<>();
+
+		for (Map.Entry<Object, Object> e : props.entrySet())
+		{
+			Matcher m = topicKrPattern.matcher(e.getKey().toString());
+			if (m.matches())
+			{
+				mapping.put(m.group(1), e.getValue().toString());
+			}
+		}
+		
+		return mapping;
+	}
+
 	/**
 	 * Instantiates properties from either the specified configuration file or the default for the class
 	 *
@@ -533,5 +565,13 @@ public class KaboomConfiguration
 	public void setKafkaZkConnectionString(String kafkaZkConnectionString)
 	{
 		this.kafkaZkConnectionString = kafkaZkConnectionString;
+	}
+
+	/**
+	 * @return the topicToKafkaReadyFlagPath
+	 */
+	public Map<String, String> getTopicToKafkaReadyFlagPath()
+	{
+		return topicToKafkaReadyFlagPath;
 	}
 }

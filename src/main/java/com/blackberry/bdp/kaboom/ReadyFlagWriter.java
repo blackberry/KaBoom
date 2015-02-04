@@ -137,7 +137,7 @@ public class ReadyFlagWriter extends NotifyingThread
 	@Override
 	public void doRun() throws Exception
 	{
-		Map<String, List<PartitionMetadata>> topicsWithPartitions = new HashMap<String, List<PartitionMetadata>>();
+		Map<String, List<PartitionMetadata>> topicsWithPartitions = new HashMap<>();
 		StateUtils.getTopicParitionMetaData(config.getKafkaZkConnectionString(), config.getKafkaSeedBrokers(), topicsWithPartitions);
 
 		Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
@@ -166,7 +166,7 @@ public class ReadyFlagWriter extends NotifyingThread
 				{
 					LOG.info(LOG_TAG + "Checking {} partition(s) in topic={} for offset timestamps...", entry.getValue().size(), topicName);
 
-					String hdfsTemplate = config.getTopicToHdfsPath().get(topicName);
+					String hdfsTemplate = config.getTopicToKafkaReadyFlagPath().get(topicName);
 
 					if (hdfsTemplate == null)
 					{
