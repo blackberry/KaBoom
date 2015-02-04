@@ -1,6 +1,6 @@
 #!/bin/bash
 
-JAVA='which java'
+JAVA=`which java`
 BASEDIR=/opt/kaboom
 BINDIR="$BASEDIR/bin"
 LIBDIR="$BASEDIR/lib"

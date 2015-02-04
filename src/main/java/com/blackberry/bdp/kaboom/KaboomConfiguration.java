@@ -119,12 +119,14 @@ public class KaboomConfiguration
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
 		
-		topicToKafkaReadyFlagPath = buildTopicToKafkaReadyFlagPath(props);
-		topicToHdfsPaths = buildTopicToHdfsPathFromProps(props);
+		topicToKafkaReadyFlagPath = buildTopicToKafkaReadyFlagPath(props);		
 		topicToProxyUser = buildTopicToProxyUserFromProps(props);
+		
 		hadoopConfiguration = buildHadoopConfiguration();
 		
 		buildProxyUserToHadoopFileSystem();
+		
+		topicToHdfsPaths = buildTopicToHdfsPathFromProps(props);
 	}
 	
 	/**
