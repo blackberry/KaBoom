@@ -183,6 +183,101 @@ limitations under the License.
 				</configuration>
 			</plugin>
 
+			<!-- Build a DEB package -->
+			<plugin>
+				<artifactId>jdeb</artifactId>
+				<groupId>org.vafer</groupId>
+				<version>1.3</version>
+				<executions>
+					<execution>
+						<phase>install</phase>
+						<goals>
+							<goal>jdeb</goal>
+						</goals>
+						<configuration>
+							<verbose>true</verbose>
+							<controlDir>src/deb/control</controlDir>
+							<timestamped>true</timestamped>
+							<dataSet>
+								
+								<!-- Create required directories -->
+								<data>
+									<type>template</type>
+									<paths>
+										<path>/opt/kaboom/config</path>
+										<path>/opt/kaboom/lib</path>
+										<path>/opt/kaboom/file_positions_cache</path>										
+										<path>/var/log/kaboom</path>
+										<path>/var/run/kaboom</path>
+									</paths>
+									<mapper>
+										<type>perm</type>
+										<filemode>755</filemode>
+										<user>kaboom</user>
+										<group>kaboom</group>
+									</mapper>
+								</data>
+
+								<!-- Copy the main artifact jar -->
+								<data>
+									<type>file</type>
+									<src>target/${project.build.finalName}.jar</src>
+									<dst>/opt/kaboom/lib/${project.build.finalName}.jar</dst>
+									<mapper>
+										<type>perm</type>
+										<filemode>644</filemode>
+										<user>root</user>
+										<group>root</group>
+									</mapper>
+								</data>
+								
+								<!-- Copy all required libraries -->
+								<data>
+									<type>directory</type>
+									<src>target/lib</src>
+									<includes>*.jar</includes>
+									<mapper>
+										<type>perm</type>
+										<prefix>/opt/kaboom/lib</prefix>
+										<filemode>644</filemode>
+										<user>root</user>
+										<group>root</group>
+									</mapper>
+								</data>
+								
+								<!-- Copy the config sample(s) -->
+								<data>
+									<type>files</type>
+									<paths>
+										<path>${project.basedir}/conf/kaboom.properties.sample</path>
+										<path>${project.basedir}/conf/kaboom-env.sh.sample</path>
+										<path>${project.basedir}/conf/log4j.properties.sample</path>
+									</paths>
+									<dst>/opt/kaboom/config</dst>
+								</data>
+								
+								<!-- Copy the init upstart script -->
+								<data>
+									<src>${project.basedir}/init/kaboom.conf</src>
+									<dst>/etc/init/kaboom.conf</dst>
+									<type>file</type>
+								</data>
+								
+								<!-- Link the upstart file to -->
+								<data>
+									<type>link</type>
+									<linkName>/etc/init.d/kaboom</linkName>
+									<linkTarget>/lib/init/upstart-job</linkTarget>
+									<symlink>true</symlink>
+								</data>								
+								
+							</dataSet>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+
 			<!-- Build an RPM -->
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
@@ -273,12 +368,7 @@ limitations under the License.
 
 					<!-- Create the user and the group if they do not already exist -->
 					<preinstallScriptlet>
-						<script>
-							rm /opt/kaboom/lib/*
-							getent group kafka >/dev/null || groupadd -r kafka
-							getent passwd kafka >/dev/null || useradd -r -g kafka -m -s /bin/bash -c "User for kaboom." kafka
-							exit 0
-						</script>
+						<scriptFile>src/deb/control/preinst</scriptFile>					
 					</preinstallScriptlet>
 
 				</configuration>
