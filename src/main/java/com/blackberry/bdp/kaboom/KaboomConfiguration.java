@@ -223,6 +223,7 @@ public class KaboomConfiguration
 			
 			try
 			{
+				LOG.info("Attempting to create file system {} for {}", hadoopUrlPath, proxyUser);
 				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>()
 				 {
 					 @Override
