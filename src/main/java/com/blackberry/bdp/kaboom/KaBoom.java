@@ -173,7 +173,7 @@ public class KaBoom
 		leaderSelector.start();		
 		
 		final Map<String, Worker> partitonToWorkerMap = new HashMap<>();
-		final List<Thread> threads = new ArrayList<>();
+		final Map<String, Thread> partitionToThreadsMap = new HashMap<>();
 		
 		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable()
 		{
@@ -188,8 +188,10 @@ public class KaBoom
 					w.stop();
 				}
 				
-				for (Thread t : threads)
+				for (Map.Entry<String, Thread> entry : partitionToThreadsMap.entrySet())
 				{
+					Thread t = entry.getValue();
+					
 					try
 					{
 						t.join();
@@ -227,11 +229,11 @@ public class KaBoom
 		
 		while (shutdown == false)
 		{
-			//workers.clear();
-			//threads.clear();
+			Map<String, Boolean> validWorkingPartitions = new HashMap<>();			
 			
-			Map<String, String> unaccountedForWorkers = new HashMap<>();			
-			
+			/**
+			 * Get all my assignments and create a worker if there's anything not already being worked
+			 */			
 			for (String partitionId : curator.getChildren().forPath("/kaboom/assignments"))
 			{
 				String assignee = new String(curator.getData().forPath("/kaboom/assignments/" + partitionId), UTF8);
@@ -241,6 +243,7 @@ public class KaBoom
 					if (partitonToWorkerMap.containsKey(partitionId))
 					{
 						LOG.info("KaBoom clientId {} assigned to partitonId {} and worker is already working", config.getKaboomId(), partitionId);
+						validWorkingPartitions.put(partitionId, true);
 					}
 					else
 					{
@@ -260,21 +263,15 @@ public class KaBoom
 								continue;
 							}
 
-							String proxyUser = config.getTopicToProxyUser().get(topic);
-							if (proxyUser == null)
-							{
-								proxyUser = "";
-							}						
-
 							Worker worker = new Worker(config, curator, topic, partition);
 
 							partitonToWorkerMap.put(partitionId, worker);
-							Thread t = new Thread(worker);
-							threads.add(t);
-							t.start();
+							partitionToThreadsMap.put(partitionId, new Thread(worker));
+							partitionToThreadsMap.get(partitionId).start();
 							
 							LOG.info("KaBoom clientId {} assigned to partitonId {} and a new worker has been started", config.getKaboomId(), partitionId);
-
+							
+							validWorkingPartitions.put(partitionId, true);
 						} 
 						else
 						{
@@ -284,19 +281,24 @@ public class KaBoom
 				}
 			}
 			
+			/**
+			 * Now, look through the workers and if there are any that are invalid, politely ask them to stop working and kill them if they take too long
+			 */
 			
-			
-			if (threads.size() > 0)
+			for (Map.Entry<String, Worker> entry : partitonToWorkerMap.entrySet())
 			{
-				for (Thread t : threads)
-				{
-					t.join();
+				Worker w = entry.getValue();
+				
+				if (!validWorkingPartitions.containsKey(w.getPartitionId()))
+				{					
+					w.stop();
+					LOG.info("Worker currently assigned to {} is no longer valid has been instructed to stop working", w.getPartitionId());
 				}
-			}
-			else
-			{
-				Thread.sleep(10000);
-			}
+			}		
+			
+			// Since all we're really doing after things are running in steady state is reading from ZK, a wait of 10 seconds should be enough.
+			
+			Thread.sleep(10000);			
 		}
 	}
 	
