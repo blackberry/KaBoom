@@ -16,11 +16,9 @@
 
 package com.blackberry.bdp.kaboom;
 
-import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.HashSet;
-import java.util.Map.Entry;
 import java.util.Set;
 
 import org.apache.curator.framework.CuratorFramework;
@@ -356,7 +354,7 @@ public class Worker implements Runnable
 			} 
 			catch (Exception e)
 			{
-				LOG.error("[{}] Error getting offset.", partitionId, e);
+				LOG.error("[{}] Error getting offset.", getPartitionId(), e);
 				return;
 			}
 
@@ -366,7 +364,7 @@ public class Worker implements Runnable
 			} 
 			catch (UnknownHostException e)
 			{
-				LOG.error("[{}] Can't determine local hostname", partitionId);
+				LOG.error("[{}] Can't determine local hostname", getPartitionId());
 				hostname = "unknown.host";
 			}
 
@@ -374,7 +372,7 @@ public class Worker implements Runnable
 
 			consumer = new Consumer(config.getConsumerConfiguration(), clientId, topic, partition,offset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
 
-			LOG.info("[{}] Created worker.  Starting at offset {}.", partitionId, offset);
+			LOG.info("[{}] Created worker.  Starting at offset {}.", getPartitionId(), offset);
 
 			byte[] bytes = new byte[1024 * 1024];
 			int length;
@@ -416,8 +414,7 @@ public class Worker implements Runnable
 								 * should just be patient until the offsets are from where we want.  
 								*/
 
-								LOG.debug("[{}] skipping last offset {} since it's lower than high watermark {}",
-									 partitionId, consumer.getLastOffset(), highWatermark);
+								LOG.debug("[{}] skipping last offset {} since it's lower than high watermark {}", getPartitionId(), consumer.getLastOffset(), highWatermark);
 								
 								lowerOffsetsReceived++;
 								continue;
@@ -432,20 +429,18 @@ public class Worker implements Runnable
 
 								if (config.getSinkToHighWatermark())
 								{
-									LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
-										 partitionId, offset, highWatermark, config.getSinkToHighWatermark());
+									LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.", getPartitionId(), offset, highWatermark, config.getSinkToHighWatermark());
 
 									consumer.setNextOffset(highWatermark);
 									offset = highWatermark;
 
-									LOG.info("[{}] Successfully set offset to the high watermark of {}", partitionId, highWatermark);
+									LOG.info("[{}] Successfully set offset to the high watermark of {}", getPartitionId(), highWatermark);
 
 									continue;
 								} 
 								else
 								{
-									LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
-										 partitionId, offset, highWatermark, config.getSinkToHighWatermark());
+									LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.", getPartitionId(), offset, highWatermark, config.getSinkToHighWatermark());
 
 									continue;
 								}		
@@ -460,8 +455,7 @@ public class Worker implements Runnable
 						} 
 						else
 						{
-							LOG.error("[{}] Offset anomaly! Expected:{}, Got {}, Consumer high watermark {}, latest {}, earliest {}", 
-								 partitionId, 
+							LOG.error("[{}] Offset anomaly! Expected:{}, Got {}, Consumer high watermark {}, latest {}, earliest {}", getPartitionId(), 
 								 offset, 
 								 consumer.getLastOffset(), 
 								 consumer.getHighWaterMark(), 
@@ -486,7 +480,7 @@ public class Worker implements Runnable
 						}
 						else
 						{
-							LOG.warn("[{}] Unrecognized encoding version: {}", partitionId, version);
+							LOG.warn("[{}] Unrecognized encoding version: {}", getPartitionId(), version);
 							pos = 0;
 						}
 					} 
@@ -539,12 +533,12 @@ public class Worker implements Runnable
 					{
 						if (version == (byte) 0x00)
 						{
-							LOG.debug("[{}] Failed to parse timestamp.  Using stored timestamp", partitionId);
+							LOG.debug("[{}] Failed to parse timestamp.  Using stored timestamp", getPartitionId());
 							timestamp = Converter.longFromBytes(bytes, 2);
 						} 
 						else
 						{
-							LOG.error("[{}] Error parsing timestamp.", partitionId);
+							LOG.error("[{}] Error parsing timestamp.", getPartitionId());
 							timestamp = System.currentTimeMillis();
 						}
 					}
@@ -558,16 +552,16 @@ public class Worker implements Runnable
 
 					if ((length - pos) < 0)
 					{
-						LOG.info("[{}] Skipping offset as length - Offset is < 0: timestamp: {}, pos: {}, length: {}", partitionId, timestamp, pos, length);
+						LOG.info("[{}] Skipping offset as length - Offset is < 0: timestamp: {}, pos: {}, length: {}", getPartitionId(), timestamp, pos, length);
 						continue;
 					}					
 					
-					for (TimeBasedHdfsOutputPath path : hdfsOutputPaths)
+					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
 					{
 						if (!path.isConfigured())
 						{
-							String filename = String.format("%s-%08d.bm", partitionId, offset);
-							path.configure(filename, config.getHadoopConfiguration());
+							String filename = String.format("%s-%08d.bm", getPartitionId(), offset);
+							path.configure(filename);
 						}
 						
 						path.getBoomWriter(timestamp).writeLine(timestamp, bytes, pos, length - pos);
@@ -589,10 +583,10 @@ public class Worker implements Runnable
 				} 
 				catch (Throwable t)
 				{
-					LOG.error("[{}] Error processing message.", partitionId, t);
-					LOG.info("[{}] Deleting all tmp files", partitionId);
+					LOG.error("[{}] Error processing message.", getPartitionId(), t);
+					LOG.info("[{}] Deleting all tmp files", getPartitionId());
 					
-					for (TimeBasedHdfsOutputPath path : hdfsOutputPaths)
+					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
 					{
 						path.abortAll();
 					}								
@@ -601,9 +595,9 @@ public class Worker implements Runnable
 				}
 			}
 			
-			LOG.info("[{}] KaBoom client shutting down and closing all output files.", partitionId);
+			LOG.info("[{}] KaBoom client shutting down and closing all output files.", getPartitionId());
 			
-			for (TimeBasedHdfsOutputPath path : hdfsOutputPaths)
+			for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
 			{
 				path.closeAll();
 			}			
@@ -611,24 +605,24 @@ public class Worker implements Runnable
 			try
 			{
 				storeOffset();
-				storeOffsetTimestamp(partitionId, maxTimestamp);
+				storeOffsetTimestamp(getPartitionId(), maxTimestamp);
 			
-				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.", partitionId, offset, maxTimestamp);
+				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.", getPartitionId(), offset, maxTimestamp);
 			} 
 			catch (Exception e)
 			{
-				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper", partitionId, e, offset, maxTimestamp);
+				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper", getPartitionId(), e, offset, maxTimestamp);
 			}
 
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagGaugeName);
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagSecGaugeName);
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(msgWrittenGaugeName);
 			
-			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})", partitionId, linesread, offset);
+			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})", getPartitionId(), linesread, offset);
 		}
 		catch (Exception e) 
 		{
-			LOG.error("[{}] An exception occured while setting up this worker thread giving up and returing => error : {} ", partitionId, e);
+			LOG.error("[{}] An exception occured while setting up this worker thread giving up and returing => error : {} ", getPartitionId(), e);
 		}
 		finally
 		{
@@ -672,19 +666,17 @@ public class Worker implements Runnable
 
 				if (config.getAllowOffsetOverrides())
 				{
-					LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}", 
-						 this.partitionId, zkOffset, zkOffsetOverride, config.getAllowOffsetOverrides());
+					LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}", this.getPartitionId(), zkOffset, zkOffsetOverride, config.getAllowOffsetOverrides());
 					
 					curator.delete().forPath(zkPath_offSetOverride);
 					
-					LOG.info("{} successfully deleted offset override ZK path: {}", this.partitionId, zkPath_offSetOverride);
+					LOG.info("{} successfully deleted offset override ZK path: {}", this.getPartitionId(), zkPath_offSetOverride);
 					
 					return zkOffsetOverride;
 				} 
 				else
 				{
-					LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}", 
-						 this.partitionId, zkOffset, zkOffsetOverride, config.getAllowOffsetOverrides());
+					LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}", this.getPartitionId(), zkOffset, zkOffsetOverride, config.getAllowOffsetOverrides());
 				}
 			}
 
@@ -757,5 +749,21 @@ public class Worker implements Runnable
 	public long getMsgWrittenPerSec()
 	{
 		return linesread / ((System.currentTimeMillis() - startTime) / 1000);
+	}
+
+	/**
+	 * @return the hdfsOutputPaths
+	 */
+	public ArrayList<TimeBasedHdfsOutputPath> getHdfsOutputPaths()
+	{
+		return hdfsOutputPaths;
+	}
+
+	/**
+	 * @return the partitionId
+	 */
+	public String getPartitionId()
+	{
+		return partitionId;
 	}
 }

@@ -35,6 +35,8 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 public class KaBoom
@@ -166,10 +168,11 @@ public class KaBoom
 		// Start leader election thread.  The leader assigns work to each instance
 		
 		LoadBalancer loadBalancer = new LoadBalancer(config);
-		final LeaderSelector leaderSelector = new LeaderSelector(curator, "/kaboom/leader", loadBalancer);
+		final LeaderSelector leaderSelector = new LeaderSelector(curator, "/kaboom/leader", loadBalancer);		
 		leaderSelector.autoRequeue();
 		leaderSelector.start();		
-		final List<Worker> workers = new ArrayList<>();
+		
+		final Map<String, Worker> partitonToWorkerMap = new HashMap<>();
 		final List<Thread> threads = new ArrayList<>();
 		
 		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable()
@@ -179,10 +182,12 @@ public class KaBoom
 			{
 				shutdown();
 				
-				for (Worker w : workers)
+				for (Map.Entry<String, Worker> entry : partitonToWorkerMap.entrySet())
 				{
+					Worker w = entry.getValue();
 					w.stop();
 				}
+				
 				for (Thread t : threads)
 				{
 					try
@@ -222,50 +227,64 @@ public class KaBoom
 		
 		while (shutdown == false)
 		{
-			workers.clear();
-			threads.clear();
+			//workers.clear();
+			//threads.clear();
 			
-			for (String node : curator.getChildren().forPath("/kaboom/assignments"))
+			Map<String, String> unaccountedForWorkers = new HashMap<>();			
+			
+			for (String partitionId : curator.getChildren().forPath("/kaboom/assignments"))
 			{
-				String assignee = new String(curator.getData().forPath("/kaboom/assignments/" + node), UTF8);
+				String assignee = new String(curator.getData().forPath("/kaboom/assignments/" + partitionId), UTF8);
 				
 				if (assignee.equals(Integer.toString(config.getKaboomId())))
-				{
-					LOG.info("Running data pull for {}", node);
-					Matcher m = topicPartitionPattern.matcher(node);
-					
-					if (m.matches())
+				{					
+					if (partitonToWorkerMap.containsKey(partitionId))
 					{
-						String topic = m.group(1);
-						int partition = Integer.parseInt(m.group(2));						
-						ArrayList<TimeBasedHdfsOutputPath> paths = config.getTopicToHdfsPaths().get(topic);
-						
-						if (paths == null)
-						{
-							LOG.error("Topic has no configured output path: {}", topic);
-							continue;
-						}
-						
-						String proxyUser = config.getTopicToProxyUser().get(topic);
-						if (proxyUser == null)
-						{
-							proxyUser = "";
-						}						
-						
-						Worker worker = new Worker(config, curator, topic, partition);
-						
-						workers.add(worker);
-						Thread t = new Thread(worker);
-						threads.add(t);
-						t.start();
-						
-					} 
+						LOG.info("KaBoom clientId {} assigned to partitonId {} and worker is already working", config.getKaboomId(), partitionId);
+					}
 					else
 					{
-						LOG.error("Could not get topic and partition from node name. ({})", node);
+						LOG.info("KaBoom clientId {} assigned to partitonId {} and a worker doesn't exist", config.getKaboomId(), partitionId);
+					
+						Matcher m = topicPartitionPattern.matcher(partitionId);
+
+						if (m.matches())
+						{
+							String topic = m.group(1);
+							int partition = Integer.parseInt(m.group(2));						
+							ArrayList<TimeBasedHdfsOutputPath> paths = config.getTopicToHdfsPaths().get(topic);
+
+							if (paths == null)
+							{
+								LOG.error("Topic has no configured output path: {}", topic);
+								continue;
+							}
+
+							String proxyUser = config.getTopicToProxyUser().get(topic);
+							if (proxyUser == null)
+							{
+								proxyUser = "";
+							}						
+
+							Worker worker = new Worker(config, curator, topic, partition);
+
+							partitonToWorkerMap.put(partitionId, worker);
+							Thread t = new Thread(worker);
+							threads.add(t);
+							t.start();
+							
+							LOG.info("KaBoom clientId {} assigned to partitonId {} and a new worker has been started", config.getKaboomId(), partitionId);
+
+						} 
+						else
+						{
+							LOG.error("Could not get topic and partition from node name. ({})", partitionId);
+						}
 					}
 				}
 			}
+			
+			
 			
 			if (threads.size() > 0)
 			{

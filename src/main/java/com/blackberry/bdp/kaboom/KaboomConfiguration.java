@@ -35,7 +35,11 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import com.blackberry.bdp.common.utils.props.Parser;
+import java.io.IOException;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 /**
  *
@@ -44,13 +48,15 @@ import java.util.ArrayList;
 public class KaboomConfiguration
 {
 	private static final String defaultProperyFile = "kaboom.properties";
-	
+	private final Object fsLock = new Object();
+	private final Path hadoopUrlPath;
 	private int kaboomId;
 	private long fileRotateInterval;
 	private int weight;
 	private final Map<String, ArrayList<TimeBasedHdfsOutputPath>> topicToHdfsPaths;
 	private Map<String, String> topicToProxyUser;
-	public Map<String, String> topicToKafkaReadyFlagPath;
+	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
+	private final Map<String, String> topicToKafkaReadyFlagPath;
 	private String kerberosPrincipal;
 	private String kerberosKeytab;
 	private String hostname;
@@ -98,7 +104,8 @@ public class KaboomConfiguration
 	{
 		Parser propsParser = new Parser(props);
 		
-		consumerConfiguration = new ConsumerConfiguration(props);	
+		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));		
+		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
 		fileRotateInterval = propsParser.parseLong("fileRotateInterval", 60L * 3L * 1000L);
 		weight = propsParser.parseInteger("kaboom.weighting", Runtime.getRuntime().availableProcessors());
@@ -112,14 +119,14 @@ public class KaboomConfiguration
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
 		
-		topicToKafkaReadyFlagPath = getTopicToKafkaReadyFlagPath(props);
-		topicToHdfsPaths = getTopicToHdfsPathFromProps(props);
-		topicToProxyUser = getTopicToProxyUserFromProps(props);
+		topicToKafkaReadyFlagPath = buildTopicToKafkaReadyFlagPath(props);
+		topicToHdfsPaths = buildTopicToHdfsPathFromProps(props);
+		topicToProxyUser = buildTopicToProxyUserFromProps(props);
 		hadoopConfiguration = buildHadoopConfiguration();
 	}
 	
 	/**
-	 * Creates the topic to an HDFS paths Map
+	 * Builds the topic to an HDFS paths Map
 	 * 
 	 * Sample property definition:
 	 * 
@@ -132,7 +139,7 @@ public class KaboomConfiguration
 	 * @param props Properties to parse for topics and paths
 	 * @return Map<String, String>
 	 */
-	private Map<String, ArrayList<TimeBasedHdfsOutputPath>> getTopicToHdfsPathFromProps(Properties props)
+	private Map<String, ArrayList<TimeBasedHdfsOutputPath>> buildTopicToHdfsPathFromProps(Properties props)
 	{
 		Pattern topicPathPattern = Pattern.compile("^topic\\.([^\\.]+)\\.hdfsPath\\.(\\d+)\\.directory$");
 
@@ -150,7 +157,9 @@ public class KaboomConfiguration
 
 				LOG.info("HDFS output path property matched topic: {} path number: {} duration: {} directory: {}", topic, pathNumber, duration, directory);					
 				
-				TimeBasedHdfsOutputPath path = new TimeBasedHdfsOutputPath(duration, directory);
+				proxyUserToFileSystem.get(topicToProxyUser.get(topic));
+				
+				TimeBasedHdfsOutputPath path = new TimeBasedHdfsOutputPath(proxyUserToFileSystem.get(topicToProxyUser.get(topic)), directory, duration);
 				
 				ArrayList<TimeBasedHdfsOutputPath> paths = topicToHdfsPaths.get(topic);
 				
@@ -170,22 +179,24 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * Creates the topic to proxy user Map
+	 * Builds the topic to proxy users map
 	 *
 	 * @param props Properties to parse for topics and users
 	 * @return Map<String, String>
 	 */
-	private Map<String, String> getTopicToProxyUserFromProps(Properties props) 
+	private Map<String, String> buildTopicToProxyUserFromProps(Properties props) 
 	{
 		Pattern topicProxyUsersPattern = Pattern.compile("^topic\\.([^\\.]+)\\.proxy.user$");
 		Map<String, String> topicProxyUsers = new HashMap<>();
 
 		for (Map.Entry<Object, Object> e : props.entrySet())
 		{
+			String proxyUser = e.getValue().toString();			
+				 
 			Matcher m = topicProxyUsersPattern.matcher(e.getKey().toString());
 			if (m.matches())
-			{
-				topicProxyUsers.put(m.group(1), e.getValue().toString());
+			{				
+				topicProxyUsers.put(m.group(1), proxyUser);
 			}
 		}		
 				
@@ -193,14 +204,62 @@ public class KaboomConfiguration
 	}
 	
 	/**
-	 * Creates the topic to kafka ready flag path Map
+	 * Builds the proxy user to hadoop file system map
+	 */
+	private void buildProxyUserToHadoopFileSystem() 
+	{
+		for (Map.Entry<String, String> entry : topicToProxyUser.entrySet())
+		{
+			final String proxyUser = entry.getValue();
+			
+			if (proxyUserToFileSystem.containsKey(proxyUser))
+			{
+				continue;
+			}
+			
+			try
+			{
+				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>()
+				 {
+					 @Override
+					 public Void run() throws Exception
+					 {
+						 synchronized (fsLock)
+						 {							 
+							 try
+							 {
+								 FileSystem fs = hadoopUrlPath.getFileSystem(hadoopConfiguration);
+								 proxyUserToFileSystem.put(proxyUser, fs);
+								 								 
+								 LOG.info("Opening {} for proxy user {}", hadoopUrlPath, proxyUser);
+							 }
+							 catch (IOException ioe)
+							 {
+								 LOG.error("Error getting file system {} for proxy user {}", hadoopUrlPath, ioe);
+							 }
+						 }
+
+						 return null;
+					 }
+				 });
+			} 
+			catch (Exception e)
+			{
+				LOG.error("Error creating file.", e);
+			}
+		}		
+	}
+
+	
+	/**
+	 * Builds the proxy user to kafka ready flag path Map
 	 * 
 	 * topic.topicName.kafkaReadyFlag.directory = hdfs://hadoop.lab/service/82/component/logs/%y%M%d/%H/topicName/incoming
 	 *
 	 * @param props Properties to parse for topics and users
 	 * @return Map<String, String>
 	 */
-	private Map<String, String> getTopicToKafkaReadyFlagPath(Properties props) 
+	private Map<String, String> buildTopicToKafkaReadyFlagPath(Properties props) 
 	{			
 		Pattern topicKrPattern = Pattern.compile("^topic\\.([^\\.]+)\\.kafkaReadyFlag.directory$");
 		Map<String, String> mapping = new HashMap<>();
@@ -215,7 +274,7 @@ public class KaboomConfiguration
 		}
 		
 		return mapping;
-	}
+	}	
 
 	/**
 	 * Instantiates properties from either the specified configuration file or the default for the class
@@ -573,5 +632,13 @@ public class KaboomConfiguration
 	public Map<String, String> getTopicToKafkaReadyFlagPath()
 	{
 		return topicToKafkaReadyFlagPath;
+	}
+
+	/**
+	 * @return the hadoopUrlPath
+	 */
+	public Path getHadoopUrlPath()
+	{
+		return hadoopUrlPath;
 	}
 }

@@ -117,8 +117,9 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 
 			StateUtils.calculateLoad(partitionToHost, clients, clientToPartitions);
 
-			// If any node is over its target by at least one, then unassign partitions until it is at or below its target
-			
+			/**
+			 * For every client, determine if it's doing too much work and remove assignments (remote ones first)
+			 */			
 			for (Entry<String, KaBoomNodeInfo> e : clients.entrySet())
 			{
 				String client = e.getKey();

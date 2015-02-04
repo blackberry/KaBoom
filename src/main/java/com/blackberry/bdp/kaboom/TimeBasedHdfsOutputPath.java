@@ -8,6 +8,7 @@ package com.blackberry.bdp.kaboom;
 import com.blackberry.bdp.common.utils.conversion.Converter;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.security.PrivilegedExceptionAction;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
@@ -29,11 +30,12 @@ import org.slf4j.LoggerFactory;
 public class TimeBasedHdfsOutputPath
 {
 	private static final Object fsLock = new Object();
-	private FileSystem fs;
+	private FileSystem fileSystem;
 	private final FsPermission permissions = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);
 	
 	private final String dirTemplate;
 	private String filename;
+	private String proxyUser;
 	
 	private final Integer durationSeconds;
 	//private Long timestampExpires;
@@ -53,17 +55,18 @@ public class TimeBasedHdfsOutputPath
 	
 	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
 	
-	public TimeBasedHdfsOutputPath(Integer durationSeconds, String pathTemplate)
+	public TimeBasedHdfsOutputPath(FileSystem fileSystem, String pathTemplate, Integer durationSeconds)
 	{
+		this.fileSystem = fileSystem;
 		this.durationSeconds = durationSeconds;
 		this.dirTemplate = pathTemplate;
 	}
 	
-	public void configure(String filename, Configuration hadoopConfiguration)
+	public void configure(String filename)
 	{
 		this.filename = filename;
-		this.hadoopConfiguration = hadoopConfiguration;		
-		this.configured = true;
+		
+		this.configured = true;		
 	}
 	
 	public boolean isConfigured()
@@ -147,23 +150,17 @@ public class TimeBasedHdfsOutputPath
 			tmpdir = String.format("%s/%s%s", dir, tmpPrefix, filename);
 			finalPath = new Path(dir + "/" + filename);			
 			tmpPath = new Path(tmpdir + "/" + filename);
-
+			
 			try
 			{
-				 synchronized (fsLock)
+				 if (fileSystem.exists(tmpPath))
 				 {
-					 fs = tmpPath.getFileSystem(hadoopConfiguration);
-					 LOG.info("Opening {}.", tmpPath);
-
-					 if (fs.exists(tmpPath))
-					 {
-						 fs.delete(tmpPath, false);
-						 LOG.info("Removing file from HDFS because it already exists: {}", tmpPath.toString());
-					 }
-
-					 out = fs.create(tmpPath, permissions, false, bufferSize, replicas, blocksize, null);
-					 boomWriter = new FastBoomWriter(out);
+					 fileSystem.delete(tmpPath, false);
+					 LOG.info("Removing file from HDFS because it already exists: {}", tmpPath);
 				 }
+
+				 out = fileSystem.create(tmpPath, permissions, false, bufferSize, replicas, blocksize, null);
+				 boomWriter = new FastBoomWriter(out);						 
 			} 
 			catch (Exception e)
 			{
@@ -197,8 +194,7 @@ public class TimeBasedHdfsOutputPath
 			{
 				try
 				{
-					fs = tmpPath.getFileSystem(hadoopConfiguration);
-					fs.delete(new Path(tmpdir), true);
+					fileSystem.delete(new Path(tmpdir), true);
 					LOG.info("Deleted temp file: {}", tmpPath);
 				} 
 				catch (IOException e)
@@ -222,22 +218,10 @@ public class TimeBasedHdfsOutputPath
 				LOG.error("Error closing up boomWriter {}:", tmpPath, ioe);
 			}				 
 
-			synchronized (fsLock)
-			{
-				try
-				{
-					fs = tmpPath.getFileSystem(hadoopConfiguration);
-				} 
-				catch (IOException e)
-				{
-					LOG.error("Error getting File System for {}:", tmpPath, e);
-				}
-			}
-
 			try
 			{
 				LOG.info("Moving {} to {}", tmpPath, finalPath);
-				fs.rename(tmpPath, finalPath);
+				fileSystem.rename(tmpPath, finalPath);
 			} 
 			catch (Exception e)
 			{
@@ -247,9 +231,9 @@ public class TimeBasedHdfsOutputPath
 
 			try
 			{
-				fs.delete(new Path(tmpdir), true);
+				fileSystem.delete(new Path(tmpdir), true);
 			} 
-			catch (Exception e)
+			catch (IllegalArgumentException | IOException e)
 			{
 				LOG.error("Error deleting file {}", tmpPath, e);
 			}
