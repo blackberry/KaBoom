@@ -74,16 +74,10 @@ public class StateUtils {
 			return;
 		}
 	}
-	public static void getPartitionHosts(String kafkaSeedBrokers,
-		List<String> topics, Map<String, String> partitionToHost,
-		Map<String, List<String>> hostToPartition) {
-		
-		getPartitionHosts(kafkaSeedBrokers, topics, partitionToHost, hostToPartition, null);		
-	}
-	
+
 	public static void getPartitionHosts(String kafkaSeedBrokers,
 			List<String> topics, Map<String, String> partitionToHost,
-			Map<String, List<String>> hostToPartition, Map<String, Boolean> supportedTopics) {
+			Map<String, List<String>> hostToPartition) {
 		LOG.debug("Getting partition to host mappings for {}", topics);
 
 		// Map partition to host and host to partition
@@ -106,6 +100,8 @@ public class StateUtils {
 				
 				LOG.info("Received a response with metadata for {} topics", metaData.size());
 
+				ArrayList<String> skippedTopicNames = new ArrayList<>();
+				
 				for (TopicMetadata item : metaData) {
 					
 					if (item == null)
@@ -114,22 +110,11 @@ public class StateUtils {
 						continue;
 					}
 					
-					ArrayList<String> skippedTopicNames = new ArrayList<>();
-					
 					for (PartitionMetadata part : item.partitionsMetadata()) {
 						
 						if (part.leader().host() == null)
 						{
 							LOG.error("A null host was found in our PartitonMetaData for topic: {} and partition: {}--skipping!", item.topic(), part.partitionId());
-							continue;
-						}
-						
-						if (supportedTopics != null &&  (
-								false == supportedTopics.containsKey(item.topic()) ||
-								false == supportedTopics.get(item.topic())
-							))
-						{
-							skippedTopicNames.add(item.topic());
 							continue;
 						}
 						
@@ -145,15 +130,16 @@ public class StateUtils {
 						}
 						parts.add(partition);
 					}
-					
-					LOG.info("Mapping partitions to hosts kipped the following unsupported topics:  {}", StringUtils.join(skippedTopicNames, String.format("%n\t")));
 				}
-			} catch (Exception e) {
+			} 
+			catch (Exception e) 
+			{
 				LOG.error("Error getting meta data", e);
 				continue;
-			} finally {
-				if (consumer != null)
-					consumer.close();
+			} 
+			finally 
+			{
+				if (consumer != null) consumer.close();
 			}
 
 			LOG.debug("Successfully got partition to host mappings");
@@ -200,18 +186,39 @@ public class StateUtils {
 		}
 	}
 
+	public static List<String> readTopicsFromZooKeeper(String kafkaZkConnectionString, List<String> topics) throws Exception {
+		return readTopicsFromZooKeeper(kafkaZkConnectionString, topics, null);
+	}
+	
+	
 	public static List<String> readTopicsFromZooKeeper(
-			String kafkaZkConnectionString, List<String> topics) throws Exception {
+			String kafkaZkConnectionString, List<String> topics, Map<String, Boolean> supportedTopics) throws Exception {
 		RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
 		CuratorFramework curator = CuratorFrameworkFactory.newClient(
 				kafkaZkConnectionString, retryPolicy);
-		try {
+		
+		List<String> skippedTopicNames = new ArrayList<>();
+		
+		try 
+		{
 			curator.start();
 
-			for (String node : curator.getChildren().forPath("/brokers/topics")) {
+			for (String node : curator.getChildren().forPath("/brokers/topics")) 
+			{
+				if (supportedTopics != null &&  (
+						false == supportedTopics.containsKey(node) ||
+						false == supportedTopics.get(node)
+					))
+				{
+					skippedTopicNames.add(node);
+					continue;
+				}				
+				
 				LOG.debug("Got topic: {}", node);
 				topics.add(node);
 			}
+			
+			LOG.info("Reading topics from ZooKeeper skipped the following unsupported topics:  {}", StringUtils.join(skippedTopicNames, String.format("%n\t")));				
 
 		} finally {
 			curator.close();

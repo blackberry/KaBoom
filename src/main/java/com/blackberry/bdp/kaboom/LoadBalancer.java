@@ -71,27 +71,13 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			Map<String, List<String>> hostToPartition = new HashMap<>();
 			final Map<String, KaBoomNodeInfo> clients = new HashMap<>();
 			Map<String, List<String>> clientToPartitions = new HashMap<>();
-			Map<String, String> partitionToClient = new HashMap<>();
+			Map<String, String> partitionToClient = new HashMap<>();			
 			List<String> topics = new ArrayList<>();
-			List<String> unsupportedTopics = new ArrayList<>();
-
+			
 			// Get a full set of metadata from Kafka
-			StateUtils.readTopicsFromZooKeeper(config.getKafkaZkConnectionString(), topics);
+			StateUtils.readTopicsFromZooKeeper(config.getKafkaZkConnectionString(), topics, config.getTopicToSupportedStatus());
 			
-			LOG.info("Found a total of {} topics in ZooKeeper", topics.size());
-			
-			for (int i = 0; i < topics.size(); i++)
-			{
-				if (!config.getTopicToSupportedStatus().containsKey(topics.get(i)) ||
-					 config.getTopicToSupportedStatus().get(topics.get(i)) == false)
-				{					
-					unsupportedTopics.add(topics.get(i));
-					topics.remove(i);
-				}
-			}
-			
-			LOG.info("Of the all the topics in ZooKeeper there are {} that are unsupported because there were no HDFS paths configured: {}", 
-				 unsupportedTopics.size(), StringUtils.join(unsupportedTopics, String.format("%n\t")));
+			LOG.info("Found a total of {} supported topics in ZooKeeper", topics.size());
 
 			// Map partitionId to leader/host and leader/host to partitionId
 			StateUtils.getPartitionHosts(config.getKafkaSeedBrokers(), topics, partitionToHost, hostToPartition);
@@ -166,7 +152,6 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 					{
 						LOG.debug("Partition {} : client {} is not connected", partition, client);
 						curator.delete().forPath("/kaboom/assignments/" + partition);
-						stat = null;
 					}
 				}
 			}
