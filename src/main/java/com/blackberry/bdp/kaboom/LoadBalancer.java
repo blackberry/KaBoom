@@ -35,6 +35,8 @@ import org.slf4j.LoggerFactory;
 
 import com.blackberry.bdp.common.utils.threads.NotifyingThread;
 import com.blackberry.bdp.common.utils.threads.ThreadCompleteListener;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.commons.lang.StringUtils;
 
 public class LoadBalancer extends LeaderSelectorListenerAdapter implements ThreadCompleteListener
@@ -90,11 +92,47 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			LOG.info("Of the all the topics in ZooKeeper there are {} that are unsupported because there were no HDFS paths configured: {}", 
 				 unsupportedTopics.size(), StringUtils.join(unsupportedTopics, ", "));
 
-			// Map partition to host and host to partition
+			// Map partitionId to leader/host and leader/host to partitionId
 			StateUtils.getPartitionHosts(config.getKafkaSeedBrokers(), topics, partitionToHost, hostToPartition);
 
 			// Get a list of active clients from zookeeper
 			StateUtils.getActiveClients(curator, clients);
+			
+			/**
+			 * Determine if there are any assignments for partitions on topics that are no longer supported (i.e. have missing HDFS output paths)
+			 * Prune them by removing the assignment in ZooKeeper when found
+			 */
+			
+			try
+			{
+				for (String partitionId : curator.getChildren().forPath("/kaboom/assignments")) 
+				{
+					try
+					{
+						Pattern topicPartitionPattern = Pattern.compile("^(.*)-(\\d+)$");
+						Matcher m = topicPartitionPattern.matcher(partitionId);
+
+						if (m.matches())
+						{
+							String topic = m.group(1);
+							if (false == config.getTopicToSupportedStatus().get(topic))
+							{
+								String assignedClient = new String(curator.getData().forPath("/kaboom/assignments/" + partitionId), UTF8);
+								LOG.info("Deleted assignment for unsupported topic partiton {} previously assigned to {}", partitionId, assignedClient);
+								curator.delete().forPath("/kaboom/assignments/" + partitionId);
+							}
+						}
+					}
+					catch (Exception e)
+					{
+						LOG.error("There was a problem pruning the assignments of unsupported topic {}", partitionId, e);
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				LOG.error("There was a problem pruning the assignments of unsupported topics", e);
+			}			
 
 			// Get a list of current assignments
 			
