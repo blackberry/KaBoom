@@ -82,7 +82,8 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			
 			for (int i = 0; i < topics.size(); i++)
 			{
-				if (false == config.getTopicToSupportedStatus().get(topics.get(i)))
+				if (config.getTopicToSupportedStatus().get(topics.get(i)) != null &&
+					 config.getTopicToSupportedStatus().get(topics.get(i)) == true)
 				{					
 					unsupportedTopics.add(topics.get(i));
 					topics.remove(i);
