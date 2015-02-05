@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import com.blackberry.bdp.common.utils.threads.NotifyingThread;
 import com.blackberry.bdp.common.utils.threads.ThreadCompleteListener;
+import org.apache.commons.lang.StringUtils;
 
 public class LoadBalancer extends LeaderSelectorListenerAdapter implements ThreadCompleteListener
 {
@@ -70,9 +71,24 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			Map<String, List<String>> clientToPartitions = new HashMap<>();
 			Map<String, String> partitionToClient = new HashMap<>();
 			List<String> topics = new ArrayList<>();
+			List<String> unsupportedTopics = new ArrayList<>();
 
 			// Get a full set of metadata from Kafka
 			StateUtils.readTopicsFromZooKeeper(config.getKafkaZkConnectionString(), topics);
+			
+			LOG.info("Found a total of {} topics in ZooKeeper", topics.size());
+			
+			for (int i = 0; i < topics.size(); i++)
+			{
+				if (false == config.getTopicToSupportedStatus().get(topics.get(i)))
+				{					
+					unsupportedTopics.add(topics.get(i));
+					topics.remove(i);
+				}
+			}
+			
+			LOG.info("Of the all the topics in ZooKeeper there are {} that are unsupported because there were no HDFS paths configured: {}", 
+				 unsupportedTopics.size(), StringUtils.join(unsupportedTopics, ", "));
 
 			// Map partition to host and host to partition
 			StateUtils.getPartitionHosts(config.getKafkaSeedBrokers(), topics, partitionToHost, hostToPartition);
