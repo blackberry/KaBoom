@@ -288,6 +288,11 @@ public class KaBoom
 			{
 				Worker w = entry.getValue();
 				
+				for (TimeBasedHdfsOutputPath outputPath : w.getHdfsOutputPaths())
+				{
+					outputPath.closeExpired();
+				}
+				
 				if (!validWorkingPartitions.containsKey(w.getPartitionId()))
 				{					
 					w.stop();
@@ -297,7 +302,7 @@ public class KaBoom
 			
 			// Since all we're really doing after things are running in steady state is reading from ZK, a wait of 10 seconds should be enough.
 			
-			Thread.sleep(10000);			
+			Thread.sleep(10000);
 		}
 	}
 	

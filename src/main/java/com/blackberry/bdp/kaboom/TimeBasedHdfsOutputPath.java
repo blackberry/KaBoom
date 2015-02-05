@@ -125,7 +125,22 @@ public class TimeBasedHdfsOutputPath
 			entry.getValue().close();
 		}
 	}
-
+	
+	public void closeExpired()
+	{
+		for (Map.Entry<Long, OutputFile> entry : outputFileMap.entrySet())
+		{
+			Long timestampStarted = entry.getKey();
+			OutputFile out = entry.getValue();
+			
+			if (out.endTime < System.currentTimeMillis() - 10 * 1000)
+			{				
+				out.close();
+				outputFileMap.remove(timestampStarted);
+				LOG.info("Expired output file closed and removed from mapping: {}", out);				
+			}			
+		}		
+	}
 	
 	private class OutputFile
 	{
@@ -146,7 +161,7 @@ public class TimeBasedHdfsOutputPath
 			dir = Converter.timestampTemplateBuilder(startTime, dirTemplate);
 			tmpdir = String.format("%s/%s%s", dir, tmpPrefix, filename);
 			finalPath = new Path(dir + "/" + filename);			
-			tmpPath = new Path(tmpdir + "/" + filename);
+			tmpPath = new Path(tmpdir + "/" + filename);			
 			
 			try
 			{
@@ -158,12 +173,29 @@ public class TimeBasedHdfsOutputPath
 
 				 out = fileSystem.create(tmpPath, permissions, false, bufferSize, replicas, blocksize, null);
 				 boomWriter = new FastBoomWriter(out);						 
+				 LOG.info("Created {}", this);
 			} 
 			catch (Exception e)
 			{
-				LOG.error("Error creating file.", e);
+				LOG.error("Error creating file {}", tmpPath, e);
 			}
 		}
+		
+		@Override
+		public String toString()
+		{
+			return String.format("%s:%n"
+				 + "\ttmpPath: %s%n"
+				 + "\tfinalPath: %s%n"
+				 + "\tstarts: %s (%s)%n"
+				 + "\texpires: %s (%s)%n",
+				 getClass().getName(), 
+				 this.tmpPath, 
+				 this.finalPath,
+				 this.startTime,
+				 this.startTime, dateString(this.startTime),
+				 this.endTime, dateString(this.endTime));
+		}		
 
 		public void abort()
 		{
@@ -250,7 +282,6 @@ public class TimeBasedHdfsOutputPath
 		{
 			return boomWriter;
 		}
-		
 	}
 	
 	@Override
