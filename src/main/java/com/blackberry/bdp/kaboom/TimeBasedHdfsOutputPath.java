@@ -29,7 +29,6 @@ public class TimeBasedHdfsOutputPath
 	private final FileSystem fileSystem;
 	private final FsPermission permissions = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);	
 	private final String dirTemplate;
-	private String filename;	
 	private final Integer durationSeconds;	
 	private final int bufferSize = 16 * 1024;
 	private final short replicas = 3;
@@ -37,7 +36,6 @@ public class TimeBasedHdfsOutputPath
 	private final String tmpPrefix = "_tmp_";
 	private OutputFile outputFile;
 	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();	
-	private boolean configured = false;
 	
 	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
 	
@@ -46,18 +44,6 @@ public class TimeBasedHdfsOutputPath
 		this.fileSystem = fileSystem;
 		this.durationSeconds = durationSeconds;
 		this.dirTemplate = pathTemplate;
-	}
-	
-	public void configure(String filename)
-	{
-		this.filename = filename;
-		
-		this.configured = true;		
-	}
-	
-	public boolean isConfigured()
-	{
-		return configured;
 	}
 	
 	private static String dateString(Long ts)
@@ -73,20 +59,16 @@ public class TimeBasedHdfsOutputPath
 		return ts - ts % (this.durationSeconds * 1000);
 	}
 	
-	public FastBoomWriter getBoomWriter(long timestamp) throws IOException, Exception
+	public FastBoomWriter getBoomWriter(long timestamp, String filename) throws IOException, Exception
 	{		
-		if (!configured)
-		{
-			throw new Exception("Cannot call getBoomWriter on non-configured TimeBasedHdfsOutputPath: " + this.toString(), null);
-		}
-		
 		Long startTime = calculateStartTime(timestamp);
 				
 		outputFile = outputFileMap.get(startTime);
 		
 		if (outputFile == null)
 		{			
-			outputFile = new OutputFile(startTime, System.currentTimeMillis() + durationSeconds * 1000);
+			outputFile = new OutputFile(filename, startTime, System.currentTimeMillis() + durationSeconds * 1000);
+			
 			outputFileMap.put(startTime, outputFile);
 		}
 		
@@ -130,6 +112,7 @@ public class TimeBasedHdfsOutputPath
 		private String dir;
 		private String tmpdir;
 
+		private String filename;
 		private Path finalPath;
 		private Path tmpPath;
 		private FastBoomWriter boomWriter;
@@ -137,8 +120,9 @@ public class TimeBasedHdfsOutputPath
 		private Long startTime;
 		private Long closeTime;
 
-		public OutputFile(Long startTime, Long closeTime)
+		public OutputFile(String filename, Long startTime, Long closeTime)
 		{
+			this.filename = filename;
 			this.startTime = startTime;
 			this.closeTime = closeTime;
 			
