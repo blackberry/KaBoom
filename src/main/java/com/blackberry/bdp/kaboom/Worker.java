@@ -39,6 +39,14 @@ public class Worker implements Runnable
 {
 	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
 
+	/**
+	 * @return the ZK_ROOT
+	 */
+	public static String getZK_ROOT()
+	{
+		return ZK_ROOT;
+	}
+
 	private String partitionId;
 
 	private Consumer consumer;
@@ -351,7 +359,7 @@ public class Worker implements Runnable
 	{
 		try
 		{
-			zkPath = ZK_ROOT + "/topics/" + topic + "/" + partition;
+			zkPath = getZK_ROOT() + "/topics/" + getTopic() + "/" + getPartition();
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
 			zkPath_offSetOverride = zkPath + "/offset_override";						
 
@@ -377,7 +385,7 @@ public class Worker implements Runnable
 
 			String clientId = "kaboom-" + hostname;
 
-			consumer = new Consumer(config.getConsumerConfiguration(), clientId, topic, partition,offset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
+			consumer = new Consumer(config.getConsumerConfiguration(), clientId, getTopic(), getPartition(),offset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
 
 			LOG.info("[{}] Created worker.  Starting at offset {}.", getPartitionId(), offset);
 
@@ -772,5 +780,29 @@ public class Worker implements Runnable
 	public String getPartitionId()
 	{
 		return partitionId;
+	}
+
+	/**
+	 * @return the topic
+	 */
+	public String getTopic()
+	{
+		return topic;
+	}
+
+	/**
+	 * @return the partition
+	 */
+	public int getPartition()
+	{
+		return partition;
+	}
+
+	/**
+	 * @param partition the partition to set
+	 */
+	public void setPartition(int partition)
+	{
+		this.partition = partition;
 	}
 }

@@ -53,6 +53,7 @@ public class KaboomConfiguration
 	private int kaboomId;
 	private long fileRotateInterval;
 	private int weight;
+	private CuratorFramework curator;
 	private final Map<String, ArrayList<TimeBasedHdfsOutputPath>> topicToHdfsPaths = new HashMap<>();
 	private final Map<String, String> topicToProxyUser = new HashMap<>();
 	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
@@ -129,6 +130,7 @@ public class KaboomConfiguration
 		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
+		curator = buildCuratorFramework();
 		
 		hadoopConfiguration = buildHadoopConfiguration();
 		
@@ -369,7 +371,7 @@ public class KaboomConfiguration
 	 * 
 	 * @return CuratorFramework
 	 */
-	public CuratorFramework getCuratorFramework()
+	private CuratorFramework buildCuratorFramework()
 	{
 		RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
 		
@@ -377,22 +379,22 @@ public class KaboomConfiguration
 		
 		String[] connStringAndPrefix = getKaboomZkConnectionString().split("/", 2);
 		
-		final CuratorFramework curator;
+		CuratorFramework newCurator;
 		
 		if (connStringAndPrefix.length == 1)
 		{
-			curator = CuratorFrameworkFactory.newClient(kaboomZkConnectionString, retryPolicy);
+			newCurator = CuratorFrameworkFactory.newClient(kaboomZkConnectionString, retryPolicy);
 		}
 		else
 		{
-			curator = CuratorFrameworkFactory.builder()
+			newCurator = CuratorFrameworkFactory.builder()
 				 .namespace(connStringAndPrefix[1])
 				 .connectString(connStringAndPrefix[0]).retryPolicy(retryPolicy)
 				 .build();
 		}
 		
-		curator.start();
-		return curator;			
+		newCurator.start();
+		return newCurator;			
 	}
 	
 	/**
@@ -657,5 +659,13 @@ public class KaboomConfiguration
 	public Map<String, Boolean> getTopicToSupportedStatus()
 	{
 		return topicToSupportedStatus;
+	}
+
+	/**
+	 * @return the curator
+	 */
+	public CuratorFramework getCurator()
+	{
+		return curator;
 	}
 }

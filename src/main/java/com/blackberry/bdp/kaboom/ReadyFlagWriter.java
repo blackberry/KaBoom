@@ -42,8 +42,8 @@ public class ReadyFlagWriter extends NotifyingThread
 	private static final Logger LOG = LoggerFactory.getLogger(ReadyFlagWriter.class);
 
 	private FileSystem fs;
-	private CuratorFramework curator;
-	private KaboomConfiguration config;
+	private final CuratorFramework curator;
+	private final KaboomConfiguration config;
 
 	private static final String ZK_ROOT = "/kaboom";
 	public static final String MERGE_READY_FLAG = "_READY";
@@ -52,10 +52,10 @@ public class ReadyFlagWriter extends NotifyingThread
 	public static final String WORKING_DIR = "working";
 	public static final String LOG_TAG = "[ready flag writer] ";
 
-	public ReadyFlagWriter(KaboomConfiguration config, CuratorFramework curator) throws Exception
+	public ReadyFlagWriter(KaboomConfiguration config) throws Exception
 	{
 		this.config = config;
-		this.curator = curator;
+		this.curator = config.getCurator();
 	}
 
 	/*

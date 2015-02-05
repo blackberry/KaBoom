@@ -16,6 +16,7 @@
 
 package com.blackberry.bdp.kaboom;
 
+import com.blackberry.bdp.common.utils.conversion.Converter;
 import com.blackberry.bdp.common.utils.props.Parser;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
@@ -35,8 +36,11 @@ import org.yaml.snakeyaml.Yaml;
 
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import kafka.javaapi.PartitionMetadata;
+import org.apache.zookeeper.data.Stat;
 
 public class KaBoom
 {
@@ -107,7 +111,7 @@ public class KaBoom
 		 * 
 		 */
 		
-		final CuratorFramework curator = config.getCuratorFramework();
+		final CuratorFramework curator = config.getCurator();
 		
 		for (String path : new String[] {"/kaboom/leader", "/kaboom/clients", "/kaboom/assignments"})
 		{
@@ -280,18 +284,18 @@ public class KaBoom
 				}
 			}
 			
-			/**
-			 * Now, look through the workers and if there are any that are invalid, politely ask them to stop working and kill them if they take too long
-			 */
-			
 			for (Map.Entry<String, Worker> entry : partitonToWorkerMap.entrySet())
 			{
 				Worker w = entry.getValue();
+				
+				// Check the worker's output paths and close any that are expired
 				
 				for (TimeBasedHdfsOutputPath outputPath : w.getHdfsOutputPaths())
 				{
 					outputPath.closeExpired();
 				}
+				
+				//  If there are any that are invalid, they need to stop working
 				
 				if (!validWorkingPartitions.containsKey(w.getPartitionId()))
 				{					
@@ -299,8 +303,6 @@ public class KaBoom
 					LOG.info("Worker currently assigned to {} is no longer valid has been instructed to stop working", w.getPartitionId());
 				}
 			}		
-			
-			// Since all we're really doing after things are running in steady state is reading from ZK, a wait of 10 seconds should be enough.
 			
 			Thread.sleep(10000);
 		}

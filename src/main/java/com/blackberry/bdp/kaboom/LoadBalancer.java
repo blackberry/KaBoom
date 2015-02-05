@@ -37,7 +37,6 @@ import com.blackberry.bdp.common.utils.threads.NotifyingThread;
 import com.blackberry.bdp.common.utils.threads.ThreadCompleteListener;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.commons.lang.StringUtils;
 
 public class LoadBalancer extends LeaderSelectorListenerAdapter implements ThreadCompleteListener
 {
@@ -325,7 +324,7 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			if (readyFlagThread == null || !readyFlagThread.isAlive())
 			{
 				LOG.info("[ready flag writer] thread doesn't exist or is not running");				
-				readyFlagWriter = new ReadyFlagWriter(config, curator);
+				readyFlagWriter = new ReadyFlagWriter(config);
 				readyFlagWriter.addListener(this);
 				readyFlagThread = new Thread(readyFlagWriter);
 				readyFlagThread.start();

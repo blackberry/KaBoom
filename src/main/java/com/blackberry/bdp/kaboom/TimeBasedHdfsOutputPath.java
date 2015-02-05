@@ -27,22 +27,16 @@ public class TimeBasedHdfsOutputPath
 {
 	private static final Object fsLock = new Object();
 	private final FileSystem fileSystem;
-	private final FsPermission permissions = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);
-	
+	private final FsPermission permissions = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);	
 	private final String dirTemplate;
-	private String filename;
-	
-	private final Integer durationSeconds;
-	
+	private String filename;	
+	private final Integer durationSeconds;	
 	private final int bufferSize = 16 * 1024;
 	private final short replicas = 3;
-	private final long blocksize = 256 * 1024 * 1024;	
-	
+	private final long blocksize = 256 * 1024 * 1024;		
 	private final String tmpPrefix = "_tmp_";
-
 	private OutputFile outputFile;
-	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();
-	
+	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();	
 	private boolean configured = false;
 	
 	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
@@ -79,11 +73,6 @@ public class TimeBasedHdfsOutputPath
 		return ts - ts % (this.durationSeconds * 1000);
 	}
 	
-	private long calculateEndTime(Long ts)
-	{
-		return calculateStartTime(ts) + durationSeconds * 1000;
-	}
-	
 	public FastBoomWriter getBoomWriter(long timestamp) throws IOException, Exception
 	{		
 		if (!configured)
@@ -96,12 +85,11 @@ public class TimeBasedHdfsOutputPath
 		outputFile = outputFileMap.get(startTime);
 		
 		if (outputFile == null)
-		{
-			Long endTime = calculateEndTime(timestamp);
-			outputFile = new OutputFile(startTime, endTime);
+		{			
+			outputFile = new OutputFile(startTime, System.currentTimeMillis() + durationSeconds * 1000);
 			outputFileMap.put(startTime, outputFile);
 		}
-
+		
 		return outputFile.getBoomWriter();
 	}
 	
@@ -128,7 +116,7 @@ public class TimeBasedHdfsOutputPath
 			Long timestampStarted = entry.getKey();
 			OutputFile out = entry.getValue();
 			
-			if (out.endTime < System.currentTimeMillis() - 10 * 1000)
+			if (out.closeTime < System.currentTimeMillis() - 60 * 1000)
 			{				
 				out.close();
 				outputFileMap.remove(timestampStarted);
@@ -147,12 +135,13 @@ public class TimeBasedHdfsOutputPath
 		private FastBoomWriter boomWriter;
 		private OutputStream out;
 		private Long startTime;
-		private Long endTime;
+		private Long closeTime;
 
-		public OutputFile(long startTime, Long endTime)
+		public OutputFile(Long startTime, Long closeTime)
 		{
 			this.startTime = startTime;
-			this.endTime = endTime;
+			this.closeTime = closeTime;
+			
 			dir = Converter.timestampTemplateBuilder(startTime, dirTemplate);
 			tmpdir = String.format("%s/%s%s", dir, tmpPrefix, filename);
 			finalPath = new Path(dir + "/" + filename);			
@@ -183,13 +172,12 @@ public class TimeBasedHdfsOutputPath
 				 + "\ttmpPath: %s%n"
 				 + "\tfinalPath: %s%n"
 				 + "\tstarts: %s (%s)%n"
-				 + "\texpires: %s (%s)%n",
+				 + "\tcloses: %s (%s)%n",
 				 getClass().getName(), 
 				 this.tmpPath, 
 				 this.finalPath,
-				 this.startTime,
 				 this.startTime, dateString(this.startTime),
-				 this.endTime, dateString(this.endTime));
+				 this.closeTime, dateString(this.closeTime));
 		}		
 
 		public void abort()
@@ -214,17 +202,14 @@ public class TimeBasedHdfsOutputPath
 				LOG.error("Error closing boom writer output file: {}", tmpPath, e);
 			}
 			
-			synchronized (fsLock)
+			try
 			{
-				try
-				{
-					fileSystem.delete(new Path(tmpdir), true);
-					LOG.info("Deleted temp file: {}", tmpPath);
-				} 
-				catch (IOException e)
-				{
-					LOG.error("Error deleting temp files: {}", tmpPath, e);
-				}
+				fileSystem.delete(new Path(tmpdir), true);
+				LOG.info("Deleted temp file: {}", tmpPath);
+			} 
+			catch (IOException e)
+			{
+				LOG.error("Error deleting temp files: {}", tmpPath, e);
 			}
 		}
 
@@ -266,11 +251,6 @@ public class TimeBasedHdfsOutputPath
 		public Long getStartTime()
 		{
 			return startTime;
-		}
-
-		public Long getEndTime()
-		{
-			return endTime;
 		}
 
 		public FastBoomWriter getBoomWriter()
