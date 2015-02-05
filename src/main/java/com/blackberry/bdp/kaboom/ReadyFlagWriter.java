@@ -161,7 +161,7 @@ public class ReadyFlagWriter extends NotifyingThread
 				continue;
 			}
 
-			for (Integer hourNum = 0; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
+			for (Integer hourNum = 1; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
 			{
 				/**
 				 * We know what the current timestamp was when we started, so start subtracting 
@@ -169,7 +169,7 @@ public class ReadyFlagWriter extends NotifyingThread
 				 * starts at 0 so we're not skipping the immediate previous hour
 				 */
 
-				long prevHourStartTimestmap = startOfHourTimestamp - (60 * 60 * 1000);
+				long prevHourStartTimestmap = startOfHourTimestamp - (60 * 60 * 1000) * hourNum;
 				previousHourCal.setTimeInMillis(prevHourStartTimestmap);
 
 				try
