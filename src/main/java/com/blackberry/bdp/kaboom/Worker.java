@@ -261,9 +261,16 @@ public class Worker implements Runnable
 		this.partition = partition;
 		this.startTime = System.currentTimeMillis();
 		this.linesread = 0;
-		this.hdfsOutputPaths = config.getTopicToHdfsPaths().get(topic);		
-
+		this.hdfsOutputPaths = config.getTopicToHdfsPaths().get(topic);	
+		
 		partitionId = topic + "-" + partition;
+		
+		LOG.info("Worker instantiated for {} and configured for {} output paths", partitionId, hdfsOutputPaths.size());
+		
+		for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths)
+		{
+			LOG.info("\t {} {} => {}", config.getKaboomId(), partitionId, outputPath);
+		}
 
 		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
 		lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";

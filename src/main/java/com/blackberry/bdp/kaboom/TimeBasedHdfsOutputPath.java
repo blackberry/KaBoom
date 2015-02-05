@@ -12,7 +12,6 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
@@ -27,18 +26,14 @@ import org.slf4j.LoggerFactory;
 public class TimeBasedHdfsOutputPath
 {
 	private static final Object fsLock = new Object();
-	private FileSystem fileSystem;
+	private final FileSystem fileSystem;
 	private final FsPermission permissions = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);
 	
 	private final String dirTemplate;
 	private String filename;
-	private String proxyUser;
 	
 	private final Integer durationSeconds;
-	//private Long timestampExpires;
-	//private Long timestampStarts;
 	
-	private Configuration hadoopConfiguration;
 	private final int bufferSize = 16 * 1024;
 	private final short replicas = 3;
 	private final long blocksize = 256 * 1024 * 1024;	
@@ -289,15 +284,10 @@ public class TimeBasedHdfsOutputPath
 	{
 		return String.format("%s:%n"
 			 + "\tseconds: %s%n"
-			 + "\tpathTemplate: %s%n"
-			 //+ "\tdurationExpiresTs: %s (%s)%n"
-			 //+ "\tdurationStartsTs: %s (%s)%n"
-			 + "\timestamp: %s%n", 
+			 + "\tpathTemplate: %s%n",
 			 getClass().getName(), 
 			 this.durationSeconds, 
 			 this.dirTemplate);
-			 //this.timestampExpires, dateString(this.timestampExpires),
-			 //this.timestampStarts, dateString(this.timestampStarts));
 	}
 	
 }
