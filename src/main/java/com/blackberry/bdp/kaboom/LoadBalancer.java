@@ -82,8 +82,8 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			
 			for (int i = 0; i < topics.size(); i++)
 			{
-				if (config.getTopicToSupportedStatus().get(topics.get(i)) != null &&
-					 config.getTopicToSupportedStatus().get(topics.get(i)) == true)
+				if (!config.getTopicToSupportedStatus().containsKey(topics.get(i)) ||
+					 config.getTopicToSupportedStatus().get(topics.get(i)) == false)
 				{					
 					unsupportedTopics.add(topics.get(i));
 					topics.remove(i);
@@ -91,7 +91,7 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 			}
 			
 			LOG.info("Of the all the topics in ZooKeeper there are {} that are unsupported because there were no HDFS paths configured: {}", 
-				 unsupportedTopics.size(), StringUtils.join(unsupportedTopics, ", "));
+				 unsupportedTopics.size(), StringUtils.join(unsupportedTopics, String.format("%n\t")));
 
 			// Map partitionId to leader/host and leader/host to partitionId
 			StateUtils.getPartitionHosts(config.getKafkaSeedBrokers(), topics, partitionToHost, hostToPartition);
@@ -116,7 +116,8 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 						if (m.matches())
 						{
 							String topic = m.group(1);
-							if (false == config.getTopicToSupportedStatus().get(topic))
+							if (config.getTopicToSupportedStatus().containsKey(topic)
+								 && config.getTopicToSupportedStatus().get(topic) == true)
 							{
 								String assignedClient = new String(curator.getData().forPath("/kaboom/assignments/" + partitionId), UTF8);
 								LOG.info("Deleted assignment for unsupported topic partiton {} previously assigned to {}", partitionId, assignedClient);
