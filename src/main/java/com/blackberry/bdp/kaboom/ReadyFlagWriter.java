@@ -148,19 +148,10 @@ public class ReadyFlagWriter extends NotifyingThread
 		long currentTimestamp = cal.getTimeInMillis();
 		long startOfHourTimestamp = currentTimestamp - currentTimestamp % (60 * 60 * 1000);
 		
-		ArrayList<String> skippedTopicNames = new ArrayList<>();
-
 		for (Map.Entry<String, List<PartitionMetadata>> entry : topicsWithPartitions.entrySet())
 		{
 			String topicName = entry.getKey();
 				
-			if (!config.getTopicToSupportedStatus().containsKey(topicName)
-				 || config.getTopicToSupportedStatus().get(topicName) == false)
-			{				
-				skippedTopicNames.add(topicName);
-				continue;
-			}
-
 			for (Integer hourNum = 1; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
 			{
 				/**
@@ -273,11 +264,6 @@ public class ReadyFlagWriter extends NotifyingThread
 
 				LOG.info(LOG_TAG + "finished {} topic(s) after {} seconds", topicsWithPartitions.size(), (cal.getTimeInMillis() - currentTimestamp) / 1000);
 			}
-			
-			startOfHourTimestamp -= 60 * 60 * 1000;
-
 		}
-		
-		LOG.info("The ReadFlagWriter thead skipped the following unsupported topics:  {}", StringUtils.join(skippedTopicNames, String.format("%n\t")));
 	}
 }

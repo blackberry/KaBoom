@@ -37,14 +37,26 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
 
-public class StateUtils {
+public class StateUtils 
+{
 	private static final Logger LOG = LoggerFactory.getLogger(StateUtils.class);
 
-	public static void getTopicParitionMetaData(String kafkaZkConnectionString, 
-			String kafkaSeedBrokers, 	
-			Map<String, List<PartitionMetadata>> topicsWithPartitions) throws Exception {
+	public static void getTopicParitionMetaData(
+		 String kafkaZkConnectionString,  
+		 String kafkaSeedBrokers,  
+		 Map<String, List<PartitionMetadata>> topicsWithPartitions) throws Exception 
+	{
+		getTopicParitionMetaData(kafkaZkConnectionString, kafkaSeedBrokers, topicsWithPartitions, null);
+	}
+	
+	public static void getTopicParitionMetaData(
+		 String kafkaZkConnectionString,  
+		 String kafkaSeedBrokers,  
+		 Map<String, List<PartitionMetadata>> topicsWithPartitions,
+		 Map<String, Boolean> supportedTopics) throws Exception 
+	{	
 		List<String> topics = new ArrayList<String>();
-		StateUtils.readTopicsFromZooKeeper(kafkaZkConnectionString, topics);
+		StateUtils.readTopicsFromZooKeeper(kafkaZkConnectionString, topics, supportedTopics);
 		LOG.debug("Getting partition meta data for topics: {}", topics);
 		// Iterate through all the seed brokers		
 		for (String seed : kafkaSeedBrokers.split(",")) {
@@ -191,12 +203,10 @@ public class StateUtils {
 	}
 	
 	
-	public static List<String> readTopicsFromZooKeeper(
-			String kafkaZkConnectionString, List<String> topics, Map<String, Boolean> supportedTopics) throws Exception {
+	public static List<String> readTopicsFromZooKeeper(String kafkaZkConnectionString, List<String> topics, Map<String, Boolean> supportedTopics) throws Exception 
+	{
 		RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
-		CuratorFramework curator = CuratorFrameworkFactory.newClient(
-				kafkaZkConnectionString, retryPolicy);
-		
+		CuratorFramework curator = CuratorFrameworkFactory.newClient(kafkaZkConnectionString, retryPolicy);		
 		List<String> skippedTopicNames = new ArrayList<>();
 		
 		try 
@@ -218,9 +228,10 @@ public class StateUtils {
 				topics.add(node);
 			}
 			
-			LOG.info("Reading topics from ZooKeeper skipped the following unsupported topics:  {}", StringUtils.join(skippedTopicNames, String.format("%n\t")));				
-
-		} finally {
+			LOG.info("Reading topics from ZooKeeper skipped the following unsupported topics:  {}", StringUtils.join(skippedTopicNames, ", "));				
+		} 
+		finally 
+		{
 			curator.close();
 		}
 
