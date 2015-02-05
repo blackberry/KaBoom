@@ -35,6 +35,8 @@ import org.slf4j.LoggerFactory;
 
 import com.blackberry.bdp.common.utils.threads.NotifyingThread;
 import com.blackberry.bdp.common.utils.conversion.Converter;
+import java.util.ArrayList;
+import org.apache.commons.lang.StringUtils;
 
 public class ReadyFlagWriter extends NotifyingThread
 {
@@ -146,21 +148,29 @@ public class ReadyFlagWriter extends NotifyingThread
 		long currentTimestamp = cal.getTimeInMillis();
 		long startOfHourTimestamp = currentTimestamp - currentTimestamp % (60 * 60 * 1000);
 		
-		for (Integer hourNum = 0; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
+		ArrayList<String> skippedTopicNames = new ArrayList<>();
+
+		for (Map.Entry<String, List<PartitionMetadata>> entry : topicsWithPartitions.entrySet())
 		{
-			/**
-			 * We know what the current timestamp was when we started, so start subtracting 
-			 * hourNum * 60 * 60 * 100 from it so we're checking previous hours... Note hourNum 
-			 * starts at 0 so we're not skipping the immediate previous hour
-			 */
-			
-			long prevHourStartTimestmap = startOfHourTimestamp - (60 * 60 * 1000);
-			previousHourCal.setTimeInMillis(prevHourStartTimestmap);
+			String topicName = entry.getKey();
+				
+			if (!config.getTopicToSupportedStatus().containsKey(topicName)
+				 || config.getTopicToSupportedStatus().get(topicName) == false)
+			{				
+				skippedTopicNames.add(topicName);
+				continue;
+			}
 
-			for (Map.Entry<String, List<PartitionMetadata>> entry : topicsWithPartitions.entrySet())
+			for (Integer hourNum = 0; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
 			{
+				/**
+				 * We know what the current timestamp was when we started, so start subtracting 
+				 * hourNum * 60 * 60 * 100 from it so we're checking previous hours... Note hourNum 
+				 * starts at 0 so we're not skipping the immediate previous hour
+				 */
 
-				String topicName = entry.getKey();
+				long prevHourStartTimestmap = startOfHourTimestamp - (60 * 60 * 1000);
+				previousHourCal.setTimeInMillis(prevHourStartTimestmap);
 
 				try
 				{
@@ -267,5 +277,7 @@ public class ReadyFlagWriter extends NotifyingThread
 			startOfHourTimestamp -= 60 * 60 * 1000;
 
 		}
+		
+		LOG.info("The ReadFlagWriter thead skipped the following unsupported topics:  {}", StringUtils.join(skippedTopicNames, String.format("%n\t")));
 	}
 }

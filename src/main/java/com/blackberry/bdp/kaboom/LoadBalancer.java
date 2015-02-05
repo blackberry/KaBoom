@@ -116,8 +116,8 @@ public class LoadBalancer extends LeaderSelectorListenerAdapter implements Threa
 						if (m.matches())
 						{
 							String topic = m.group(1);
-							if (config.getTopicToSupportedStatus().containsKey(topic)
-								 && config.getTopicToSupportedStatus().get(topic) == true)
+							if (!config.getTopicToSupportedStatus().containsKey(topic)
+								 || config.getTopicToSupportedStatus().get(topic) == false)
 							{
 								String assignedClient = new String(curator.getData().forPath("/kaboom/assignments/" + partitionId), UTF8);
 								LOG.info("Deleted assignment for unsupported topic partiton {} previously assigned to {}", partitionId, assignedClient);
