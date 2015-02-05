@@ -261,7 +261,7 @@ public class Worker implements Runnable
 		this.partition = partition;
 		this.startTime = System.currentTimeMillis();
 		this.linesread = 0;
-		this.hdfsOutputPaths = config.getTopicToHdfsPaths().get(topic);	
+		this.hdfsOutputPaths = config.getTopicToHdfsPaths().get(topic);
 		
 		partitionId = topic + "-" + partition;
 		

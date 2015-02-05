@@ -98,6 +98,16 @@ public class KaboomConfiguration
 			LOG.info("topicToKrFlagPath: {} -> {}", entry.getKey(), entry.getValue());
 		}
 
+		for (Map.Entry<String, ArrayList<TimeBasedHdfsOutputPath>> entry : getTopicToHdfsPaths().entrySet())
+		{
+			ArrayList<TimeBasedHdfsOutputPath> outputPaths = entry.getValue();
+				 
+			for (TimeBasedHdfsOutputPath outputPath : outputPaths)
+			{	
+				LOG.info("topic: {} -> {}", entry.getKey(), outputPath);
+			}
+		}
+
 		LOG.info(" *** end dumping configuration *** ");
 	}
 	
@@ -154,7 +164,6 @@ public class KaboomConfiguration
 				String topic = m.group(1);				
 				String pathNumber = m.group(2);
 				String directory = props.getProperty(e.getKey().toString());
-
 				String durationProperty = String.format("topic.%s.hdfsPath.%d.duration", topic, Integer.parseInt(pathNumber));
 				Integer duration = Integer.parseInt(props.getProperty(durationProperty, "180"));
 
@@ -169,6 +178,7 @@ public class KaboomConfiguration
 				if (paths == null)
 				{
 					paths = new ArrayList<>();
+					paths.add(path);
 					topicToHdfsPaths.put(topic, paths);
 				}
 				else
