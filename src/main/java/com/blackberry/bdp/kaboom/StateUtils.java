@@ -26,6 +26,7 @@ import kafka.javaapi.PartitionMetadata;
 import kafka.javaapi.TopicMetadata;
 import kafka.javaapi.TopicMetadataRequest;
 import kafka.javaapi.consumer.SimpleConsumer;
+import org.apache.commons.lang.StringUtils;
 
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
@@ -73,10 +74,16 @@ public class StateUtils {
 			return;
 		}
 	}
-
+	public static void getPartitionHosts(String kafkaSeedBrokers,
+		List<String> topics, Map<String, String> partitionToHost,
+		Map<String, List<String>> hostToPartition) {
+		
+		getPartitionHosts(kafkaSeedBrokers, topics, partitionToHost, hostToPartition, null);		
+	}
+	
 	public static void getPartitionHosts(String kafkaSeedBrokers,
 			List<String> topics, Map<String, String> partitionToHost,
-			Map<String, List<String>> hostToPartition) {
+			Map<String, List<String>> hostToPartition, Map<String, Boolean> supportedTopics) {
 		LOG.debug("Getting partition to host mappings for {}", topics);
 
 		// Map partition to host and host to partition
@@ -90,10 +97,14 @@ public class StateUtils {
 				consumer = new SimpleConsumer(seedHost, seedPort, 100000, 64 * 1024,
 						"leaderLookup");
 
+				LOG.info("Requesting metadata for a list of {} topics", topics.size());
+				
 				TopicMetadataRequest req = new TopicMetadataRequest(topics);
 				kafka.javaapi.TopicMetadataResponse resp = consumer.send(req);
 
 				List<TopicMetadata> metaData = resp.topicsMetadata();
+				
+				LOG.info("Received a response with metadata for {} topics", metaData.size());
 
 				for (TopicMetadata item : metaData) {
 					
@@ -103,11 +114,22 @@ public class StateUtils {
 						continue;
 					}
 					
+					ArrayList<String> skippedTopicNames = new ArrayList<>();
+					
 					for (PartitionMetadata part : item.partitionsMetadata()) {
 						
 						if (part.leader().host() == null)
 						{
 							LOG.error("A null host was found in our PartitonMetaData for topic: {} and partition: {}--skipping!", item.topic(), part.partitionId());
+							continue;
+						}
+						
+						if (supportedTopics != null &&  (
+								false == supportedTopics.containsKey(item.topic()) ||
+								false == supportedTopics.get(item.topic())
+							))
+						{
+							skippedTopicNames.add(item.topic());
 							continue;
 						}
 						
@@ -118,11 +140,13 @@ public class StateUtils {
 
 						List<String> parts = hostToPartition.get(host);
 						if (parts == null) {
-							parts = new ArrayList<String>();
+							parts = new ArrayList<>();
 							hostToPartition.put(host, parts);
 						}
 						parts.add(partition);
 					}
+					
+					LOG.info("Mapping partitions to hosts kipped the following unsupported topics:  {}", StringUtils.join(skippedTopicNames, String.format("%n\t")));
 				}
 			} catch (Exception e) {
 				LOG.error("Error getting meta data", e);
