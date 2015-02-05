@@ -35,8 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import com.blackberry.bdp.common.utils.threads.NotifyingThread;
 import com.blackberry.bdp.common.utils.conversion.Converter;
-import java.util.ArrayList;
-import org.apache.commons.lang.StringUtils;
 
 public class ReadyFlagWriter extends NotifyingThread
 {
@@ -140,7 +138,7 @@ public class ReadyFlagWriter extends NotifyingThread
 	public void doRun() throws Exception
 	{
 		Map<String, List<PartitionMetadata>> topicsWithPartitions = new HashMap<>();
-		StateUtils.getTopicParitionMetaData(config.getKafkaZkConnectionString(), config.getKafkaSeedBrokers(), topicsWithPartitions);
+		StateUtils.getTopicParitionMetaData(config.getKafkaZkConnectionString(), config.getKafkaSeedBrokers(), topicsWithPartitions, config.getTopicToSupportedStatus());
 
 		Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
 		Calendar previousHourCal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
