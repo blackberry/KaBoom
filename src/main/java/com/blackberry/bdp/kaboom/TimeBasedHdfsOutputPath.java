@@ -11,6 +11,7 @@ import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -93,20 +94,19 @@ public class TimeBasedHdfsOutputPath
 	
 	public void closeExpired()
 	{
-		for (Map.Entry<Long, OutputFile> entry : outputFileMap.entrySet())
+		Iterator<Map. Entry<Long,OutputFile>> iter = outputFileMap.entrySet().iterator();
+		
+		while (iter.hasNext())
 		{
-			Long timestampStarted = entry.getKey();
-			OutputFile out = entry.getValue();
-			
-			LOG.info("Checking output path for expiration: {}", out);
-			
-			if (out.closeTime < System.currentTimeMillis() - 60 * 1000)
-			{				
-				out.close();
-				outputFileMap.remove(timestampStarted);
-				LOG.info("Expired output file closed and removed from mapping ({} files still open): {}", outputFileMap.size(), out);				
-			}			
-		}		
+			Map.Entry<Long, OutputFile> entry = iter.next();
+
+			if (entry.getValue().closeTime < System.currentTimeMillis() - 60 * 1000)
+			{
+				entry.getValue().close();
+				iter.remove();
+				LOG.info("Expired output file closed and removed from mapping ({} files still open): {}", outputFileMap.size(), entry.getValue());
+			}
+		}
 	}
 	
 	private class OutputFile
@@ -130,8 +130,8 @@ public class TimeBasedHdfsOutputPath
 			
 			dir = Converter.timestampTemplateBuilder(startTime, dirTemplate);
 			tmpdir = String.format("%s/%s%s", dir, tmpPrefix, filename);
-			finalPath = new Path(dir + "/" + filename);			
-			tmpPath = new Path(tmpdir + "/" + filename);			
+			finalPath = new Path(dir + "/" + filename);
+			tmpPath = new Path(tmpdir + "/" + filename);	
 			
 			try
 			{
