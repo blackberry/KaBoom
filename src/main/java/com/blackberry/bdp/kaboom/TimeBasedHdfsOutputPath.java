@@ -104,7 +104,7 @@ public class TimeBasedHdfsOutputPath
 			{				
 				out.close();
 				outputFileMap.remove(timestampStarted);
-				LOG.info("Expired output file closed and removed from mapping: {}", out);				
+				LOG.info("Expired output file closed and removed from mapping ({} files still open): {}", outputFileMap.size(), out);				
 			}			
 		}		
 	}
@@ -206,7 +206,9 @@ public class TimeBasedHdfsOutputPath
 			try
 			{
 				boomWriter.close();
-				out.close();			
+				LOG.info("Boom writer closed for {}", tmpPath);
+				out.close();	
+				LOG.info("Output stream closed for {}", tmpPath);
 			}
 			catch (IOException ioe)
 			{
@@ -227,6 +229,7 @@ public class TimeBasedHdfsOutputPath
 			try
 			{
 				fileSystem.delete(new Path(tmpdir), true);
+				LOG.info("Deleted tmp path: {}", tmpPath);
 			} 
 			catch (IllegalArgumentException | IOException e)
 			{
