@@ -175,7 +175,7 @@ public class KaBoom
 		leaderSelector.autoRequeue();
 		leaderSelector.start();		
 		
-		final Map<String, Worker> partitonToWorkerMap = new HashMap<>();
+		final Map<String, Worker> partitionToWorkerMap = new HashMap<>();
 		final Map<String, Thread> partitionToThreadsMap = new HashMap<>();
 		
 		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable()
@@ -185,7 +185,7 @@ public class KaBoom
 			{
 				shutdown();
 				
-				for (Map.Entry<String, Worker> entry : partitonToWorkerMap.entrySet())
+				for (Map.Entry<String, Worker> entry : partitionToWorkerMap.entrySet())
 				{
 					Worker w = entry.getValue();
 					w.stop();
@@ -232,7 +232,7 @@ public class KaBoom
 		
 		while (shutdown == false)
 		{
-			Map<String, Boolean> validWorkingPartitions = new HashMap<>();			
+			Map<String, Boolean> validWorkingPartitions = new HashMap<>();						
 			
 			/**
 			 * Get all my assignments and create a worker if there's anything not already being worked
@@ -243,7 +243,7 @@ public class KaBoom
 				
 				if (assignee.equals(Integer.toString(config.getKaboomId())))
 				{					
-					if (partitonToWorkerMap.containsKey(partitionId))
+					if (partitionToWorkerMap.containsKey(partitionId))
 					{
 						LOG.info("KaBoom clientId {} assigned to partitonId {} and worker is already working", config.getKaboomId(), partitionId);
 						validWorkingPartitions.put(partitionId, true);
@@ -268,7 +268,7 @@ public class KaBoom
 
 							Worker worker = new Worker(config, curator, topic, partition);
 
-							partitonToWorkerMap.put(partitionId, worker);
+							partitionToWorkerMap.put(partitionId, worker);
 							partitionToThreadsMap.put(partitionId, new Thread(worker));
 							partitionToThreadsMap.get(partitionId).start();
 							
@@ -282,9 +282,15 @@ public class KaBoom
 						}
 					}
 				}
+				else
+				{
+					LOG.info("{} is not interested in work assigned to {}", config.getKaboomId(), assignee);
+				}
 			}
 			
-			for (Map.Entry<String, Worker> entry : partitonToWorkerMap.entrySet())
+			LOG.info("There are {} entries in the partitons to workers mapping", partitionToWorkerMap.size());
+			
+			for (Map.Entry<String, Worker> entry : partitionToWorkerMap.entrySet())
 			{
 				Worker w = entry.getValue();
 				
