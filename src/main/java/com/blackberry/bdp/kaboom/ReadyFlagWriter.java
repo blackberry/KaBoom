@@ -165,7 +165,7 @@ public class ReadyFlagWriter extends NotifyingThread
 				{
 					LOG.info(LOG_TAG + "Checking {} partition(s) in topic={} for offset timestamps...", entry.getValue().size(), topicName);
 
-					String hdfsTemplate = config.getTopicToKafkaReadyFlagPath().get(topicName);
+					String hdfsTemplate = config.getTopicToHdfsRoot().get(topicName);
 
 					if (hdfsTemplate == null)
 					{
@@ -173,9 +173,7 @@ public class ReadyFlagWriter extends NotifyingThread
 						continue;
 					}
 
-					String hdfsPath = Converter.timestampTemplateBuilder(prevHourStartTimestmap, hdfsTemplate);
-
-					final Path topicRoot = new Path(parentFromPath(hdfsPath, INCOMING_DIR));
+					final Path topicRoot = new Path(Converter.timestampTemplateBuilder(prevHourStartTimestmap, hdfsTemplate));
 					final Path mergeReadyFlag = new Path(topicRoot + "/" + MERGE_READY_FLAG);
 					final Path incomingDirectory = new Path(topicRoot + "/" + INCOMING_DIR);
 					final Path workingDirectory = new Path(topicRoot + "/" + WORKING_DIR);

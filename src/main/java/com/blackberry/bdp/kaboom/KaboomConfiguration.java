@@ -53,11 +53,11 @@ public class KaboomConfiguration
 	private int kaboomId;
 	private long fileRotateInterval;
 	private int weight;
-	private CuratorFramework curator;
+	private final CuratorFramework curator;
 	private final Map<String, ArrayList<TimeBasedHdfsOutputPath>> topicToHdfsPaths = new HashMap<>();
 	private final Map<String, String> topicToProxyUser = new HashMap<>();
 	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
-	private final Map<String, String> topicToKafkaReadyFlagPath = new HashMap<>();
+	private final Map<String, String> topicToHdfsRootDir = new HashMap<>();
 	private final Map<String, Boolean> topicToSupportedStatus = new HashMap<>();
 	private String kerberosPrincipal;
 	private String kerberosKeytab;
@@ -94,7 +94,7 @@ public class KaboomConfiguration
 			LOG.info("topicToProxyUser: {} -> {}", entry.getKey(), entry.getValue());
 		}
 		
-		for (Map.Entry<String, String> entry : getTopicToKafkaReadyFlagPath().entrySet())
+		for (Map.Entry<String, String> entry : getTopicToHdfsRoot().entrySet())
 		{
 			LOG.info("topicToKrFlagPath: {} -> {}", entry.getKey(), entry.getValue());
 		}
@@ -134,7 +134,6 @@ public class KaboomConfiguration
 		
 		hadoopConfiguration = buildHadoopConfiguration();
 		
-		mapTopicToKafkaReadyFlagPath(props);
 		mapTopicToProxyUser(props);
 		mapProxyUserToHadoopFileSystem();		
 		mapTopicToHdfsPathFromProps(props);
@@ -145,33 +144,45 @@ public class KaboomConfiguration
 	 * 
 	 * Sample property definition:
 	 * 
-	 * topic.topicName.hdfsPath.1.directory = hdfs://hadoop.lab/service/82/component/logs/%y%M%d/%H/topicName/incoming/%l
-	 * topic.topicName.hdfsPath.1.duration = 180
-	 * 
-	 * topic.topicName.hdfsPath.2.directory = hdfs://hadoop.lab/service/82/component/logs/%y%M%d/%H/topicName/data
-	 * topic.topicName.hdfsPath.2.duration = 3600
+	 * topic.devtest-test1.hdfsRootDir=hdfs://hadoop.log82.bblabs/service/82/devtest/logs/%y%M%d/%H/test1
+	 * topic.devtest-test1.proxy.user=dariens
+	 * topic.devtest-test1.hdfsDir.1=incoming/%l
+	 * topic.devtest-test1.hdfsDir.2=hourly_temp
+	 * topic.devtest-test1.hdfsDir.2.duration=3600
 	 *
 	 * @param props Properties to parse for topics and paths
 	 * @return Map<String, String>
 	 */
 	private void mapTopicToHdfsPathFromProps(Properties props)
 	{
-		Pattern topicPathPattern = Pattern.compile("^topic\\.([^\\.]+)\\.hdfsPath\\.(\\d+)\\.directory$");
+		Pattern topicPathPattern = Pattern.compile("^topic\\.([^\\.]+)\\.hdfsDir\\.(\\d+)");
 
 		for (Map.Entry<Object, Object> e : props.entrySet())
 		{
 			Matcher m = topicPathPattern.matcher(e.getKey().toString());
 			if (m.matches())
-			{
+			{								
 				String topic = m.group(1);				
 				String pathNumber = m.group(2);
-				String directory = props.getProperty(e.getKey().toString());
-				String durationProperty = String.format("topic.%s.hdfsPath.%d.duration", topic, Integer.parseInt(pathNumber));
+				
+				if (!props.containsKey(String.format("topic.%s.hdfsRootDir", topic)))
+				{
+					LOG.error("Topic {} configuration property missing", String.format("topic.%s.hdfsRootDir", topic));
+					continue;
+				}
+				
+				String hdfsRootDir = props.getProperty(String.format("topic.%s.hdfsRootDir", topic));				
+				
+				if (!topicToHdfsRootDir.containsKey(topic))
+				{					
+					topicToHdfsRootDir.put(topic, hdfsRootDir);
+				}
+				
+				String directory = String.format("%s/%s", hdfsRootDir, e.getValue().toString());
+				String durationProperty = String.format("topic.%s.hdfsDir.%d.duration", topic, Integer.parseInt(pathNumber));
 				Integer duration = Integer.parseInt(props.getProperty(durationProperty, "180"));
 
 				LOG.info("HDFS output path property matched topic: {} path number: {} duration: {} directory: {}", topic, pathNumber, duration, directory);					
-				
-				proxyUserToFileSystem.get(topicToProxyUser.get(topic));
 				
 				TimeBasedHdfsOutputPath path = new TimeBasedHdfsOutputPath(proxyUserToFileSystem.get(topicToProxyUser.get(topic)), directory, duration);
 				
@@ -271,29 +282,6 @@ public class KaboomConfiguration
 			}
 		}		
 	}
-
-	
-	/**
-	 * Builds the proxy user to kafka ready flag path Map
-	 * 
-	 * topic.topicName.kafkaReadyFlag.directory = hdfs://hadoop.lab/service/82/component/logs/%y%M%d/%H/topicName/incoming
-	 *
-	 * @param props Properties to parse for topics and users
-	 */
-	private void mapTopicToKafkaReadyFlagPath(Properties props) 
-	{			
-		Pattern topicKrPattern = Pattern.compile("^topic\\.([^\\.]+)\\.kafkaReadyFlag.directory$");
-		Map<String, String> mapping = new HashMap<>();
-		
-		for (Map.Entry<Object, Object> e : props.entrySet())
-		{
-			Matcher m = topicKrPattern.matcher(e.getKey().toString());
-			if (m.matches())
-			{
-				topicToKafkaReadyFlagPath.put(m.group(1), e.getValue().toString());
-			}
-		}
-	}	
 
 	/**
 	 * Instantiates properties from either the specified configuration file or the default for the class
@@ -638,11 +626,11 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the topicToKafkaReadyFlagPath
+	 * @return the topicToHdfsRootDir
 	 */
-	public Map<String, String> getTopicToKafkaReadyFlagPath()
+	public Map<String, String> getTopicToHdfsRoot()
 	{
-		return topicToKafkaReadyFlagPath;
+		return topicToHdfsRootDir;
 	}
 
 	/**

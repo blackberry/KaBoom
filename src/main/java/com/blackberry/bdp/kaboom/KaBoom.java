@@ -301,7 +301,6 @@ public class KaBoom
 				for (TimeBasedHdfsOutputPath outputPath : w.getHdfsOutputPaths())
 				{
 					outputPath.closeExpired();
-					LOG.info("Finished calling closed expired");
 				}
 				
 				//  If there are any that are invalid, they need to stop working

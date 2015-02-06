@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
  */
 public class TimeBasedHdfsOutputPath
 {
-	private static final Object fsLock = new Object();
 	private final FileSystem fileSystem;
 	private final FsPermission permissions = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);	
 	private final String dirTemplate;
