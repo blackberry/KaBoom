@@ -71,7 +71,7 @@ public class Worker implements Runnable
 
 	private long lag = 0;
 	private int lag_sec = 0;
-	private long linesread = 0;
+	private long messagesWritten = 0;
 
 	private String lagGaugeName;
 	private String lagSecGaugeName;
@@ -268,7 +268,7 @@ public class Worker implements Runnable
 		this.topic = topic;
 		this.partition = partition;
 		this.startTime = System.currentTimeMillis();
-		this.linesread = 0;
+		this.messagesWritten = 0;
 		this.hdfsOutputPaths = config.getTopicToHdfsPaths().get(topic);
 		
 		partitionId = topic + "-" + partition;
@@ -331,7 +331,7 @@ public class Worker implements Runnable
 					  @Override
 					  public Long getValue()
 					  {
-						  return linesread / ((System.currentTimeMillis() - startTime) / 1000);
+						  return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
 					  }
 			 });
 
@@ -479,7 +479,7 @@ public class Worker implements Runnable
 						}
 					}
 
-					linesread++;
+					messagesWritten += hdfsOutputPaths.size();
 					offset = consumer.getNextOffset();
 					lag = consumer.getHighWaterMark() - offset;
 
@@ -629,7 +629,7 @@ public class Worker implements Runnable
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagSecGaugeName);
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(msgWrittenGaugeName);
 			
-			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})", getPartitionId(), linesread, offset);
+			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})", getPartitionId(), messagesWritten, offset);
 		}
 		catch (Exception e) 
 		{
@@ -759,7 +759,7 @@ public class Worker implements Runnable
 
 	public long getMsgWrittenPerSec()
 	{
-		return linesread / ((System.currentTimeMillis() - startTime) / 1000);
+		return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
 	}
 
 	/**
