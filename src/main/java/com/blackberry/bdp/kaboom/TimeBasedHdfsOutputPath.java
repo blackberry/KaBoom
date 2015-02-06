@@ -98,6 +98,8 @@ public class TimeBasedHdfsOutputPath
 			Long timestampStarted = entry.getKey();
 			OutputFile out = entry.getValue();
 			
+			LOG.info("Checking output path for expiration: {}", out);
+			
 			if (out.closeTime < System.currentTimeMillis() - 60 * 1000)
 			{				
 				out.close();
