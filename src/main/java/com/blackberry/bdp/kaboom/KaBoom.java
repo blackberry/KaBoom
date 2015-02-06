@@ -296,11 +296,12 @@ public class KaBoom
 				
 				// Check the worker's output paths and close any that are expired
 				
-				LOG.info("Worker assigned to {} has {} output paths open", w.getPartitionId(), w.getHdfsOutputPaths().size());
+				LOG.info("Worker assigned to {} has {} 1 output path template", w.getPartitionId(), w.getHdfsOutputPaths().size());
 				
 				for (TimeBasedHdfsOutputPath outputPath : w.getHdfsOutputPaths())
 				{
 					outputPath.closeExpired();
+					LOG.info("Finished calling  closed expired");
 				}
 				
 				//  If there are any that are invalid, they need to stop working
