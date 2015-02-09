@@ -59,15 +59,14 @@ public class TimeBasedHdfsOutputPath
 		return ts - ts % (this.durationSeconds * 1000);
 	}
 	
-	public FastBoomWriter getBoomWriter(long timestamp, String filename) throws IOException, Exception
+	public FastBoomWriter getBoomWriter(long timestamp, String filename, Boolean useTempOpenFileDir) throws IOException, Exception
 	{		
-		Long startTime = calculateStartTime(timestamp);
-				
+		Long startTime = calculateStartTime(timestamp);				
 		outputFile = outputFileMap.get(startTime);
 		
 		if (outputFile == null)
 		{			
-			outputFile = new OutputFile(filename, startTime, System.currentTimeMillis() + durationSeconds * 1000);
+			outputFile = new OutputFile(filename, startTime, System.currentTimeMillis() + durationSeconds * 1000, useTempOpenFileDir);
 			
 			outputFileMap.put(startTime, outputFile);
 		}
@@ -111,42 +110,51 @@ public class TimeBasedHdfsOutputPath
 	private class OutputFile
 	{
 		private String dir;
-		private String tmpdir;
+		private String openFileDirectory;
 
 		private String filename;
 		private Path finalPath;
-		private Path tmpPath;
+		private Path openFilePath;
 		private FastBoomWriter boomWriter;
 		private OutputStream out;
 		private Long startTime;
 		private Long closeTime;
+		private Boolean useTempOpenFileDir;
 
-		public OutputFile(String filename, Long startTime, Long closeTime)
+		public OutputFile(String filename, Long startTime, Long closeTime, Boolean useTempOpenFileDir)
 		{
 			this.filename = filename;
 			this.startTime = startTime;
 			this.closeTime = closeTime;
+			this.useTempOpenFileDir = useTempOpenFileDir;
 			
-			dir = Converter.timestampTemplateBuilder(startTime, dirTemplate);
-			tmpdir = String.format("%s/%s%s", dir, tmpPrefix, filename);
+			dir = Converter.timestampTemplateBuilder(startTime, dirTemplate);			
 			finalPath = new Path(dir + "/" + filename);
-			tmpPath = new Path(tmpdir + "/" + filename);	
+			
+			openFileDirectory = dir;			
+			openFilePath = finalPath;
+			
+			if (useTempOpenFileDir)
+			{
+				openFileDirectory = String.format("%s/%s%s", dir, tmpPrefix, filename);
+				openFilePath = new Path(openFileDirectory + "/" + filename);
+			}
 			
 			try
 			{
-				 if (fileSystem.exists(tmpPath))
+				 if (fileSystem.exists(openFilePath))
 				 {
-					 fileSystem.delete(tmpPath, false);
-					 LOG.info("Removing file from HDFS because it already exists: {}", tmpPath);
+					 fileSystem.delete(openFilePath, false);
+					 LOG.info("Removing file from HDFS because it already exists: {}", openFilePath);
 				 }
 
-				 out = fileSystem.create(tmpPath, permissions, false, bufferSize, replicas, blocksize, null);
+				 out = fileSystem.create(openFilePath, permissions, false, bufferSize, replicas, blocksize, null);
 				 boomWriter = new FastBoomWriter(out);						 
 				 LOG.info("Created {}", this);
 			} 
 			catch (Exception e)
 			{
-				LOG.error("Error creating file {}", tmpPath, e);
+				LOG.error("Error creating file {}", openFilePath, e);
 			}
 		}
 		
@@ -159,7 +167,7 @@ public class TimeBasedHdfsOutputPath
 				 + "\tstarts: %s (%s)%n"
 				 + "\tcloses: %s (%s)%n",
 				 getClass().getName(), 
-				 this.tmpPath, 
+				 this.openFilePath, 
 				 this.finalPath,
 				 this.startTime, dateString(this.startTime),
 				 this.closeTime, dateString(this.closeTime));
@@ -167,7 +175,7 @@ public class TimeBasedHdfsOutputPath
 
 		public void abort()
 		{
-			LOG.info("Aborting output file: {}", tmpPath);
+			LOG.info("Aborting output file: {}", openFilePath);
 			
 			try
 			{
@@ -175,7 +183,7 @@ public class TimeBasedHdfsOutputPath
 			} 
 			catch (IOException e)
 			{
-				LOG.error(" Error closing boom writer: {}", tmpPath, e);
+				LOG.error(" Error closing boom writer: {}", openFilePath, e);
 			}
 			
 			try
@@ -184,55 +192,58 @@ public class TimeBasedHdfsOutputPath
 			} 
 			catch (IOException e)
 			{
-				LOG.error("Error closing boom writer output file: {}", tmpPath, e);
+				LOG.error("Error closing boom writer output file: {}", openFilePath, e);
 			}
 			
 			try
 			{
-				fileSystem.delete(new Path(tmpdir), true);
-				LOG.info("Deleted temp file: {}", tmpPath);
+				fileSystem.delete(new Path(openFileDirectory), true);
+				LOG.info("Deleted open file: {}", openFilePath);
 			} 
 			catch (IOException e)
 			{
-				LOG.error("Error deleting temp files: {}", tmpPath, e);
+				LOG.error("Error deleting open file: {}", openFilePath, e);
 			}
 		}
 
 		public void close()
 		{
-			LOG.info("Closing {}", tmpPath);
+			LOG.info("Closing {}", openFilePath);
 			
 			try
 			{
 				boomWriter.close();
-				LOG.info("Boom writer closed for {}", tmpPath);
+				LOG.info("Boom writer closed for {}", openFilePath);
 				out.close();	
-				LOG.info("Output stream closed for {}", tmpPath);
+				LOG.info("Output stream closed for {}", openFilePath);
 			}
 			catch (IOException ioe)
 			{
-				LOG.error("Error closing up boomWriter {}:", tmpPath, ioe);
+				LOG.error("Error closing up boomWriter {}:", openFilePath, ioe);
 			}				 
 
-			try
+			if (useTempOpenFileDir)
 			{
-				LOG.info("Moving {} to {}", tmpPath, finalPath);
-				fileSystem.rename(tmpPath, finalPath);
-			} 
-			catch (Exception e)
-			{
-				LOG.error("Error moving {} to {}", tmpPath, finalPath, e);
-				abort();
-			}
+				try
+				{
+					LOG.info("Moving {} to {}", openFilePath, finalPath);
+					fileSystem.rename(openFilePath, finalPath);								
+				} 
+				catch (Exception e)
+				{
+					LOG.error("Error moving {} to {}", openFilePath, finalPath, e);
+					abort();
+				}
 
-			try
-			{
-				fileSystem.delete(new Path(tmpdir), true);
-				LOG.info("Deleted tmp path: {}", tmpPath);
-			} 
-			catch (IllegalArgumentException | IOException e)
-			{
-				LOG.error("Error deleting file {}", tmpPath, e);
+				try
+				{
+					fileSystem.delete(new Path(openFileDirectory), true);
+					LOG.info("Deleted temp open file directory: {}", openFilePath);
+				} 
+				catch (IllegalArgumentException | IOException e)
+				{
+					LOG.error("Error deleting temp open file direcrory {}", openFilePath, e);
+				}
 			}
 		}
 		
