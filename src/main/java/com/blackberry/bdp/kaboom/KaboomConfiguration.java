@@ -70,7 +70,7 @@ public class KaboomConfiguration
 	private Configuration hadoopConfiguration;
 	private String kafkaSeedBrokers;
 	private Integer readyFlagPrevHoursCheck;
-	private Boolean useTempOpenFileDir;
+	private final Boolean useTempOpenFileDirectory;
 	
 	private static final Logger LOG = LoggerFactory.getLogger(KaboomConfiguration.class);
 	
@@ -89,7 +89,7 @@ public class KaboomConfiguration
 		LOG.info("sinkToHighWatermark: {}", getSinkToHighWatermark());
 		LOG.info("kafkaSeedBrokers: {}", getKafkaSeedBrokers());
 		LOG.info("readyFlagPrevHoursCheck: {}", getReadyFlagPrevHoursCheck());
-		LOG.info("useTempOpenFIleDir: {}", getUseTempOpenFileDir());
+		LOG.info("useTempOpenFileDirectory: {}", getUseTempOpenFileDirectory());
 		
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
@@ -132,7 +132,7 @@ public class KaboomConfiguration
 		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
-		useTempOpenFileDir = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);
+		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);
 		curator = buildCuratorFramework();
 		
 		hadoopConfiguration = buildHadoopConfiguration();
@@ -661,10 +661,10 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the useTempOpenFileDir
+	 * @return the useTempOpenFileDirectory
 	 */
-	public Boolean getUseTempOpenFileDir()
+	public Boolean getUseTempOpenFileDirectory()
 	{
-		return useTempOpenFileDir;
+		return useTempOpenFileDirectory;
 	}
 }
