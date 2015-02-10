@@ -99,11 +99,12 @@ public class FastBoomWriter
 			
 			if (logBlockBuffer.position() > 0)
 			{
-				LOG.info("Log block write forced since It's been {} ms since last avro block was written and the log block buffer position is {}", 
+				LOG.info("Log block write forced since it's been {} ms since last avro block was written and the log block buffer position is {}", 
 					 msSinceLastAvroBlockWrite(), logBlockBuffer.position());
 
-				writeLogBlock();
+				writeLogBlock();				
 				logBlockBufferWritten = true;
+				out.flush();
 			}
 			else
 			{
@@ -118,10 +119,11 @@ public class FastBoomWriter
 
 				if (avroBlockBuffer.position() > 0)
 				{
-					LOG.info("Avro block write force since It's been {} ms since last avro block was written and the avro block buffer position is {}",
+					LOG.info("Avro block write force since it's been {} ms since last avro block was written and the avro block buffer position is {}",
 						 msSinceLastAvroBlockWrite(), avroBlockBuffer.position());
 
 					writeAvroBlock();
+					out.flush();
 				}
 				else
 				{
@@ -138,7 +140,7 @@ public class FastBoomWriter
 		}
 		else
 		{
-			LOG.info("Last written avro block was {} ms  ago", msSinceLastAvroBlockWrite());
+			LOG.info("Last written avro block was {} ms ago", msSinceLastAvroBlockWrite());
 		}
 	}
 
