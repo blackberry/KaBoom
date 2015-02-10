@@ -23,6 +23,8 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
 
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -37,8 +39,11 @@ public class FastBoomWriterTest {
 
 	@Test
 	public void testWriteFile() throws IOException {
-		FileOutputStream out = new FileOutputStream("/tmp/test.bm");
-		FastBoomWriter writer = new FastBoomWriter(out);
+		FileSystem.Statistics fsDataStats = null;
+		FileOutputStream out = new FileOutputStream("/tmp/test2.bm");		
+		FSDataOutputStream fsDataOut = new FSDataOutputStream(out, fsDataStats);
+		FastBoomWriter writer = new FastBoomWriter(fsDataOut);
+
 
 		byte[] message = "This is a test.  Let's make the line a bit longer by writing some stuff here."
 				.getBytes(UTF8);
@@ -50,8 +55,10 @@ public class FastBoomWriterTest {
 
 	@Test
 	public void testWriteBigFile() throws IOException {
-		FileOutputStream out = new FileOutputStream("/tmp/test2.bm");
-		FastBoomWriter writer = new FastBoomWriter(out);
+		FileSystem.Statistics fsDataStats = null;
+		FileOutputStream out = new FileOutputStream("/tmp/test2.bm");		
+		FSDataOutputStream fsDataOut = new FSDataOutputStream(out, fsDataStats);
+		FastBoomWriter writer = new FastBoomWriter(fsDataOut);
 
 		byte[] chars = "abc".getBytes(UTF8);
 		List<byte[]> messages = new ArrayList<byte[]>();
