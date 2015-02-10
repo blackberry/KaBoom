@@ -111,7 +111,7 @@ public class FastBoomWriter
 					if (avroBlockBuffer.position() > 0)
 					{
 						LOG.info("Avro block write force since It's been {} ms since last avro block was written and the log block buffer position is {}",
-							 msSinceLastAvroBlockWrite(), logBlockBuffer.position());
+							 msSinceLastAvroBlockWrite(), avroBlockBuffer.position());
 
 						writeAvroBlock();
 					}
@@ -135,7 +135,7 @@ public class FastBoomWriter
 		}
 		else
 		{
-			LOG.info("Last written avro block was {} seconds ago", msSinceLastAvroBlockWrite());
+			LOG.info("Last written avro block was {} ms  ago", msSinceLastAvroBlockWrite());
 		}
 	}
 
