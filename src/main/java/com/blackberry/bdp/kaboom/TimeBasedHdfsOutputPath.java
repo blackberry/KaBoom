@@ -13,7 +13,9 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileSystem.Statistics;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
@@ -130,6 +132,8 @@ public class TimeBasedHdfsOutputPath
 		private Path openFilePath;
 		private FastBoomWriter boomWriter;
 		private OutputStream out;
+		private FSDataOutputStream fsDataOut;
+		private Statistics fsDataStats;
 		private Long startTime;
 		private Long closeTime;
 		private Boolean useTempOpenFileDir;
@@ -162,7 +166,9 @@ public class TimeBasedHdfsOutputPath
 				 }
 
 				 out = fileSystem.create(openFilePath, permissions, false, bufferSize, replicas, blocksize, null);
-				 boomWriter = new FastBoomWriter(out);						 
+				 fsDataOut = new FSDataOutputStream(out, fsDataStats);
+				 
+				 boomWriter = new FastBoomWriter(fsDataOut);						 
 				 LOG.info("Created {}", this);
 			} 
 			catch (Exception e)

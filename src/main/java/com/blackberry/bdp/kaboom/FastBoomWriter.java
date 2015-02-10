@@ -15,6 +15,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Random;
 import java.util.zip.Deflater;
+import org.apache.hadoop.fs.FSDataOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,11 +69,11 @@ public class FastBoomWriter
 
 	private final byte[] syncMarker;
 
-	private final OutputStream out;
+	private final FSDataOutputStream  fsDataOut;
 
-	public FastBoomWriter(OutputStream out) throws IOException
+	public FastBoomWriter(FSDataOutputStream out) throws IOException
 	{
-		this.out = out;
+		this.fsDataOut = out;
 
 		Random rand = new Random();
 		syncMarker = new byte[16];
@@ -104,11 +105,11 @@ public class FastBoomWriter
 
 				writeLogBlock();				
 				logBlockBufferWritten = true;
-				out.flush();
+				fsDataOut.hflush();				
 			}
 			else
 			{
-				LOG.info("Skipping forced log block write since log block buffer position is", logBlockBuffer.position());					 
+				LOG.info("Skipping forced log block write since log block buffer position is {}", logBlockBuffer.position());					 
 			}
 				
 			// Need to check time since last avro write again as writing the log block could call the avro block write
@@ -123,11 +124,11 @@ public class FastBoomWriter
 						 msSinceLastAvroBlockWrite(), avroBlockBuffer.position());
 
 					writeAvroBlock();
-					out.flush();
+					fsDataOut.hflush();
 				}
 				else
 				{
-					LOG.info("Skipping forced avro block write since avro block buffer position is", avroBlockBuffer.position());					 
+					LOG.info("Skipping forced avro block write since avro block buffer position is {}", avroBlockBuffer.position());					 
 				}
 			}
 			else
@@ -146,11 +147,11 @@ public class FastBoomWriter
 
 	private void writeHeader() throws IOException
 	{
-		out.write(MAGIC_NUMBER);
+		fsDataOut.write(MAGIC_NUMBER);
 
 		// 2 entries in the metadata
 		encodeLong(2L);
-		out.write(longBytes, 0, longBuffer.position());
+		fsDataOut.write(longBytes, 0, longBuffer.position());
 
 		// Write schema
 		writeBytes("avro.schema".getBytes(UTF8));
@@ -162,16 +163,16 @@ public class FastBoomWriter
 
 		// End the map
 		encodeLong(0L);
-		out.write(longBytes, 0, longBuffer.position());
+		fsDataOut.write(longBytes, 0, longBuffer.position());
 
-		out.write(syncMarker);
+		fsDataOut.write(syncMarker);
 	}
 
 	private void writeBytes(byte[] bytes) throws IOException
 	{
 		encodeLong(bytes.length);
-		out.write(longBytes, 0, longBuffer.position());
-		out.write(bytes);
+		fsDataOut.write(longBytes, 0, longBuffer.position());
+		fsDataOut.write(bytes);
 	}
 
 	private byte[] longBytes = new byte[10];
@@ -350,7 +351,7 @@ public class FastBoomWriter
 	{
 		LOG.debug("Writing Avro Block ({} bytes)", avroBlockBuffer.position());
 		encodeLong(avroBlockRecordCount);
-		out.write(longBytes, 0, longBuffer.position());
+		fsDataOut.write(longBytes, 0, longBuffer.position());
 
 		while (true)
 		{
@@ -376,9 +377,9 @@ public class FastBoomWriter
 
 		encodeLong(compressedSize);
 		
-		out.write(longBytes, 0, longBuffer.position());
-		out.write(compressedBlockBytes, 0, compressedSize);
-		out.write(syncMarker);
+		fsDataOut.write(longBytes, 0, longBuffer.position());
+		fsDataOut.write(compressedBlockBytes, 0, compressedSize);
+		fsDataOut.write(syncMarker);
 
 		avroBlockBuffer.clear();
 		avroBlockRecordCount = 0L;
@@ -397,6 +398,6 @@ public class FastBoomWriter
 		{
 			writeAvroBlock();
 		}
-		out.close();		
+		fsDataOut.close();		
 	}
 }
