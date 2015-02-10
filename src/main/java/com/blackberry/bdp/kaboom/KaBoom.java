@@ -16,7 +16,6 @@
 
 package com.blackberry.bdp.kaboom;
 
-import com.blackberry.bdp.common.utils.conversion.Converter;
 import com.blackberry.bdp.common.utils.props.Parser;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
@@ -36,11 +35,8 @@ import org.yaml.snakeyaml.Yaml;
 
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import kafka.javaapi.PartitionMetadata;
-import org.apache.zookeeper.data.Stat;
 
 public class KaBoom
 {
@@ -301,6 +297,16 @@ public class KaBoom
 				for (TimeBasedHdfsOutputPath outputPath : w.getHdfsOutputPaths())
 				{
 					outputPath.closeExpired();
+					
+					if (config.getMaxMsBetweenAvroBlockWrite() > 0)
+					{
+						outputPath.pollUnwrittenAvroBlock(config.getMaxMsBetweenAvroBlockWrite());
+					}
+					else
+					{
+						LOG.info("Skipping poll to write unwritten avro blocks as the config property for max ms is {}", config.getMaxMsBetweenAvroBlockWrite());
+					}
+					
 				}
 				
 				//  If there are any that are invalid, they need to stop working

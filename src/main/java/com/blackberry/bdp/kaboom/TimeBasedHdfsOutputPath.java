@@ -106,6 +106,19 @@ public class TimeBasedHdfsOutputPath
 			}
 		}
 	}
+
+	public void pollUnwrittenAvroBlock(Long maxMsSinceLastWrite) throws IOException
+	{
+		Iterator<Map. Entry<Long,OutputFile>> iter = outputFileMap.entrySet().iterator();
+		
+		while (iter.hasNext())
+		{
+			Map.Entry<Long, OutputFile> entry = iter.next();
+
+			entry.getValue().getBoomWriter().unwrittenAvroBlockLifetimePoll(maxMsSinceLastWrite);
+		}
+	}
+
 	
 	private class OutputFile
 	{
