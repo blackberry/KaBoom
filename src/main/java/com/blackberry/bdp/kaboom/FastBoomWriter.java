@@ -95,42 +95,45 @@ public class FastBoomWriter
 		
 		if (msSinceLastAvroBlockWrite() >= maxUnwrittenAvroBlockLifetimeMs)
 		{
+			Boolean logBlockBufferWritten = false;
+			
 			if (logBlockBuffer.position() > 0)
 			{
 				LOG.info("Log block write forced since It's been {} ms since last avro block was written and the log block buffer position is {}", 
 					 msSinceLastAvroBlockWrite(), logBlockBuffer.position());
 
-				writeLogBlock();				
+				writeLogBlock();
+				logBlockBufferWritten = true;
+			}
+			else
+			{
+				LOG.info("Skipping forced log block write since log block buffer position is", logBlockBuffer.position());					 
+			}
 				
-				// Need to check time since last avro write again as writing the log block could call the avro block write
+			// Need to check time since last avro write again as writing the log block could call the avro block write
 				
-				if (msSinceLastAvroBlockWrite() >= maxUnwrittenAvroBlockLifetimeMs)				
-				{
-					// Check the position to be doubly sure?
-					
-					if (avroBlockBuffer.position() > 0)
-					{
-						LOG.info("Avro block write force since It's been {} ms since last avro block was written and the log block buffer position is {}",
-							 msSinceLastAvroBlockWrite(), avroBlockBuffer.position());
+			if (msSinceLastAvroBlockWrite() >= maxUnwrittenAvroBlockLifetimeMs)				
+			{
+				// Check the position to be doubly sure?
 
-						writeAvroBlock();
-					}
-					else
-					{
-						LOG.warn("A log block was written, and it didn't incur a call to write an avro block, however the avro block buffer position is {}", 
-							avroBlockBuffer.position());
-					}
+				if (avroBlockBuffer.position() > 0)
+				{
+					LOG.info("Avro block write force since It's been {} ms since last avro block was written and the avro block buffer position is {}",
+						 msSinceLastAvroBlockWrite(), avroBlockBuffer.position());
+
+					writeAvroBlock();
 				}
 				else
 				{
-					LOG.info("After writing the log block the last written avro block was {} ms ago, assuming it was written as part of the log block and skipping", 
-						 msSinceLastAvroBlockWrite());
+					LOG.info("Skipping forced avro block write since avro block buffer position is", avroBlockBuffer.position());					 
 				}
-			}			
+			}
 			else
 			{
-				LOG.info("Time since last avro block write was {} ms ago and less than the threshold ({} ms) for forcing  a write", 
-					 msSinceLastAvroBlockWrite(), maxUnwrittenAvroBlockLifetimeMs);
+				if (logBlockBufferWritten == true)
+				{
+					LOG.info("A log block write was forced and likely incured a call to write the avro block as it's only been {} ms since last avro block write", msSinceLastAvroBlockWrite());
+				}
 			}
 		}
 		else
