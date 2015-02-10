@@ -23,7 +23,7 @@ public class FastBoomWriter
 {
 	private static final Logger LOG = LoggerFactory.getLogger(FastBoomWriter.class);
 	private static final Charset UTF8 = Charset.forName("UTF8");
-	private Long lastAvroBlockWriteTimestamp;	
+	private Long lastAvroBlockWriteTimestamp = System.currentTimeMillis();	
 
 	private static final byte[] MAGIC_NUMBER = new byte[]
 	{
@@ -97,10 +97,10 @@ public class FastBoomWriter
 		{
 			if (logBlockBuffer.position() > 0)
 			{
-				writeLogBlock();
-				
 				LOG.info("Log block write forced since It's been {} ms since last avro block was written and the log block buffer position is {}", 
 					 msSinceLastAvroBlockWrite(), logBlockBuffer.position());
+
+				writeLogBlock();				
 				
 				// Need to check time since last avro write again as writing the log block could call the avro block write
 				
@@ -110,16 +110,16 @@ public class FastBoomWriter
 					
 					if (avroBlockBuffer.position() > 0)
 					{
-						writeAvroBlock();
-						LOG.info("Avro block write force since It's been {} ms since last avro block was written and the log block buffer position is {}", 
+						LOG.info("Avro block write force since It's been {} ms since last avro block was written and the log block buffer position is {}",
 							 msSinceLastAvroBlockWrite(), logBlockBuffer.position());
+
+						writeAvroBlock();
 					}
 					else
 					{
 						LOG.warn("A log block was written, and it didn't incur a call to write an avro block, however the avro block buffer position is {}", 
-							 avroBlockBuffer.position());
+							avroBlockBuffer.position());
 					}
-
 				}
 				else
 				{
