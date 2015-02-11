@@ -121,7 +121,7 @@ public class KaboomConfiguration
 		Parser propsParser = new Parser(props);
 		
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));		
-		periodicHdfsFlushInterval = propsParser.parseLong("kabom.boomWriter.periodicHdfsFlushInterval", 0l);
+		periodicHdfsFlushInterval = propsParser.parseLong("kaboom.boomWriter.periodicHdfsFlushInterval", 0l);
 		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
 		fileRotateInterval = propsParser.parseLong("fileRotateInterval", 60L * 3L * 1000L);
