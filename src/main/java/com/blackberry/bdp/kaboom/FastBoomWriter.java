@@ -169,7 +169,7 @@ public class FastBoomWriter
 		}		
 
 		long hdfsFlushStartTs = System.currentTimeMillis();		
-		//fsDataOut.hflush();
+		fsDataOut.hflush();
 		long hdfsFlushEndTs = System.currentTimeMillis();
 		
 		lastHdfsFlushDurationMs = hdfsFlushEndTs - hdfsFlushStartTs;
