@@ -346,6 +346,7 @@ public class FastBoomWriter
 				 logBlockBuffer.position(), length);
 		}
 		logLineCount++;
+		periodicHdfsFlushPoll(30000l);
 	}
 
 	private long avroBlockRecordCount = 0L;
