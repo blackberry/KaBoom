@@ -61,7 +61,16 @@ CLASSPATH=$CONFIGDIR:/etc/hadoop/conf:$LIBDIR/*
 
 ```
 # This must be unique amongst all KaBoom instances
-kaboom.id=282000100
+kaboom.id=666
+
+# Hadoop URI
+hadooop.fs.uri=hdfs://hadoop.lab.com
+
+# How often to periodically flush open output paths to HDFS
+kaboom.boomWriter.periodicHdfsFlushInterval=30000
+
+# Store open files in a temp directory (based off filename) while they are open
+kaboom.useTempOpenFileDirectory = false
 
 kerberos.principal = flume@AD0.BBLABS
 kerberos.keytab = /opt/kaboom/config/kaboom.keytab
@@ -79,11 +88,10 @@ kaboom.allowOffsetOverrides=true
 
 metadata.broker.list=kafka1.site.dc1:9092,kafka2.site.dc1:9092,kafka3.site.dc1:9092
 
-topic.topic1.path=hdfs://nameservice1/service/dc1/testing/logs/%y%M%d/%H/topic1/incoming/%l
-topic.topic1.proxy.user=username1
-
-topic.topic1.path=hdfs://nameservice1/service/dc1/testing/logs/%y%M%d/%H/topic2/incoming/%l
-topic.topic1.proxy.user=username2
+topic.topic1.hdfsRootDir=/service/82/topic1/logs/%y%M%d/%H/topic1
+topic.topic1.proxy.user=someuser
+topic.topic1.hdfsDir.1=data
+topic.topic1.hdfsDir.1.duration=3600
 ```
 
 /opt/klogger/config/log4j.properties (logging)

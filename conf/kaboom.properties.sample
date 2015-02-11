@@ -15,11 +15,20 @@ auto.offset.reset=smallest
 #####################
 ##### KaBoom Specific #####
 
+# Hadoop URI
+hadooop.fs.uri=hdfs://hadoop.lab.com
+
 # Each instance of KaBoom needs a unique integer id.
 kaboom.id=99999
 
 # How often to rotate files (in ms)
 file.rotate.interval=180000
+
+# How often to periodically flush open output paths to HDFS
+kaboom.boomWriter.periodicHdfsFlushInterval=30000
+
+# Store open files in a temp directory (based off filename) while they are open
+kaboom.useTempOpenFileDirectory = false
 
 # Load within the cluster is distributed based on a weighting of each client.
 # The higher the weight, the more load this KaBoom instance will take on.
@@ -43,7 +52,12 @@ kerberos.keytab=user.keytab
 kafka.zookeeper.connection.string=zk1.kafka.domain:2181,zk2.kafka.domain:2181,zk3.kafka.domain:2181
 
 # Once each topic is discovered, we need to know where to write to
-# The destination directory is here. Same substitutions as Sawmill.
-# Eventually, this method of configurationwill probably be changed.
-topic.topic1.path=hdfs://nameservice1/service/servicename/logs/%y%M%d/%H/topic1/incoming/%l/
+# The destination directory is here. 
+# Note: hadooop.fs.uri is prepended to hdfsRootRir 
+# Note: hdfsRootDir is prepended to each output path
+# Default duration is 180
+
+topic.topic1.hdfsRootDir=/service/82/topic1/logs/%y%M%d/%H/topic1
 topic.topic1.proxy.user=someuser
+topic.topic1.hdfsDir.1=data
+topic.topic1.hdfsDir.1.duration=3600
