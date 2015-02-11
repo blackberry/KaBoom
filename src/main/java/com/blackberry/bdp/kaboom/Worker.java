@@ -33,6 +33,7 @@ import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 
 import com.blackberry.bdp.common.utils.conversion.Converter;
+import com.codahale.metrics.Meter;
 import java.util.ArrayList;
 
 public class Worker implements Runnable
@@ -77,6 +78,8 @@ public class Worker implements Runnable
 	private String lagSecGaugeName;
 	private String msgWrittenGaugeName;
 	private String lowerOffsetsGaugeName;
+	
+	private Meter boomWritesMeter;
 	
 	private ArrayList<TimeBasedHdfsOutputPath> hdfsOutputPaths;
 
@@ -271,6 +274,7 @@ public class Worker implements Runnable
 		this.messagesWritten = 0;
 		this.hdfsOutputPaths = config.getTopicToHdfsPaths().get(topic);
 		
+		
 		partitionId = topic + "-" + partition;
 		
 		LOG.info("Worker instantiated for {} and configured for {} output paths", partitionId, hdfsOutputPaths.size());
@@ -280,6 +284,8 @@ public class Worker implements Runnable
 			outputPath.setPartitionId(partitionId);
 			LOG.info("\t {} {} => {}", config.getKaboomId(), partitionId, outputPath);
 		}
+		
+		this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
 
 		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
 		lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
@@ -578,6 +584,7 @@ public class Worker implements Runnable
 						String fileName = getPartitionId() + "-" + offset +".bm";
 						
 						path.getBoomWriter(timestamp, fileName, config.getUseTempOpenFileDirectory()).writeLine(timestamp, bytes, pos, length - pos);
+						boomWritesMeter.mark();
 					}
 
 					/*
