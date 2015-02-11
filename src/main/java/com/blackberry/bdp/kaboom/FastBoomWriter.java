@@ -127,7 +127,7 @@ public class FastBoomWriter
 	
 	public void periodicHdfsFlushPoll(Long periodicHdfsFlushInterval) throws IOException
 	{
-		if (periodicHdfsFlushInterval == null)
+		if (periodicHdfsFlushInterval == null || msSinceLastHdfsFlush() < periodicHdfsFlushInterval)
 		{
 			return;
 		}		
