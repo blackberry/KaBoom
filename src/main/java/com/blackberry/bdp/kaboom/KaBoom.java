@@ -241,7 +241,7 @@ public class KaBoom
 				{					
 					if (partitionToWorkerMap.containsKey(partitionId))
 					{
-						LOG.info("KaBoom clientId {} assigned to partitonId {} and worker is already working", config.getKaboomId(), partitionId);
+						LOG.debug("KaBoom clientId {} assigned to partitonId {} and worker is already working", config.getKaboomId(), partitionId);
 						validWorkingPartitions.put(partitionId, true);
 					}
 					else
@@ -280,11 +280,11 @@ public class KaBoom
 				}
 				else
 				{
-					LOG.info("{} is not interested in work assigned to {}", config.getKaboomId(), assignee);
+					LOG.debug("{} is not interested in work assigned to {}", config.getKaboomId(), assignee);
 				}
 			}
 			
-			LOG.info("There are {} entries in the partitons to workers mapping", partitionToWorkerMap.size());
+			LOG.debug("There are {} entries in the partitons to workers mapping", partitionToWorkerMap.size());
 			
 			for (Map.Entry<String, Worker> entry : partitionToWorkerMap.entrySet())
 			{
@@ -292,11 +292,11 @@ public class KaBoom
 				
 				// Check the worker's output paths and close any that are expired
 				
-				LOG.info("Worker assigned to {} has {} output path template", w.getPartitionId(), w.getHdfsOutputPaths().size());
+				LOG.debug("Worker assigned to {} has {} output path template", w.getPartitionId(), w.getHdfsOutputPaths().size());
 				
 				for (TimeBasedHdfsOutputPath outputPath : w.getHdfsOutputPaths())
 				{
-					outputPath.closeExpired();					
+					outputPath.closeExpired();
 				}
 				
 				//  If there are any that are invalid, they need to stop working
