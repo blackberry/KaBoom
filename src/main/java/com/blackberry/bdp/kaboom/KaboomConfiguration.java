@@ -91,7 +91,7 @@ public class KaboomConfiguration
 		LOG.info("kafkaSeedBrokers: {}", getKafkaSeedBrokers());
 		LOG.info("readyFlagPrevHoursCheck: {}", getReadyFlagPrevHoursCheck());
 		LOG.info("useTempOpenFileDirectory: {}", getUseTempOpenFileDirectory());
-		LOG.info("maxMsBetweenAvroBlockWrite: {}", getMaxMsBeforeHdfsFlush());
+		LOG.info("maxMsBeforeHdfsFlush: {}", getMaxMsBeforeHdfsFlush());
 		
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
