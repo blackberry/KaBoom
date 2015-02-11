@@ -177,7 +177,7 @@ public class KaboomConfiguration
 					continue;
 				}
 				
-				String hdfsRootDir = props.getProperty(String.format("topic.%s.hdfsRootDir", topic));				
+				String hdfsRootDir = hadoopUrlPath + props.getProperty(String.format("topic.%s.hdfsRootDir", topic));				
 				
 				if (!topicToHdfsRootDir.containsKey(topic))
 				{					
