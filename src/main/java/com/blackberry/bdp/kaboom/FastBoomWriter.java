@@ -11,6 +11,8 @@ package com.blackberry.bdp.kaboom;
 
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import com.codahale.metrics.Gauge;
+import com.codahale.metrics.Metric;
+import com.codahale.metrics.MetricFilter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -29,6 +31,7 @@ public class FastBoomWriter
 	private long lastHdfsFlushDurationMs = 0l;
 	private long numAvroBlocksWritten = 0l;
 	private long numHdfsFlushedAVroBlocks = 0l;
+	private String partitionId;
 	private static final byte[] MAGIC_NUMBER = new byte[]
 	{
 		'O', 'b', 'j', 1		 
@@ -74,9 +77,10 @@ public class FastBoomWriter
 
 	private final FSDataOutputStream  fsDataOut;
 
-	public FastBoomWriter(FSDataOutputStream out) throws IOException
+	public FastBoomWriter(FSDataOutputStream out, String partitionId) throws IOException
 	{
 		this.fsDataOut = out;
+		this.partitionId = partitionId;
 
 		Random rand = new Random();
 		syncMarker = new byte[16];
@@ -84,8 +88,29 @@ public class FastBoomWriter
 
 		writeHeader();
 		
+		String metricNamelastHdfsFlushTime = "kaboom:partitions:" + partitionId + ":last hdfs flush ms";
+
+		String[] metrics_to_remove = {metricNamelastHdfsFlushTime};
+
+		for (final String metric_name : metrics_to_remove)
+		{
+			if (MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				 .getGauges(new MetricFilter()
+					  {
+						  @Override
+						  public boolean matches(String s, Metric m)
+						  {
+							  return s.equals(metric_name);
+						  }
+				 }).size() > 0)
+			{
+				LOG.debug("Removing existing metric: '{}'", metric_name);
+				MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(metric_name);
+			}
+		}		
+		
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register("hflush_duration_ms", new Gauge<Long>()
+			 .register(metricNamelastHdfsFlushTime, new Gauge<Long>()
 				  {
 					  @Override
 					  public Long getValue()

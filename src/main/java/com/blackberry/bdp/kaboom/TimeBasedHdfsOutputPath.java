@@ -7,7 +7,6 @@ package com.blackberry.bdp.kaboom;
 
 import com.blackberry.bdp.common.utils.conversion.Converter;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
@@ -15,7 +14,6 @@ import java.util.Iterator;
 import java.util.Map;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.FileSystem.Statistics;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
@@ -30,6 +28,7 @@ public class TimeBasedHdfsOutputPath
 {
 	private final FileSystem fileSystem;
 	private final FsPermission permissions = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);	
+	private String partitionId = "unknown-partitionId";
 	private final String dirTemplate;
 	private final Integer durationSeconds;	
 	private final int bufferSize = 16 * 1024;
@@ -121,6 +120,22 @@ public class TimeBasedHdfsOutputPath
 		}
 	}
 
+	/**
+	 * @return the partitionId
+	 */
+	public String getPartitionId()
+	{
+		return partitionId;
+	}
+
+	/**
+	 * @param partitionId the partitionId to set
+	 */
+	public void setPartitionId(String partitionId)
+	{
+		this.partitionId = partitionId;
+	}
+
 	
 	private class OutputFile
 	{
@@ -166,7 +181,7 @@ public class TimeBasedHdfsOutputPath
 				 fsDataOut = fileSystem.create(openFilePath, permissions, false, bufferSize, replicas, blocksize, null);
 				 //fsDataOut = new FSDataOutputStream(out, fsDataStats);
 				 
-				 boomWriter = new FastBoomWriter(fsDataOut);						 
+				 boomWriter = new FastBoomWriter(fsDataOut, getPartitionId());						 
 				 LOG.info("Created {}", this);
 			} 
 			catch (Exception e)

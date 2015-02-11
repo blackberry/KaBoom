@@ -186,7 +186,7 @@ public class KaboomConfiguration
 				
 				String directory = String.format("%s/%s", hdfsRootDir, e.getValue().toString());
 				String durationProperty = String.format("topic.%s.hdfsDir.%d.duration", topic, Integer.parseInt(pathNumber));
-				Integer duration = Integer.parseInt(props.getProperty(durationProperty, "180"));
+				Integer duration = Integer.parseInt(props.getProperty(durationProperty, "180"));				
 
 				LOG.info("HDFS output path property matched topic: {} path number: {} duration: {} directory: {}", topic, pathNumber, duration, directory);					
 				
