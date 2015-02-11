@@ -109,7 +109,7 @@ public class TimeBasedHdfsOutputPath
 		}
 	}
 
-	public void pollUnwrittenAvroBlock(Long maxMsSinceLastWrite) throws IOException
+	public void pollPeriodicHdfsFlush(Long maxMsSinceLastFlush) throws IOException
 	{
 		Iterator<Map. Entry<Long,OutputFile>> iter = outputFileMap.entrySet().iterator();
 		
@@ -117,7 +117,7 @@ public class TimeBasedHdfsOutputPath
 		{
 			Map.Entry<Long, OutputFile> entry = iter.next();
 
-			entry.getValue().getBoomWriter().unwrittenAvroBlockLifetimePoll(maxMsSinceLastWrite);
+			entry.getValue().getBoomWriter().periodicHdfsFlushPoll(maxMsSinceLastFlush);
 		}
 	}
 
@@ -131,9 +131,7 @@ public class TimeBasedHdfsOutputPath
 		private Path finalPath;
 		private Path openFilePath;
 		private FastBoomWriter boomWriter;
-		private OutputStream out;
-		private FSDataOutputStream fsDataOut;
-		private Statistics fsDataStats;
+		private FSDataOutputStream fsDataOut;		
 		private Long startTime;
 		private Long closeTime;
 		private Boolean useTempOpenFileDir;
@@ -165,8 +163,8 @@ public class TimeBasedHdfsOutputPath
 					 LOG.info("Removing file from HDFS because it already exists: {}", openFilePath);
 				 }
 
-				 out = fileSystem.create(openFilePath, permissions, false, bufferSize, replicas, blocksize, null);
-				 fsDataOut = new FSDataOutputStream(out, fsDataStats);
+				 fsDataOut = fileSystem.create(openFilePath, permissions, false, bufferSize, replicas, blocksize, null);
+				 //fsDataOut = new FSDataOutputStream(out, fsDataStats);
 				 
 				 boomWriter = new FastBoomWriter(fsDataOut);						 
 				 LOG.info("Created {}", this);
@@ -207,7 +205,7 @@ public class TimeBasedHdfsOutputPath
 			
 			try
 			{
-				out.close();
+				fsDataOut.close();
 			} 
 			catch (IOException e)
 			{
@@ -233,7 +231,7 @@ public class TimeBasedHdfsOutputPath
 			{
 				boomWriter.close();
 				LOG.info("Boom writer closed for {}", openFilePath);
-				out.close();	
+				fsDataOut.close();	
 				LOG.info("Output stream closed for {}", openFilePath);
 			}
 			catch (IOException ioe)

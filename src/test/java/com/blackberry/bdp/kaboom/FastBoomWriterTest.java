@@ -16,7 +16,6 @@
 
 package com.blackberry.bdp.kaboom;
 
-import com.blackberry.bdp.kaboom.FastBoomWriter;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -61,7 +60,7 @@ public class FastBoomWriterTest {
 		FastBoomWriter writer = new FastBoomWriter(fsDataOut);
 
 		byte[] chars = "abc".getBytes(UTF8);
-		List<byte[]> messages = new ArrayList<byte[]>();
+		List<byte[]> messages = new ArrayList<>();
 		for (int i = 0; i < 151; i++) {
 			StringBuilder sb = new StringBuilder("This is a test. ");
 			int extra = rand.nextInt() % 500;
@@ -79,24 +78,4 @@ public class FastBoomWriterTest {
 
 		writer.close();
 	}
-	// @Test
-	// public void encode() throws IOException, ParseException {
-	// OutputStream out = new BufferedOutputStream(new FileOutputStream(
-	// "/tmp/test3.bm"));
-	// FastBoomWriter writer = new FastBoomWriter(out);
-	//
-	// BufferedReader in = new BufferedReader(new InputStreamReader(
-	// new FileInputStream("/tmp/testlogs")));
-	//
-	// TimestampParser tsp = new Rfc5424TimestampParser();
-	// String line;
-	// String[] tsAndMsg;
-	// byte[] msg;
-	// while ((line = in.readLine()) != null) {
-	// tsAndMsg = tsp.splitLine(line);
-	// msg = tsAndMsg[1].getBytes(UTF8);
-	// writer.writeLine(tsp.parseTimestatmp(tsAndMsg[0]), msg, 0, msg.length);
-	// }
-	//
-	// }
 }

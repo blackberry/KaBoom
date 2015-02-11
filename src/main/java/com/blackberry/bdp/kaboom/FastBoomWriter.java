@@ -9,8 +9,9 @@
  */
 package com.blackberry.bdp.kaboom;
 
+import com.blackberry.bdp.krackle.MetricRegistrySingleton;
+import com.codahale.metrics.Gauge;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Random;
@@ -24,8 +25,10 @@ public class FastBoomWriter
 {
 	private static final Logger LOG = LoggerFactory.getLogger(FastBoomWriter.class);
 	private static final Charset UTF8 = Charset.forName("UTF8");
-	private Long lastAvroBlockWriteTimestamp = System.currentTimeMillis();	
-
+	private long lastHdfsFlushTimestamp = System.currentTimeMillis();	
+	private long lastHdfsFlushDurationMs = 0l;
+	private long numAvroBlocksWritten = 0l;
+	private long numHdfsFlushedAVroBlocks = 0l;
 	private static final byte[] MAGIC_NUMBER = new byte[]
 	{
 		'O', 'b', 'j', 1		 
@@ -80,69 +83,75 @@ public class FastBoomWriter
 		rand.nextBytes(syncMarker);
 
 		writeHeader();
+		
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+			 .register("hflush_duration_ms", new Gauge<Long>()
+				  {
+					  @Override
+					  public Long getValue()
+					  {
+						  return lastHdfsFlushDurationMs;
+					  }
+			 });		
 	}
 	
-	private Long msSinceLastAvroBlockWrite() 
+	private Long msSinceLastHdfsFlush() 
 	{		
-		return System.currentTimeMillis() - lastAvroBlockWriteTimestamp;
+		return System.currentTimeMillis() - lastHdfsFlushTimestamp;
 	}
 	
-	public void unwrittenAvroBlockLifetimePoll(Long maxUnwrittenAvroBlockLifetimeMs) throws IOException
+	public void periodicHdfsFlushPoll(Long periodicHdfsFlushInterval) throws IOException
 	{
-		if (maxUnwrittenAvroBlockLifetimeMs == null || lastAvroBlockWriteTimestamp == null)
+		if (periodicHdfsFlushInterval == null)
 		{
 			return;
-		}
+		}		
+				
+		Boolean logBlockBufferWritten = false;
 		
-		if (msSinceLastAvroBlockWrite() >= maxUnwrittenAvroBlockLifetimeMs)
+		if (logBlockBuffer.position() > 0)
 		{
-			Boolean logBlockBufferWritten = false;
-			
-			if (logBlockBuffer.position() > 0)
-			{
-				LOG.info("Log block write forced since it's been {} ms since last avro block was written and the log block buffer position is {}", 
-					 msSinceLastAvroBlockWrite(), logBlockBuffer.position());
-
-				writeLogBlock();				
-				logBlockBufferWritten = true;
-				fsDataOut.hflush();				
-			}
-			else
-			{
-				LOG.info("Skipping forced log block write since log block buffer position is {}", logBlockBuffer.position());					 
-			}
-				
-			// Need to check time since last avro write again as writing the log block could call the avro block write
-				
-			if (msSinceLastAvroBlockWrite() >= maxUnwrittenAvroBlockLifetimeMs)				
-			{
-				// Check the position to be doubly sure?
-
-				if (avroBlockBuffer.position() > 0)
-				{
-					LOG.info("Avro block write force since it's been {} ms since last avro block was written and the avro block buffer position is {}",
-						 msSinceLastAvroBlockWrite(), avroBlockBuffer.position());
-
-					writeAvroBlock();
-					fsDataOut.hflush();
-				}
-				else
-				{
-					LOG.info("Skipping forced avro block write since avro block buffer position is {}", avroBlockBuffer.position());					 
-				}
-			}
-			else
-			{
-				if (logBlockBufferWritten == true)
-				{
-					LOG.info("A log block write was forced and likely incured a call to write the avro block as it's only been {} ms since last avro block write", msSinceLastAvroBlockWrite());
-				}
-			}
+			LOG.info("Log block write forced during periodic HDFS flush since buffer position is {}", logBlockBuffer.position());
+			writeLogBlock();				
+			logBlockBufferWritten = true;			
 		}
 		else
 		{
-			LOG.info("Last written avro block was {} ms ago", msSinceLastAvroBlockWrite());
+			LOG.info("Skipping forced log block write in periodic HDFS flush since log block buffer position is {}", logBlockBuffer.position());					 
 		}
+				
+		// Need to check time since last avro write again as writing the log block could call the avro block write
+				
+		if (avroBlockBuffer.position() > 0)
+		{
+			LOG.info("Avro block write forced during periodic HDFS flush since buffer position is {}", avroBlockBuffer.position());
+			writeAvroBlock();
+		}
+		else
+		{
+			if (logBlockBufferWritten == true)
+			{
+				LOG.info("A log block write was forced and likely incured a call to write the avro block because the avro block buffer position is now {}", avroBlockBuffer.position());
+			}
+			
+			LOG.info("Skipping forced avro block write since avro block buffer position is {}", avroBlockBuffer.position());					 
+		}
+		
+		if (numAvroBlocksWritten == 0 || numHdfsFlushedAVroBlocks == numAvroBlocksWritten)
+		{
+			LOG.info("Skipping forced HDFS flush as there haven't been any new avro blocks written");
+			return;
+		}		
+
+		long hdfsFlushStartTs = System.currentTimeMillis();		
+		fsDataOut.hflush();
+		long hdfsFlushEndTs = System.currentTimeMillis();
+		
+		lastHdfsFlushDurationMs = hdfsFlushEndTs - hdfsFlushStartTs;
+		numHdfsFlushedAVroBlocks = numAvroBlocksWritten;
+		lastHdfsFlushTimestamp = System.currentTimeMillis();
+		
+		LOG.info("HDFS Flush completed in {} ms", lastHdfsFlushDurationMs);
 	}
 
 	private void writeHeader() throws IOException
@@ -383,8 +392,7 @@ public class FastBoomWriter
 
 		avroBlockBuffer.clear();
 		avroBlockRecordCount = 0L;
-		
-		lastAvroBlockWriteTimestamp = System.currentTimeMillis();
+		numAvroBlocksWritten++;
 	}
 
 	public void close() throws IOException

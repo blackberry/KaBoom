@@ -298,15 +298,14 @@ public class KaBoom
 				{
 					outputPath.closeExpired();
 					
-					if (config.getMaxMsBetweenAvroBlockWrite() > 0)
+					if (config.getMaxMsBeforeHdfsFlush() > 0)
 					{
-						outputPath.pollUnwrittenAvroBlock(config.getMaxMsBetweenAvroBlockWrite());
+						outputPath.pollPeriodicHdfsFlush(config.getMaxMsBeforeHdfsFlush());
 					}
 					else
 					{
-						LOG.info("Skipping poll to write unwritten avro blocks as the config property for max ms is {}", config.getMaxMsBetweenAvroBlockWrite());
-					}
-					
+						LOG.info("Skipping poll to write unwritten avro blocks as the config property for max ms is {}", config.getMaxMsBeforeHdfsFlush());
+					}					
 				}
 				
 				//  If there are any that are invalid, they need to stop working

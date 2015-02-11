@@ -71,7 +71,7 @@ public class KaboomConfiguration
 	private String kafkaSeedBrokers;
 	private Integer readyFlagPrevHoursCheck;
 	private final Boolean useTempOpenFileDirectory;
-	private final Long maxMsBetweenAvroBlockWrite;
+	private final Long maxMsBeforeHdfsFlush;
 	
 	private static final Logger LOG = LoggerFactory.getLogger(KaboomConfiguration.class);
 	
@@ -91,7 +91,7 @@ public class KaboomConfiguration
 		LOG.info("kafkaSeedBrokers: {}", getKafkaSeedBrokers());
 		LOG.info("readyFlagPrevHoursCheck: {}", getReadyFlagPrevHoursCheck());
 		LOG.info("useTempOpenFileDirectory: {}", getUseTempOpenFileDirectory());
-		LOG.info("maxMsBetweenAvroBlockWrite: {}", getMaxMsBetweenAvroBlockWrite());
+		LOG.info("maxMsBetweenAvroBlockWrite: {}", getMaxMsBeforeHdfsFlush());
 		
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
@@ -135,7 +135,7 @@ public class KaboomConfiguration
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
 		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);
-		maxMsBetweenAvroBlockWrite = propsParser.parseLong("kabom.boomWriter.maxMsBetweenAvroBlockWrite", 0l);
+		maxMsBeforeHdfsFlush = propsParser.parseLong("kabom.boomWriter.maxMsBeforeHdfsFlush", 0l);
 		curator = buildCuratorFramework();
 		
 		hadoopConfiguration = buildHadoopConfiguration();
@@ -672,10 +672,10 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the maxMsBetweenAvroBlockWrite
+	 * @return the maxMsBeforeHdfsFlush
 	 */
-	public Long getMaxMsBetweenAvroBlockWrite()
+	public Long getMaxMsBeforeHdfsFlush()
 	{
-		return maxMsBetweenAvroBlockWrite;
+		return maxMsBeforeHdfsFlush;
 	}
 }
