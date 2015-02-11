@@ -296,16 +296,7 @@ public class KaBoom
 				
 				for (TimeBasedHdfsOutputPath outputPath : w.getHdfsOutputPaths())
 				{
-					outputPath.closeExpired();
-					
-					if (config.getMaxMsBeforeHdfsFlush() > 0)
-					{
-						outputPath.pollPeriodicHdfsFlush(config.getMaxMsBeforeHdfsFlush());
-					}
-					else
-					{
-						LOG.info("Skipping poll to write unwritten avro blocks as the config property for max ms is {}", config.getMaxMsBeforeHdfsFlush());
-					}					
+					outputPath.closeExpired();					
 				}
 				
 				//  If there are any that are invalid, they need to stop working

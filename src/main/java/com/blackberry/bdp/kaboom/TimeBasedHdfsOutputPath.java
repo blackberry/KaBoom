@@ -31,6 +31,7 @@ public class TimeBasedHdfsOutputPath
 	private String partitionId = "unknown-partitionId";
 	private final String dirTemplate;
 	private final Integer durationSeconds;	
+	private Long periodicHdfsFlushInterval = null;
 	private final int bufferSize = 16 * 1024;
 	private final short replicas = 3;
 	private final long blocksize = 256 * 1024 * 1024;		
@@ -108,18 +109,6 @@ public class TimeBasedHdfsOutputPath
 		}
 	}
 
-	public void pollPeriodicHdfsFlush(Long maxMsSinceLastFlush) throws IOException
-	{
-		Iterator<Map. Entry<Long,OutputFile>> iter = outputFileMap.entrySet().iterator();
-		
-		while (iter.hasNext())
-		{
-			Map.Entry<Long, OutputFile> entry = iter.next();
-
-			entry.getValue().getBoomWriter().periodicHdfsFlushPoll(maxMsSinceLastFlush);
-		}
-	}
-
 	/**
 	 * @return the partitionId
 	 */
@@ -134,6 +123,22 @@ public class TimeBasedHdfsOutputPath
 	public void setPartitionId(String partitionId)
 	{
 		this.partitionId = partitionId;
+	}
+
+	/**
+	 * @return the periodicHdfsFlushInterval
+	 */
+	public Long getPeriodicHdfsFlushInterval()
+	{
+		return periodicHdfsFlushInterval;
+	}
+
+	/**
+	 * @param periodicHdfsFlushInterval the periodicHdfsFlushInterval to set
+	 */
+	public void setPeriodicHdfsFlushInterval(Long periodicHdfsFlushInterval)
+	{
+		this.periodicHdfsFlushInterval = periodicHdfsFlushInterval;
 	}
 
 	
@@ -182,6 +187,8 @@ public class TimeBasedHdfsOutputPath
 				 //fsDataOut = new FSDataOutputStream(out, fsDataStats);
 				 
 				 boomWriter = new FastBoomWriter(fsDataOut, getPartitionId());						 
+				 boomWriter.setPeriodicHdfsFlushInterval(periodicHdfsFlushInterval);
+				 
 				 LOG.info("Created {}", this);
 			} 
 			catch (Exception e)

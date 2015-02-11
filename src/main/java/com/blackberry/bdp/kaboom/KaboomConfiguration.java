@@ -71,7 +71,7 @@ public class KaboomConfiguration
 	private String kafkaSeedBrokers;
 	private Integer readyFlagPrevHoursCheck;
 	private final Boolean useTempOpenFileDirectory;
-	private final Long maxMsBeforeHdfsFlush;
+	private final Long periodicHdfsFlushInterval;
 	
 	private static final Logger LOG = LoggerFactory.getLogger(KaboomConfiguration.class);
 	
@@ -91,7 +91,7 @@ public class KaboomConfiguration
 		LOG.info("kafkaSeedBrokers: {}", getKafkaSeedBrokers());
 		LOG.info("readyFlagPrevHoursCheck: {}", getReadyFlagPrevHoursCheck());
 		LOG.info("useTempOpenFileDirectory: {}", getUseTempOpenFileDirectory());
-		LOG.info("maxMsBeforeHdfsFlush: {}", getMaxMsBeforeHdfsFlush());
+		LOG.info("periodicHdfsFlushInterval: {}", getPeriodicHdfsFlushInterval());
 		
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
@@ -121,6 +121,7 @@ public class KaboomConfiguration
 		Parser propsParser = new Parser(props);
 		
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));		
+		periodicHdfsFlushInterval = propsParser.parseLong("kabom.boomWriter.periodicHdfsFlushInterval", 0l);
 		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
 		fileRotateInterval = propsParser.parseLong("fileRotateInterval", 60L * 3L * 1000L);
@@ -134,8 +135,7 @@ public class KaboomConfiguration
 		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
-		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);
-		maxMsBeforeHdfsFlush = propsParser.parseLong("kabom.boomWriter.maxMsBeforeHdfsFlush", 0l);
+		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);		
 		curator = buildCuratorFramework();
 		
 		hadoopConfiguration = buildHadoopConfiguration();
@@ -191,6 +191,8 @@ public class KaboomConfiguration
 				LOG.info("HDFS output path property matched topic: {} path number: {} duration: {} directory: {}", topic, pathNumber, duration, directory);					
 				
 				TimeBasedHdfsOutputPath path = new TimeBasedHdfsOutputPath(proxyUserToFileSystem.get(topicToProxyUser.get(topic)), directory, duration);
+				
+				path.setPeriodicHdfsFlushInterval(periodicHdfsFlushInterval);
 				
 				ArrayList<TimeBasedHdfsOutputPath> paths = topicToHdfsPaths.get(topic);
 				
@@ -672,10 +674,10 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the maxMsBeforeHdfsFlush
+	 * @return the periodicHdfsFlushInterval
 	 */
-	public Long getMaxMsBeforeHdfsFlush()
+	public Long getPeriodicHdfsFlushInterval()
 	{
-		return maxMsBeforeHdfsFlush;
+		return periodicHdfsFlushInterval;
 	}
 }

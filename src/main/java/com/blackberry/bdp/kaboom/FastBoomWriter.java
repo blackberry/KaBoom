@@ -32,7 +32,9 @@ public class FastBoomWriter
 	private long numAvroBlocksWritten = 0l;
 	private long numHdfsFlushedAVroBlocks = 0l;
 	private String partitionId;
+	private Long periodicHdfsFlushInterval = null;
 	private static final byte[] MAGIC_NUMBER = new byte[]
+		 
 	{
 		'O', 'b', 'j', 1		 
 	};
@@ -125,9 +127,9 @@ public class FastBoomWriter
 		return System.currentTimeMillis() - lastHdfsFlushTimestamp;
 	}
 	
-	public void periodicHdfsFlushPoll(Long periodicHdfsFlushInterval) throws IOException
+	public void periodicHdfsFlushPoll() throws IOException
 	{
-		if (periodicHdfsFlushInterval == null || msSinceLastHdfsFlush() < periodicHdfsFlushInterval)
+		if (getPeriodicHdfsFlushInterval() == null || msSinceLastHdfsFlush() < getPeriodicHdfsFlushInterval())
 		{
 			return;
 		}		
@@ -346,7 +348,7 @@ public class FastBoomWriter
 				 logBlockBuffer.position(), length);
 		}
 		logLineCount++;
-		periodicHdfsFlushPoll(30000l);
+		periodicHdfsFlushPoll();
 	}
 
 	private long avroBlockRecordCount = 0L;
@@ -433,5 +435,21 @@ public class FastBoomWriter
 			writeAvroBlock();
 		}
 		fsDataOut.close();		
+	}
+
+	/**
+	 * @return the periodicHdfsFlushInterval
+	 */
+	public Long getPeriodicHdfsFlushInterval()
+	{
+		return periodicHdfsFlushInterval;
+	}
+
+	/**
+	 * @param periodicHdfsFlushInterval the periodicHdfsFlushInterval to set
+	 */
+	public void setPeriodicHdfsFlushInterval(Long periodicHdfsFlushInterval)
+	{
+		this.periodicHdfsFlushInterval = periodicHdfsFlushInterval;
 	}
 }
