@@ -24,10 +24,12 @@ Below is an example configuration for running a KaBoom instance that consumes me
 0.7.1 Introduces a few new required configuration properties and changes how HDFS output paths and file systems are defined.  It aso supports writing to open files intended to be read and consumed by downstream tooling and map reduce jobs.  A configurable flush interval has been exposed to periodically perform an HDFS flush on the open file.
 
 New required configuration property: 
+
 ```
 # Define the URI to your Hadoop file sysetm (this was previously required to be included before each topic's path)
 hadooop.fs.uri=hdfs://hadoop.site.cluster-01
 ```
+
 For writing to open files turn this (new property) off and _tmp_<fileName> directories will not be created to hold the open files:
 ```
 # Store open files in a temp directory (based off filename) while they are open
