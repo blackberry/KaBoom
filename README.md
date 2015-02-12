@@ -210,7 +210,6 @@ Krackle:
 * Meter: BrokerReadFailureTotal
 
 ## Boom Files
-
 This section contains portions from the [hadoop-logdriver](https://github.com/blackberry/hadoop-logdriver) project's description of Boom files.
 
 A Boom file is a place where we store logs in HDFS.
