@@ -173,6 +173,10 @@ After configuration simply start the kaboom service 'service kabom start'.
 ## Monitoring
 Exposed via [Coda Hale's Metric's](https://github.com/dropwizard/metrics) are metrics for monitoring message count, size, and lag (measure of how far behind KaBoom is compared to most recent message in Kafka--both in offset count and seconds):
 
+New monitoring metrics in 0.7.1:
+
+* Meter: boom writes (The number of boom file writes)
+
 Kaboom (Aggregate metrics--for the KaBoom cluster):
 
 * Gauge: max message lab sec 
