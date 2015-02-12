@@ -19,8 +19,94 @@ Performing a Maven install produces a RPM package that currently installs on Cen
 ## Configuring
 Below is an example configuration for running a KaBoom instance that consumes messages in two topics (topic1, topic2) and writes them to HDFS paths owned by different HDFS users.
 
-/opt/kaboom/config/kaboom-env.sh (defines runtime configuration and JVM properties)
+### Note: Kaboom version 0.7.1 
 
+0.7.1 Introduces a few new required configuration properties and changes how HDFS output paths and file systems are defined.  It aso supports writing to open files intended to be read and consumed by downstream tooling and map reduce jobs.  A configurable flush interval has been exposed to periodically perform an HDFS flush on the open file.
+
+New required configuration property: 
+
+# Define the URI to your Hadoop file sysetm (this was previously required to be included before each topic's path)
+hadooop.fs.uri=hdfs://hadoop.site.cluster-01
+
+For writing to open files turn this (new property) off and _tmp_<fileName> directories will not be created to hold the open files:
+	
+# Store open files in a temp directory (based off filename) while they are open
+kaboom.useTempOpenFileDirectory=false
+
+These two properties are still recommended:
+	
+> If the expected offset is greater than than actual offset and also higher than the high watermark 
+> then perhaps the broker we're receiving messages from has changed and the new broker has a 
+> lower offset because it was behind when it took over... 
+> 
+> If so, allow ourselves to sink to the new high watermark  
+
+kaboom.sinkToHighWatermark=true
+
+> Kaboom stores the offsets for the topic-partition it's assigned in ZK...  Sometimes there's a need to override that, 
+> so if a znode is created alongside the offset znode called offset_override, kaboom will start there instead
+
+kaboom.allowOffsetOverrides=true
+
+Topics and their output paths are now configured a little differently.  An hdfsRootDir is now required for every topic in addition to the proxy user.  
+
+Note that the hdfsRootDir is prefixed with the hadoop.fs.uri before it's used.
+
+topic.devtest-test1.hdfsRootDir=/service/82/devtest/logs/%y%M%d/%H/test1
+topic.devtest-test1.proxy.user=dariens
+
+Multiple numbered HDFS output directories are supported.  The numbers are meaningless and the duration determines how long the file will remain open before it's closed off.  
+
+Note: The duration + 60 seconds is used.  The 60 seconds is an attempt at ensuring that late events don't still require the open file.
+
+topic.devtest-test1.hdfsDir.1=data
+topic.devtest-test1.hdfsDir.1.duration=3600
+
+The hdfsDir above is prefixed with the hdfsRootDir for the topic (which in turn is prefixed with the hadoop.fs.uri).  In this example the fully populated URL would be:
+
+hdfs://hadoop.site.cluster-01//service/82/devtest/logs/%y%M%d/%H/test1/data/
+
+The file created would be a boom  file called: <partition_number>_<offset>.bm, example:
+
+hdfs://hadoop.site.cluster-01/service/82/devtest/logs/%y%M%d/%H/test1/data/0_12345678.bm
+
+### Example Configuration FIle /opt/klogger/config/klogger.properties (defines Klogger configuration, topics, and ports)
+```
+# This must be unique amongst all KaBoom instances
+kaboom.id=666
+
+# Hadoop URI
+hadooop.fs.uri=hdfs://hadoop.site.cluster-01
+
+# How often to periodically flush open output paths to HDFS
+kaboom.boomWriter.periodicHdfsFlushInterval=30000
+
+# Store open files in a temp directory (based off filename) while they are open
+kaboom.useTempOpenFileDirectory = false
+
+kerberos.principal = flume@AD0.BBLABS
+kerberos.keytab = /opt/kaboom/config/kaboom.keytab
+kaboom.readyflag.prevhours = 30
+
+zookeeper.connection.string=kaboom1.site.dc1:2181,kaboom2.site.dc1:2181,kaboom3.site.dc1:2181/KaBoom
+
+kafka.zookeeper.connection.string=kafka1.site.dc1:2181,kafka2.site.dc1:2181,kafka3.site.dc1:2181
+fetch.wait.max.ms=5000
+auto.offset.reset=smallest
+socket.receive.buffer.bytes=1048576
+fetch.message.max.bytes=10485760
+kaboom.sinkToHighWatermark=true
+kaboom.allowOffsetOverrides=true
+
+metadata.broker.list=kafka1.site.dc1:9092,kafka2.site.dc1:9092,kafka3.site.dc1:9092
+
+topic.topic1.hdfsRootDir=/service/82/topic1/logs/%y%M%d/%H/topic1
+topic.topic1.proxy.user=someuser
+topic.topic1.hdfsDir.1=data
+topic.topic1.hdfsDir.1.duration=3600
+```
+
+### Example Configuration FIle: /opt/kaboom/config/kaboom-env.sh (defines runtime configuration and JVM properties)
 ```
 JAVA=`which java`
 BASEDIR=/opt/kaboom
@@ -54,48 +140,9 @@ JAVA_OPTS="$JAVA_OPTS -Dlog4j.configuration=file:$LOG4JPROPERTIES"
 JAVA_OPTS="$JAVA_OPTS -Dkaboom.logs.dir=$LOGDIR"
 
 CLASSPATH=$CONFIGDIR:/etc/hadoop/conf:$LIBDIR/*
-
 ```
 
-/opt/klogger/config/klogger.properties (defines Klogger configuration, topics, and ports)
-
-```
-# This must be unique amongst all KaBoom instances
-kaboom.id=666
-
-# Hadoop URI
-hadooop.fs.uri=hdfs://hadoop.lab.com
-
-# How often to periodically flush open output paths to HDFS
-kaboom.boomWriter.periodicHdfsFlushInterval=30000
-
-# Store open files in a temp directory (based off filename) while they are open
-kaboom.useTempOpenFileDirectory = false
-
-kerberos.principal = flume@AD0.BBLABS
-kerberos.keytab = /opt/kaboom/config/kaboom.keytab
-kaboom.readyflag.prevhours = 30
-
-zookeeper.connection.string=kaboom1.site.dc1:2181,kaboom2.site.dc1:2181,kaboom3.site.dc1:2181/KaBoom
-
-kafka.zookeeper.connection.string=kafka1.site.dc1:2181,kafka2.site.dc1:2181,kafka3.site.dc1:2181
-fetch.wait.max.ms=5000
-auto.offset.reset=smallest
-socket.receive.buffer.bytes=1048576
-fetch.message.max.bytes=10485760
-kaboom.sinkToHighWatermark=true
-kaboom.allowOffsetOverrides=true
-
-metadata.broker.list=kafka1.site.dc1:9092,kafka2.site.dc1:9092,kafka3.site.dc1:9092
-
-topic.topic1.hdfsRootDir=/service/82/topic1/logs/%y%M%d/%H/topic1
-topic.topic1.proxy.user=someuser
-topic.topic1.hdfsDir.1=data
-topic.topic1.hdfsDir.1.duration=3600
-```
-
-/opt/klogger/config/log4j.properties (logging)
-
+### Example Configuration FIle: /opt/kaboom/config/log4j.properties (logging)
 ```
 kaboom.logs.dir=/var/log/kaboom
 log4j.rootLogger=INFO, kaboomAppender
