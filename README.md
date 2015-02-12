@@ -31,11 +31,14 @@ hadooop.fs.uri=hdfs://hadoop.site.cluster-01
 ```
 
 For writing to open files turn this (new property) off and _tmp_<fileName> directories will not be created to hold the open files:
+
 ```
 # Store open files in a temp directory (based off filename) while they are open
 kaboom.useTempOpenFileDirectory=false
 ```
+
 These two properties are still recommended:
+
 ```
 # If the expected offset is greater than than actual offset and also higher than the high watermark 
 # then perhaps the broker we're receiving messages from has changed and the new broker has a 
@@ -46,13 +49,16 @@ kaboom.sinkToHighWatermark=true
 # So if a znode is created alongside the offset znode called offset_override, kaboom will start there instead
 kaboom.allowOffsetOverrides=true
 ```
+
 Topics and their output paths are now configured a little differently.  An hdfsRootDir is now required for every topic in addition to the proxy user.  
 
 Note that the hdfsRootDir is prefixed with the hadoop.fs.uri before it's used.
+
 ```
 topic.devtest-test1.hdfsRootDir=/service/82/devtest/logs/%y%M%d/%H/test1
 topic.devtest-test1.proxy.user=dariens
 ```
+
 Multiple numbered HDFS output directories are supported.  The numbers are meaningless and the duration determines how long the file will remain open before it's closed off.  
 
 Note: The duration + 60 seconds is used.  The 60 seconds is an attempt at ensuring that late events don't still require the open file.
