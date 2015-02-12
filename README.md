@@ -26,7 +26,7 @@ Below is an example configuration for running a KaBoom instance that consumes me
 New required configuration property: 
 
 ```
-# Define the URI to your Hadoop file sysetm (this was previously required to be included before each topic's path)
+# Define the URI to your Hadoop file system (this was previously required to be included before each topic's path)
 hadooop.fs.uri=hdfs://hadoop.site.cluster-01
 ```
 
@@ -76,7 +76,7 @@ The file created for a message received at the time of this writing for partitio
 
 hdfs://hadoop.site.cluster-01/service/82/devtest/logs/20150212/17/test1/data/0_12345678.bm
 
-### Example Configuration FIle /opt/klogger/config/klogger.properties (defines Klogger configuration, topics, and ports)
+### Example Configuration FIle: /opt/klogger/config/klogger.properties (defines Klogger configuration, topics, and ports)
 ```
 # This must be unique amongst all KaBoom instances
 kaboom.id=666
@@ -94,9 +94,9 @@ kerberos.principal = flume@AD0.BBLABS
 kerberos.keytab = /opt/kaboom/config/kaboom.keytab
 kaboom.readyflag.prevhours = 30
 
-zookeeper.connection.string=kaboom1.site.dc1:2181,kaboom2.site.dc1:2181,kaboom3.site.dc1:2181/KaBoom
+zookeeper.connection.string=kaboom1.site.cluster-01:2181,kaboom2.site.cluster-01:2181,kaboom3.site.cluster-01:2181/KaBoom
 
-kafka.zookeeper.connection.string=kafka1.site.dc1:2181,kafka2.site.dc1:2181,kafka3.site.dc1:2181
+kafka.zookeeper.connection.string=kafka1.site.cluster-01:2181,kafka2.site.cluster-01:2181,kafka3.site.cluster-01:2181
 fetch.wait.max.ms=5000
 auto.offset.reset=smallest
 socket.receive.buffer.bytes=1048576
@@ -104,7 +104,7 @@ fetch.message.max.bytes=10485760
 kaboom.sinkToHighWatermark=true
 kaboom.allowOffsetOverrides=true
 
-metadata.broker.list=kafka1.site.dc1:9092,kafka2.site.dc1:9092,kafka3.site.dc1:9092
+metadata.broker.list=kafka1.site.cluster-01:9092,kafka2.site.cluster-01:9092,kafka3.site.cluster-01:9092
 
 topic.topic1.hdfsRootDir=/service/82/topic1/logs/%y%M%d/%H/topic1
 topic.topic1.proxy.user=someuser
