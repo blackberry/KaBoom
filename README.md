@@ -134,6 +134,7 @@ Kaboom (Instance metrics -- for a KaBoom worker assigned to a topic and partitio
 * Gauge: seconds lag
 * Gauge: messages written per second
 * Gauge: early offsets received (when compression is enabled and messages are included from earlier than requested offset)
+* Meter: boom writes
 
 Krackle:
 
