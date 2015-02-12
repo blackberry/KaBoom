@@ -70,11 +70,11 @@ topic.devtest-test1.hdfsDir.1.duration=3600
 
 The hdfsDir above is prefixed with the hdfsRootDir for the topic (which in turn is prefixed with the hadoop.fs.uri).  In this example the fully populated URL would be:
 
-hdfs://hadoop.site.cluster-01//service/82/devtest/logs/%y%M%d/%H/test1/data/
+hdfs://hadoop.site.cluster-01/service/82/devtest/logs/%y%M%d/%H/test1/data/
 
-The file created would be a boom  file called: <partition_number>_<offset>.bm, example:
+The file created for a message received at the time of this writing for partition 0 in the above topic would in turn create a boom  file called: <partition_number>_<offset>.bm, example:
 
-hdfs://hadoop.site.cluster-01/service/82/devtest/logs/%y%M%d/%H/test1/data/0_12345678.bm
+hdfs://hadoop.site.cluster-01/service/82/devtest/logs/20150212/17/test1/data/0_12345678.bm
 
 ### Example Configuration FIle /opt/klogger/config/klogger.properties (defines Klogger configuration, topics, and ports)
 ```
