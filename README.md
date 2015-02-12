@@ -14,7 +14,9 @@ KaBoom uses Krackle to consume from partitions of topics in Kafka and write them
 * [Dave Ariens](<mailto:dariens@blackberry.com>) (current maintainer)
 
 ## Building
-Performing a Maven install produces a RPM package that currently installs on Cent OS based Linux distributions..
+Performing a Maven install produces: 
+* An RPM package that currently installs RPM based Linux distributions
+* A Debian package for dpkg based Linux distributions
 
 ## Configuring
 Below is an example configuration for running a KaBoom instance that consumes messages in two topics (topic1, topic2) and writes them to HDFS paths owned by different HDFS users.
