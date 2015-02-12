@@ -15,6 +15,7 @@ KaBoom uses Krackle to consume from partitions of topics in Kafka and write them
 
 ## Building
 Performing a Maven install produces: 
+
 * An RPM package that currently installs RPM based Linux distributions
 * A Debian package for dpkg based Linux distributions
 
