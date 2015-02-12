@@ -580,10 +580,7 @@ public class Worker implements Runnable
 					
 					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
 					{
-						// This is somewhat costly putting a String format in the critical path of writing logs...
-						String fileName = getPartitionId() + "-" + offset +".bm";
-						
-						path.getBoomWriter(timestamp, fileName, config.getUseTempOpenFileDirectory()).writeLine(timestamp, bytes, pos, length - pos);
+						path.getBoomWriter(timestamp, partitionId + "-" + offset +".bm").writeLine(timestamp, bytes, pos, length - pos);
 						boomWritesMeter.mark();
 					}
 

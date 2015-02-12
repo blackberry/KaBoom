@@ -15,8 +15,6 @@ import java.util.Map;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsAction;
-import org.apache.hadoop.fs.permission.FsPermission;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,24 +24,29 @@ import org.slf4j.LoggerFactory;
  */
 public class TimeBasedHdfsOutputPath
 {
+	private static final Logger LOG = LoggerFactory.getLogger(TimeBasedHdfsOutputPath.class);
+
+	private final KaboomConfiguration config;
 	private final FileSystem fileSystem;
-	private final FsPermission permissions = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);	
 	private String partitionId = "unknown-partitionId";
 	private final String dirTemplate;
 	private final Integer durationSeconds;	
-	private Long periodicHdfsFlushInterval = null;
-	private final int bufferSize = 16 * 1024;
-	private final short replicas = 3;
-	private final long blocksize = 256 * 1024 * 1024;		
-	private final String tmpPrefix = "_tmp_";
-	private OutputFile outputFile;
+
 	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();	
 	
-	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
+	/**
+	 * Reusable objects only exist as class attributes because they are needed very frequently
+	 * Instead of continually re-instantiating transient objects in the critical message path they 
+	 * are created once and long lived	 
+	 */
 	
-	public TimeBasedHdfsOutputPath(FileSystem fileSystem, String pathTemplate, Integer durationSeconds)
+	private long reusableRequestedStartTime;
+	private OutputFile reusableRequestedOutputFile;
+	
+	public TimeBasedHdfsOutputPath(FileSystem fileSystem, KaboomConfiguration kaboomConfig, String pathTemplate, Integer durationSeconds)
 	{
 		this.fileSystem = fileSystem;
+		this.config = kaboomConfig;
 		this.durationSeconds = durationSeconds;
 		this.dirTemplate = pathTemplate;
 	}
@@ -56,24 +59,23 @@ public class TimeBasedHdfsOutputPath
 		return strDate;		
 	}	
 	
-	private long calculateStartTime(Long ts)
-	{
-		return ts - ts % (this.durationSeconds * 1000);
-	}
-	
-	public FastBoomWriter getBoomWriter(long timestamp, String filename, Boolean useTempOpenFileDir) throws IOException, Exception
+	public FastBoomWriter getBoomWriter(long ts, String filename) throws IOException, Exception
 	{		
-		Long startTime = calculateStartTime(timestamp);				
-		outputFile = outputFileMap.get(startTime);
+		reusableRequestedStartTime = ts - ts % (this.durationSeconds * 1000);
+		reusableRequestedOutputFile = outputFileMap.get(reusableRequestedStartTime);
 		
-		if (outputFile == null)
+		if (reusableRequestedOutputFile == null)
 		{			
-			outputFile = new OutputFile(filename, startTime, System.currentTimeMillis() + durationSeconds * 1000, useTempOpenFileDir);
+			reusableRequestedOutputFile = new OutputFile(
+				 filename, 
+				 reusableRequestedStartTime, 
+				 System.currentTimeMillis() + durationSeconds * 1000, 
+				 config.getUseTempOpenFileDirectory());
 			
-			outputFileMap.put(startTime, outputFile);
+			outputFileMap.put(reusableRequestedStartTime, reusableRequestedOutputFile);
 		}
 		
-		return outputFile.getBoomWriter();
+		return reusableRequestedOutputFile.getBoomWriter();
 	}
 	
 	public void abortAll()
@@ -92,7 +94,7 @@ public class TimeBasedHdfsOutputPath
 		}
 	}
 	
-	public void closeExpired()
+	public void periodicCloseExpiredPoll()
 	{
 		Iterator<Map. Entry<Long,OutputFile>> iter = outputFileMap.entrySet().iterator();
 		
@@ -110,14 +112,6 @@ public class TimeBasedHdfsOutputPath
 	}
 
 	/**
-	 * @return the partitionId
-	 */
-	public String getPartitionId()
-	{
-		return partitionId;
-	}
-
-	/**
 	 * @param partitionId the partitionId to set
 	 */
 	public void setPartitionId(String partitionId)
@@ -125,23 +119,6 @@ public class TimeBasedHdfsOutputPath
 		this.partitionId = partitionId;
 	}
 
-	/**
-	 * @return the periodicHdfsFlushInterval
-	 */
-	public Long getPeriodicHdfsFlushInterval()
-	{
-		return periodicHdfsFlushInterval;
-	}
-
-	/**
-	 * @param periodicHdfsFlushInterval the periodicHdfsFlushInterval to set
-	 */
-	public void setPeriodicHdfsFlushInterval(Long periodicHdfsFlushInterval)
-	{
-		this.periodicHdfsFlushInterval = periodicHdfsFlushInterval;
-	}
-
-	
 	private class OutputFile
 	{
 		private String dir;
@@ -151,7 +128,7 @@ public class TimeBasedHdfsOutputPath
 		private Path finalPath;
 		private Path openFilePath;
 		private FastBoomWriter boomWriter;
-		private FSDataOutputStream fsDataOut;		
+		private FSDataOutputStream fsDataOut;
 		private Long startTime;
 		private Long closeTime;
 		private Boolean useTempOpenFileDir;
@@ -166,12 +143,12 @@ public class TimeBasedHdfsOutputPath
 			dir = Converter.timestampTemplateBuilder(startTime, dirTemplate);			
 			finalPath = new Path(dir + "/" + filename);
 			
-			openFileDirectory = dir;			
+			openFileDirectory = dir;
 			openFilePath = finalPath;
 			
 			if (useTempOpenFileDir)
 			{
-				openFileDirectory = String.format("%s/%s%s", dir, tmpPrefix, filename);
+				openFileDirectory = String.format("%s/%s%s", dir, config.getBoomFileTmpPrefix(), this.filename);
 				openFilePath = new Path(openFileDirectory + "/" + filename);
 			}
 			
@@ -183,13 +160,18 @@ public class TimeBasedHdfsOutputPath
 					 LOG.info("Removing file from HDFS because it already exists: {}", openFilePath);
 				 }
 
-				 fsDataOut = fileSystem.create(openFilePath, permissions, false, bufferSize, replicas, blocksize, null);
-				 //fsDataOut = new FSDataOutputStream(out, fsDataStats);
+				 fsDataOut = fileSystem.create(
+					  openFilePath, 
+					  config.getBoomFilePerms(), 
+					  false, 
+					  config.getBoomFileBufferSize(), 
+					  config.getBoomFileReplicas(),
+					  config.getBoomFileBlocksize(), 
+					  null);
 				 
-				 boomWriter = new FastBoomWriter(fsDataOut, getPartitionId());						 
-				 boomWriter.setPeriodicHdfsFlushInterval(periodicHdfsFlushInterval);
-				 
-				 LOG.info("Created {}", this);
+				 boomWriter = new FastBoomWriter(fsDataOut, partitionId);						 
+				 boomWriter.setPeriodicHdfsFlushInterval(config.getPeriodicHdfsFlushInterval());				 
+
 			} 
 			catch (Exception e)
 			{

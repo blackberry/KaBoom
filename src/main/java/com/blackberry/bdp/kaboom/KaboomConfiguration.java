@@ -40,6 +40,8 @@ import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsAction;
+import org.apache.hadoop.fs.permission.FsPermission;
 
 /**
  *
@@ -73,6 +75,18 @@ public class KaboomConfiguration
 	private final Boolean useTempOpenFileDirectory;
 	private final Long periodicHdfsFlushInterval;
 	
+	/**
+	 * These are required for boom files
+	 */
+	
+	private final FsPermission boomFilePerms = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);
+	
+	private int boomFileBufferSize = 16 * 1024;
+	private short boomFileReplicas = 3;
+	private long boomFileBlocksize = 256 * 1024 * 1024;		
+	private String boomFileTmpPrefix = "_tmp_";	
+
+	
 	private static final Logger LOG = LoggerFactory.getLogger(KaboomConfiguration.class);
 	
 	public void logConfiguraton()
@@ -92,6 +106,11 @@ public class KaboomConfiguration
 		LOG.info("readyFlagPrevHoursCheck: {}", getReadyFlagPrevHoursCheck());
 		LOG.info("useTempOpenFileDirectory: {}", getUseTempOpenFileDirectory());
 		LOG.info("periodicHdfsFlushInterval: {}", getPeriodicHdfsFlushInterval());
+		
+		LOG.info("boomFileBufferSize: {}", getBoomFileBufferSize());
+		LOG.info("boomFileReplicas: {}", getBoomFileReplicas());
+		LOG.info("boomFileBlocksize: {}", getBoomFileBlocksize());
+		LOG.info("boomFileTmpPrefix: {}", getBoomFileTmpPrefix());
 		
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
@@ -135,11 +154,15 @@ public class KaboomConfiguration
 		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
-		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);		
-		curator = buildCuratorFramework();
+		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);				
 		
-		hadoopConfiguration = buildHadoopConfiguration();
+		boomFileBufferSize = propsParser.parseInteger("boom.file.buffer.size", boomFileBufferSize);
+		boomFileReplicas = propsParser.parseShort("boom.file.replicas", boomFileReplicas);
+		boomFileBlocksize = propsParser.parseLong("boom.file.block.size", boomFileBlocksize);
+		boomFileTmpPrefix = propsParser.parseString("boom.file.temp.prefix", boomFileTmpPrefix);
 		
+		curator = buildCuratorFramework();		
+		hadoopConfiguration = buildHadoopConfiguration();		
 		mapTopicToProxyUser(props);
 		mapProxyUserToHadoopFileSystem();		
 		mapTopicToHdfsPathFromProps(props);
@@ -190,10 +213,12 @@ public class KaboomConfiguration
 
 				LOG.info("HDFS output path property matched topic: {} path number: {} duration: {} directory: {}", topic, pathNumber, duration, directory);					
 				
-				TimeBasedHdfsOutputPath path = new TimeBasedHdfsOutputPath(proxyUserToFileSystem.get(topicToProxyUser.get(topic)), directory, duration);
-				
-				path.setPeriodicHdfsFlushInterval(periodicHdfsFlushInterval);
-				
+				TimeBasedHdfsOutputPath path = new TimeBasedHdfsOutputPath(
+					 proxyUserToFileSystem.get(topicToProxyUser.get(topic)), 
+					 this,
+					 directory, 
+					 duration);				
+								
 				ArrayList<TimeBasedHdfsOutputPath> paths = topicToHdfsPaths.get(topic);
 				
 				if (paths == null)
@@ -679,5 +704,45 @@ public class KaboomConfiguration
 	public Long getPeriodicHdfsFlushInterval()
 	{
 		return periodicHdfsFlushInterval;
+	}
+
+	/**
+	 * @return the boomFilePerms
+	 */
+	public FsPermission getBoomFilePerms()
+	{
+		return boomFilePerms;
+	}
+
+	/**
+	 * @return the boomFileBufferSize
+	 */
+	public int getBoomFileBufferSize()
+	{
+		return boomFileBufferSize;
+	}
+
+	/**
+	 * @return the boomFileReplicas
+	 */
+	public short getBoomFileReplicas()
+	{
+		return boomFileReplicas;
+	}
+
+	/**
+	 * @return the boomFileBlocksize
+	 */
+	public long getBoomFileBlocksize()
+	{
+		return boomFileBlocksize;
+	}
+
+	/**
+	 * @return the boomFileTmpPrefix
+	 */
+	public String getBoomFileTmpPrefix()
+	{
+		return boomFileTmpPrefix;
 	}
 }
