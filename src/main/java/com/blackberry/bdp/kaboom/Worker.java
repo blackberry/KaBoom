@@ -20,21 +20,21 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.ArrayList;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.blackberry.bdp.common.utils.conversion.Converter;
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import com.blackberry.bdp.krackle.consumer.Consumer;
+
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
-
-import com.blackberry.bdp.common.utils.conversion.Converter;
 import com.codahale.metrics.Meter;
-import java.util.ArrayList;
 
 public class Worker implements Runnable
 {
@@ -80,6 +80,7 @@ public class Worker implements Runnable
 	private String lowerOffsetsGaugeName;
 	
 	private Meter boomWritesMeter;
+	private Meter boomWritesMeterTopic;
 	
 	private ArrayList<TimeBasedHdfsOutputPath> hdfsOutputPaths;
 
@@ -262,8 +263,6 @@ public class Worker implements Runnable
 			 });
 	}
 
-	//Worker worker = new Worker(config, 	curator, topic, partition);
-	
 	public Worker(KaboomConfiguration config, CuratorFramework curator, String topic, int partition) throws Exception
 	{
 		this.config = config;
@@ -273,6 +272,7 @@ public class Worker implements Runnable
 		this.startTime = System.currentTimeMillis();
 		this.messagesWritten = 0;
 		this.hdfsOutputPaths = config.getTopicToHdfsPaths().get(topic);
+		this.boomWritesMeterTopic = config.getTopicToBoomWrites().get(topic);
 		
 		
 		partitionId = topic + "-" + partition;
@@ -582,6 +582,8 @@ public class Worker implements Runnable
 					{
 						path.getBoomWriter(timestamp, partitionId + "-" + offset +".bm").writeLine(timestamp, bytes, pos, length - pos);
 						boomWritesMeter.mark();
+						boomWritesMeterTopic.mark();
+						config.getTotalBoomWritesMeter().mark();
 					}
 
 					/*

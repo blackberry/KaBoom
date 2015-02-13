@@ -42,6 +42,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
+import com.blackberry.bdp.krackle.MetricRegistrySingleton;
+import com.codahale.metrics.Meter;
 
 /**
  *
@@ -74,6 +76,8 @@ public class KaboomConfiguration
 	private Integer readyFlagPrevHoursCheck;
 	private final Boolean useTempOpenFileDirectory;
 	private final Long periodicHdfsFlushInterval;
+	private final Map<String, Meter> topicToBoomWrites = new HashMap<>();
+	private final Meter totalBoomWritesMeter;
 	
 	/**
 	 * These are required for boom files
@@ -166,6 +170,8 @@ public class KaboomConfiguration
 		mapTopicToProxyUser(props);
 		mapProxyUserToHadoopFileSystem();		
 		mapTopicToHdfsPathFromProps(props);
+		
+		totalBoomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 	}
 	
 	/**
@@ -205,6 +211,11 @@ public class KaboomConfiguration
 				if (!topicToHdfsRootDir.containsKey(topic))
 				{					
 					topicToHdfsRootDir.put(topic, hdfsRootDir);
+				}
+				
+				if (!topicToBoomWrites.containsKey(topic))
+				{
+					getTopicToBoomWrites().put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes"));
 				}
 				
 				String directory = String.format("%s/%s", hdfsRootDir, e.getValue().toString());
@@ -744,5 +755,21 @@ public class KaboomConfiguration
 	public String getBoomFileTmpPrefix()
 	{
 		return boomFileTmpPrefix;
+	}
+
+	/**
+	 * @return the topicToBoomWrites
+	 */
+	public Map<String, Meter> getTopicToBoomWrites()
+	{
+		return topicToBoomWrites;
+	}
+
+	/**
+	 * @return the totalBoomWritesMeter
+	 */
+	public Meter getTotalBoomWritesMeter()
+	{
+		return totalBoomWritesMeter;
 	}
 }
