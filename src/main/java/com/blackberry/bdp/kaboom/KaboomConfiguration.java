@@ -169,7 +169,7 @@ public class KaboomConfiguration
 		boomFileBlocksize = propsParser.parseLong("boom.file.block.size", boomFileBlocksize);
 		boomFileTmpPrefix = propsParser.parseString("boom.file.temp.prefix", boomFileTmpPrefix);
 		periodicHdfsFlushInterval = propsParser.parseLong("boom.file.flush.interval", 30 * 1000l);
-		periodicFileCloseInterval = propsParser.parseLong("boom.file.periodic.closeExpired.interval", 60 * 1000l);
+		periodicFileCloseInterval = propsParser.parseLong("boom.file.close.expired.interval", 60 * 1000l);
 		
 		curator = buildCuratorFramework();		
 		hadoopConfiguration = buildHadoopConfiguration();		
@@ -222,12 +222,12 @@ public class KaboomConfiguration
 				
 				if (!topicToBoomWrites.containsKey(topic))
 				{
-					getTopicToBoomWrites().put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes"));
+					topicToBoomWrites.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes"));
 				}
 
 				if (!topicToHdfsFlushTime.containsKey(topic))
 				{
-					getTopicToBoomWrites().put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":hdfs flush time"));
+					topicToHdfsFlushTime.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":hdfs flush time"));
 				}
 				
 				String directory = String.format("%s/%s", hdfsRootDir, e.getValue().toString());
