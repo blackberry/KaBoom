@@ -148,6 +148,8 @@ public class KaboomConfiguration
 		Parser propsParser = new Parser(props);
 		
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));		
+		totalBoomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
+		totalHdfsFlushTime = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:hdfs flush time");
 		
 		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
@@ -175,10 +177,7 @@ public class KaboomConfiguration
 		hadoopConfiguration = buildHadoopConfiguration();		
 		mapTopicToProxyUser(props);
 		mapProxyUserToHadoopFileSystem();		
-		mapTopicToHdfsPathFromProps(props);
-		
-		totalBoomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
-		totalHdfsFlushTime = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:hdfs flush time");
+		mapTopicToHdfsPathFromProps(props);		
 	}
 	
 	/**
