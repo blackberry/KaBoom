@@ -35,6 +35,7 @@ public class TimeBasedHdfsOutputPath
 	private final Integer durationSeconds;	
 	private final Meter topicFlushTime;
 	private final Meter totalFlushTime;
+	private long lastPeriodicClosePollTime  = System.currentTimeMillis();
 
 	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();	
 	
@@ -68,6 +69,8 @@ public class TimeBasedHdfsOutputPath
 	
 	public FastBoomWriter getBoomWriter(long ts, String filename) throws IOException, Exception
 	{		
+		periodicCloseExpiredPoll();
+		
 		reusableRequestedStartTime = ts - ts % (this.durationSeconds * 1000);
 		reusableRequestedOutputFile = outputFileMap.get(reusableRequestedStartTime);
 		
@@ -103,19 +106,27 @@ public class TimeBasedHdfsOutputPath
 	
 	public void periodicCloseExpiredPoll()
 	{
+		if (lastPeriodicClosePollTime > System.currentTimeMillis() - config.getPeriodicFileCloseInterval())
+		{
+			return;
+		}
+		
 		Iterator<Map. Entry<Long,OutputFile>> iter = outputFileMap.entrySet().iterator();
 		
 		while (iter.hasNext())
 		{
 			Map.Entry<Long, OutputFile> entry = iter.next();
 
-			if (entry.getValue().closeTime < System.currentTimeMillis() - 60 * 1000)
+			if (entry.getValue().closeTime < System.currentTimeMillis() - 30 * 1000)
 			{
 				entry.getValue().close();
 				iter.remove();
-				LOG.info("Expired output file closed and removed from mapping ({} files still open): {}", outputFileMap.size(), entry.getValue());
+				LOG.info("[{}] expired open file has been closed: {}  ({} files still open): {}", partitionId, entry.getValue().openFilePath, outputFileMap.size());
 			}
+			LOG.info("[{}] {} does not expire until {}", partitionId, entry.getValue().openFilePath, dateString(entry.getValue().closeTime));
 		}
+		
+		lastPeriodicClosePollTime = System.currentTimeMillis();
 	}
 
 	/**

@@ -76,6 +76,7 @@ public class KaboomConfiguration
 	private Integer readyFlagPrevHoursCheck;
 	private final Boolean useTempOpenFileDirectory;
 	private final Long periodicHdfsFlushInterval;
+	private final Long periodicFileCloseInterval;
 	private final Map<String, Meter> topicToBoomWrites = new HashMap<>();
 	private final Map<String, Meter> topicToHdfsFlushTime = new HashMap<>();
 	private final Meter totalBoomWritesMeter;
@@ -112,6 +113,7 @@ public class KaboomConfiguration
 		LOG.info("readyFlagPrevHoursCheck: {}", getReadyFlagPrevHoursCheck());
 		LOG.info("useTempOpenFileDirectory: {}", getUseTempOpenFileDirectory());
 		LOG.info("periodicHdfsFlushInterval: {}", getPeriodicHdfsFlushInterval());
+		LOG.info("periodicFileCloseInterval: {}", getPeriodicFileCloseInterval());
 		
 		LOG.info("boomFileBufferSize: {}", getBoomFileBufferSize());
 		LOG.info("boomFileReplicas: {}", getBoomFileReplicas());
@@ -146,7 +148,7 @@ public class KaboomConfiguration
 		Parser propsParser = new Parser(props);
 		
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));		
-		periodicHdfsFlushInterval = propsParser.parseLong("kaboom.boomWriter.periodicHdfsFlushInterval", 0l);
+		
 		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
 		fileRotateInterval = propsParser.parseLong("fileRotateInterval", 60L * 3L * 1000L);
@@ -166,6 +168,8 @@ public class KaboomConfiguration
 		boomFileReplicas = propsParser.parseShort("boom.file.replicas", boomFileReplicas);
 		boomFileBlocksize = propsParser.parseLong("boom.file.block.size", boomFileBlocksize);
 		boomFileTmpPrefix = propsParser.parseString("boom.file.temp.prefix", boomFileTmpPrefix);
+		periodicHdfsFlushInterval = propsParser.parseLong("boom.file.flush.interval", 30 * 1000l);
+		periodicFileCloseInterval = propsParser.parseLong("boom.file.periodic.closeExpired.interval", 60 * 1000l);
 		
 		curator = buildCuratorFramework();		
 		hadoopConfiguration = buildHadoopConfiguration();		
@@ -796,5 +800,13 @@ public class KaboomConfiguration
 	public Meter getTotalHdfsFlushTime()
 	{
 		return totalHdfsFlushTime;
+	}
+
+	/**
+	 * @return the periodicFileCloseInterval
+	 */
+	public Long getPeriodicFileCloseInterval()
+	{
+		return periodicFileCloseInterval;
 	}
 }

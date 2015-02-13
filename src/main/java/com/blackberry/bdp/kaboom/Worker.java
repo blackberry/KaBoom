@@ -602,10 +602,10 @@ public class Worker implements Runnable
 					}
 
 				} 
-				catch (Throwable t)
+				catch (Exception e)
 				{
-					LOG.error("[{}] Error processing message.", getPartitionId(), t);
-					LOG.info("[{}] Deleting all tmp files", getPartitionId());
+					LOG.error("[{}] Error processing message: ", partitionId, e);
+					LOG.info("[{}] Deleting all tmp files", partitionId);
 					
 					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
 					{
