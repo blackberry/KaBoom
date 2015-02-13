@@ -31,10 +31,9 @@ public class FastBoomWriter
 	private long numAvroBlocksWritten = 0l;
 	private long numHdfsFlushedAVroBlocks = 0l;
 	private final String partitionId;
-	private Long periodicHdfsFlushInterval = null;
-	private final Meter hdfsFlushMeter;
-	private final Meter hdfsFlushMeterTopic;
-	private final Meter hdfsFlushMeterTotal;
+	private Long periodicHdfsFlushInterval = null;	
+	private final Timer hdfsFlushTimerTopic;
+	private final Timer hdfsFlushTimerTotal;
 	private final Timer hdfsFlushTimer;
 	
 	
@@ -83,16 +82,14 @@ public class FastBoomWriter
 
 	private final FSDataOutputStream  fsDataOut;
 
-	public FastBoomWriter(FSDataOutputStream out, String partitionId, Meter topicFlushTime, Meter totalFlushTime) throws IOException
+	public FastBoomWriter(FSDataOutputStream out, String partitionId, Timer topicFlushTimer, Timer totalFlushTimer) throws IOException
 	{
 		this.fsDataOut = out;
 		this.partitionId = partitionId;
-		this.hdfsFlushMeterTopic = topicFlushTime;
-		this.hdfsFlushMeterTotal = totalFlushTime;
-		this.hdfsFlushMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + this.partitionId + ":hdfs flush time");
+		this.hdfsFlushTimerTopic = topicFlushTimer;
+		this.hdfsFlushTimerTotal = totalFlushTimer;		
 		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");
 		
-
 		Random rand = new Random();
 		syncMarker = new byte[16];
 		rand.nextBytes(syncMarker);
@@ -114,7 +111,9 @@ public class FastBoomWriter
 			return;
 		}		
 				
-		final Timer.Context context = hdfsFlushTimer.time();
+		final Timer.Context timerContext = hdfsFlushTimer.time();
+		final Timer.Context timerContextTopic = hdfsFlushTimerTopic.time();
+		final Timer.Context timerContextTotal = hdfsFlushTimerTotal.time();
 		
 		try
 		{
@@ -154,16 +153,7 @@ public class FastBoomWriter
 				return;
 			}		
 
-			long hdfsFlushStartTs = System.currentTimeMillis();		
-			fsDataOut.hflush();
-			long hdfsFlushEndTs = System.currentTimeMillis();
-
-			lastHdfsFlushDurationMs = hdfsFlushEndTs - hdfsFlushStartTs;
-
-			hdfsFlushMeter.mark(lastHdfsFlushDurationMs);
-			hdfsFlushMeterTopic.mark(lastHdfsFlushDurationMs);
-			hdfsFlushMeterTotal.mark(lastHdfsFlushDurationMs);
-
+			fsDataOut.hflush();			
 			numHdfsFlushedAVroBlocks = numAvroBlocksWritten;
 			lastHdfsFlushTimestamp = System.currentTimeMillis();
 
@@ -171,7 +161,9 @@ public class FastBoomWriter
 		}
 		finally
 		{
-			context.stop();
+			timerContext.stop();
+			timerContextTopic.stop();
+			timerContextTotal.stop();
 		}
 		
 

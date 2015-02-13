@@ -289,18 +289,7 @@ public class KaBoom
 			for (Map.Entry<String, Worker> entry : partitionToWorkerMap.entrySet())
 			{
 				Worker w = entry.getValue();
-				
-				// Check the worker's output paths and close any that are expired
-				
-				LOG.debug("Worker assigned to {} has {} output path template", w.getPartitionId(), w.getHdfsOutputPaths().size());
-				
-				for (TimeBasedHdfsOutputPath outputPath : w.getHdfsOutputPaths())
-				{
-					outputPath.periodicCloseExpiredPoll();
-				}
-				
-				//  If there are any that are invalid, they need to stop working
-				
+
 				if (!validWorkingPartitions.containsKey(w.getPartitionId()))
 				{					
 					w.stop();

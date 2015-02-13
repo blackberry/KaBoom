@@ -17,7 +17,7 @@
 package com.blackberry.bdp.kaboom;
 
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
-import com.codahale.metrics.Meter;
+import com.codahale.metrics.Timer;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -37,14 +37,14 @@ public class FastBoomWriterTest {
 			.getLogger(FastBoomWriterTest.class);
 	private static final Charset UTF8 = Charset.forName("UTF8");
 	private static final Random rand = new Random();
-	private final Meter meter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("boom writes");
+	private final Timer timer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("boom writes");
 
 	@Test
 	public void testWriteFile() throws IOException {		
 		FileSystem.Statistics fsDataStats = null;
 		FileOutputStream out = new FileOutputStream("/tmp/test2.bm");		
 		FSDataOutputStream fsDataOut = new FSDataOutputStream(out, fsDataStats);
-		FastBoomWriter writer = new FastBoomWriter(fsDataOut, "unknown-partitionId1", meter, meter);
+		FastBoomWriter writer = new FastBoomWriter(fsDataOut, "unknown-partitionId1", timer, timer);
 
 
 		byte[] message = "This is a test.  Let's make the line a bit longer by writing some stuff here."
@@ -60,7 +60,7 @@ public class FastBoomWriterTest {
 		FileSystem.Statistics fsDataStats = null;
 		FileOutputStream out = new FileOutputStream("/tmp/test2.bm");		
 		FSDataOutputStream fsDataOut = new FSDataOutputStream(out, fsDataStats);
-		FastBoomWriter writer = new FastBoomWriter(fsDataOut, "unknown-partitionId2", meter, meter);
+		FastBoomWriter writer = new FastBoomWriter(fsDataOut, "unknown-partitionId2", timer, timer);
 
 		byte[] chars = "abc".getBytes(UTF8);
 		List<byte[]> messages = new ArrayList<>();

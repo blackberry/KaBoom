@@ -44,6 +44,7 @@ import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import com.codahale.metrics.Meter;
+import com.codahale.metrics.Timer;
 
 /**
  *
@@ -77,10 +78,10 @@ public class KaboomConfiguration
 	private final Boolean useTempOpenFileDirectory;
 	private final Long periodicHdfsFlushInterval;
 	private final Long periodicFileCloseInterval;
-	private final Map<String, Meter> topicToBoomWrites = new HashMap<>();
-	private final Map<String, Meter> topicToHdfsFlushTime = new HashMap<>();
+	private final Map<String, Meter> topicToBoomWritesMeter = new HashMap<>();
+	private final Map<String, Timer> topicToHdfsFlushTimer = new HashMap<>();
 	private final Meter totalBoomWritesMeter;
-	private final Meter totalHdfsFlushTime;
+	private final Timer totalHdfsFlushTimer;
 	
 	/**
 	 * These are required for boom files
@@ -149,7 +150,7 @@ public class KaboomConfiguration
 		
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));		
 		totalBoomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
-		totalHdfsFlushTime = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:hdfs flush time");
+		totalHdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:hdfs flush timer");
 		
 		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
@@ -219,14 +220,14 @@ public class KaboomConfiguration
 					topicToHdfsRootDir.put(topic, hdfsRootDir);
 				}
 				
-				if (!topicToBoomWrites.containsKey(topic))
+				if (!topicToBoomWritesMeter.containsKey(topic))
 				{
-					topicToBoomWrites.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes"));
+					topicToBoomWritesMeter.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes"));
 				}
 
-				if (!topicToHdfsFlushTime.containsKey(topic))
+				if (!topicToHdfsFlushTimer.containsKey(topic))
 				{
-					topicToHdfsFlushTime.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":hdfs flush time"));
+					topicToHdfsFlushTimer.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":hdfs flush timer"));
 				}
 				
 				String directory = String.format("%s/%s", hdfsRootDir, e.getValue().toString());
@@ -770,11 +771,11 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the topicToBoomWrites
+	 * @return the topicToBoomWritesMeter
 	 */
 	public Map<String, Meter> getTopicToBoomWrites()
 	{
-		return topicToBoomWrites;
+		return topicToBoomWritesMeter;
 	}
 
 	/**
@@ -786,19 +787,19 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the topicToHdfsFlushTime
+	 * @return the topicToHdfsFlushTimer
 	 */
-	public Map<String, Meter> getTopicToHdfsFlushTime()
+	public Map<String, Timer> getTopicToHdfsFlushTimer()
 	{
-		return topicToHdfsFlushTime;
+		return topicToHdfsFlushTimer;
 	}
 
 	/**
-	 * @return the totalHdfsFlushTime
+	 * @return the totalHdfsFlushTimer
 	 */
-	public Meter getTotalHdfsFlushTime()
+	public Timer getTotalHdfsFlushTimer()
 	{
-		return totalHdfsFlushTime;
+		return totalHdfsFlushTimer;
 	}
 
 	/**
