@@ -10,7 +10,6 @@
 package com.blackberry.bdp.kaboom;
 
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
-import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -27,7 +26,6 @@ public class FastBoomWriter
 	private static final Logger LOG = LoggerFactory.getLogger(FastBoomWriter.class);
 	private static final Charset UTF8 = Charset.forName("UTF8");
 	private long lastHdfsFlushTimestamp = System.currentTimeMillis();	
-	private long lastHdfsFlushDurationMs = 0l;
 	private long numAvroBlocksWritten = 0l;
 	private long numHdfsFlushedAVroBlocks = 0l;
 	private final String partitionId;
@@ -36,13 +34,14 @@ public class FastBoomWriter
 	private final Timer hdfsFlushTimerTotal;
 	private final Timer hdfsFlushTimer;
 	
-	
 	private static final byte[] MAGIC_NUMBER = new byte[]		 
 	{
 		'O', 'b', 'j', 1		 
 	};
 	
 	/**
+	 * Boom Avro Schema:
+	 * 
 		{
 		  "type": "record",
 		  "name": "logBlock",
@@ -56,7 +55,7 @@ public class FastBoomWriter
 					 "type": "record",
 					 "name": "messageWithMillis",
 					 "fields": [ 
-						{ "name": "ms",      "type": "long" },
+						{ "name": "ms", "type": "long" },
 						{ "name": "eventId", "type": "int", "default": 0 },
 						{ "name": "message", "type": "string" }
 					 ]
@@ -90,6 +89,9 @@ public class FastBoomWriter
 		this.hdfsFlushTimerTotal = totalFlushTimer;		
 		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");
 		
+		
+		
+		
 		Random rand = new Random();
 		syncMarker = new byte[16];
 		rand.nextBytes(syncMarker);
@@ -111,8 +113,8 @@ public class FastBoomWriter
 			return;
 		}		
 				
-		final Timer.Context timerContext = hdfsFlushTimer.time();
 		final Timer.Context timerContextTopic = hdfsFlushTimerTopic.time();
+		final Timer.Context timerContext = hdfsFlushTimer.time();
 		final Timer.Context timerContextTotal = hdfsFlushTimerTotal.time();
 		
 		try
@@ -121,43 +123,41 @@ public class FastBoomWriter
 
 			if (logBlockBuffer.position() > 0)
 			{
-				LOG.info("Log block write forced during periodic HDFS flush since buffer position is {}", logBlockBuffer.position());
+				LOG.trace("Log block write forced during periodic HDFS flush since buffer position is {}", logBlockBuffer.position());
 				writeLogBlock();				
 				logBlockBufferWritten = true;			
 			}
 			else
 			{
-				LOG.info("Skipping forced log block write in periodic HDFS flush since log block buffer position is {}", logBlockBuffer.position());					 
+				LOG.trace("Skipping forced log block write in periodic HDFS flush since log block buffer position is {}", logBlockBuffer.position());					 
 			}
 
 			// Need to check time since last avro write again as writing the log block could call the avro block write
 
 			if (avroBlockBuffer.position() > 0)
 			{
-				LOG.info("Avro block write forced during periodic HDFS flush since buffer position is {}", avroBlockBuffer.position());
+				LOG.trace("Avro block write forced during periodic HDFS flush since buffer position is {}", avroBlockBuffer.position());
 				writeAvroBlock();
 			}
 			else
 			{
 				if (logBlockBufferWritten == true)
 				{
-					LOG.info("A log block write was forced and likely incured a call to write the avro block because the avro block buffer position is now {}", avroBlockBuffer.position());
+					LOG.trace("A log block write was forced and likely incured a call to write the avro block because the avro block buffer position is now {}", avroBlockBuffer.position());
 				}
 
-				LOG.info("Skipping forced avro block write since avro block buffer position is {}", avroBlockBuffer.position());					 
+				LOG.trace("Skipping forced avro block write since avro block buffer position is {}", avroBlockBuffer.position());					 
 			}
 
 			if (numAvroBlocksWritten == 0 || numHdfsFlushedAVroBlocks == numAvroBlocksWritten)
 			{
-				LOG.info("Skipping forced HDFS flush as there haven't been any new avro blocks written");
+				LOG.trace("Skipping forced HDFS flush as there haven't been any new avro blocks written");
 				return;
 			}		
 
 			fsDataOut.hflush();			
 			numHdfsFlushedAVroBlocks = numAvroBlocksWritten;
 			lastHdfsFlushTimestamp = System.currentTimeMillis();
-
-			LOG.info("HDFS Flush completed in {} ms", getLastHdfsFlushDurationMs());			
 		}
 		finally
 		{
@@ -441,11 +441,4 @@ public class FastBoomWriter
 		this.periodicHdfsFlushInterval = periodicHdfsFlushInterval;
 	}
 
-	/**
-	 * @return the lastHdfsFlushDurationMs
-	 */
-	public long getLastHdfsFlushDurationMs()
-	{
-		return lastHdfsFlushDurationMs;
-	}
 }
