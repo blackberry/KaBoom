@@ -634,18 +634,18 @@ public class Worker implements Runnable
 				
 				if (verifyOffset == offset)
 				{
-					LOG.info("[{}] offset {} validated", offset);
+					LOG.info("[{}] offset {} validated", partitionId, offset);
 				}
 				else
 				{
 					LOG.error("[{}] offset {} validation error because {} was returned", partitionId, offset, verifyOffset);
 				}
 			
-				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.", getPartitionId(), offset, maxTimestamp);
+				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.", partitionId, offset, maxTimestamp);
 			} 
 			catch (Exception e)
 			{
-				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper", getPartitionId(), e, offset, maxTimestamp);
+				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper", partitionId, offset, maxTimestamp, e);
 			}
 
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagGaugeName);

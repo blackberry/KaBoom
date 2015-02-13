@@ -11,6 +11,7 @@ package com.blackberry.bdp.kaboom;
 
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import com.codahale.metrics.Gauge;
+import com.codahale.metrics.Meter;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 import java.io.IOException;
@@ -33,8 +34,11 @@ public class FastBoomWriter
 	private long numHdfsFlushedAVroBlocks = 0l;
 	private String partitionId;
 	private Long periodicHdfsFlushInterval = null;
-	private static final byte[] MAGIC_NUMBER = new byte[]
-		 
+	private Meter hdfsFlushMeter;
+	private Meter hdfsFlushMeterTopic;
+	private Meter hdfsFlushMeterTotal;
+	
+	private static final byte[] MAGIC_NUMBER = new byte[]		 
 	{
 		'O', 'b', 'j', 1		 
 	};
@@ -79,47 +83,19 @@ public class FastBoomWriter
 
 	private final FSDataOutputStream  fsDataOut;
 
-	public FastBoomWriter(FSDataOutputStream out, String partitionId) throws IOException
+	public FastBoomWriter(FSDataOutputStream out, String partitionId, Meter topicFlushTime, Meter totalFlushTime) throws IOException
 	{
 		this.fsDataOut = out;
 		this.partitionId = partitionId;
+		this.hdfsFlushMeterTopic = topicFlushTime;
+		this.hdfsFlushMeterTotal = totalFlushTime;
+		this.hdfsFlushMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":hdfs flush time");
 
 		Random rand = new Random();
 		syncMarker = new byte[16];
 		rand.nextBytes(syncMarker);
 
 		writeHeader();
-		
-		String metricNamelastHdfsFlushTime = "kaboom:partitions:" + partitionId + ":last hdfs flush ms";
-
-		String[] metrics_to_remove = {metricNamelastHdfsFlushTime};
-
-		for (final String metric_name : metrics_to_remove)
-		{
-			if (MetricRegistrySingleton.getInstance().getMetricsRegistry()
-				 .getGauges(new MetricFilter()
-					  {
-						  @Override
-						  public boolean matches(String s, Metric m)
-						  {
-							  return s.equals(metric_name);
-						  }
-				 }).size() > 0)
-			{
-				LOG.debug("Removing existing metric: '{}'", metric_name);
-				MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(metric_name);
-			}
-		}		
-		
-		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register(metricNamelastHdfsFlushTime, new Gauge<Long>()
-				  {
-					  @Override
-					  public Long getValue()
-					  {
-						  return lastHdfsFlushDurationMs;
-					  }
-			 });		
 	}
 	
 	private Long msSinceLastHdfsFlush() 
@@ -177,10 +153,15 @@ public class FastBoomWriter
 		long hdfsFlushEndTs = System.currentTimeMillis();
 		
 		lastHdfsFlushDurationMs = hdfsFlushEndTs - hdfsFlushStartTs;
+		
+		hdfsFlushMeter.mark(lastHdfsFlushDurationMs);
+		hdfsFlushMeterTopic.mark(lastHdfsFlushDurationMs);
+		hdfsFlushMeterTotal.mark(lastHdfsFlushDurationMs);
+		
 		numHdfsFlushedAVroBlocks = numAvroBlocksWritten;
 		lastHdfsFlushTimestamp = System.currentTimeMillis();
 		
-		LOG.info("HDFS Flush completed in {} ms", lastHdfsFlushDurationMs);
+		LOG.info("HDFS Flush completed in {} ms", getLastHdfsFlushDurationMs());
 	}
 
 	private void writeHeader() throws IOException
@@ -453,5 +434,13 @@ public class FastBoomWriter
 	public void setPeriodicHdfsFlushInterval(Long periodicHdfsFlushInterval)
 	{
 		this.periodicHdfsFlushInterval = periodicHdfsFlushInterval;
+	}
+
+	/**
+	 * @return the lastHdfsFlushDurationMs
+	 */
+	public long getLastHdfsFlushDurationMs()
+	{
+		return lastHdfsFlushDurationMs;
 	}
 }

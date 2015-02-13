@@ -6,6 +6,7 @@
 package com.blackberry.bdp.kaboom;
 
 import com.blackberry.bdp.common.utils.conversion.Converter;
+import com.codahale.metrics.Meter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -27,10 +28,13 @@ public class TimeBasedHdfsOutputPath
 	private static final Logger LOG = LoggerFactory.getLogger(TimeBasedHdfsOutputPath.class);
 
 	private final KaboomConfiguration config;
+	private String topic;
 	private final FileSystem fileSystem;
 	private String partitionId = "unknown-partitionId";
 	private final String dirTemplate;
 	private final Integer durationSeconds;	
+	private final Meter topicFlushTime;
+	private final Meter totalFlushTime;
 
 	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();	
 	
@@ -43,12 +47,15 @@ public class TimeBasedHdfsOutputPath
 	private long reusableRequestedStartTime;
 	private OutputFile reusableRequestedOutputFile;
 	
-	public TimeBasedHdfsOutputPath(FileSystem fileSystem, KaboomConfiguration kaboomConfig, String pathTemplate, Integer durationSeconds)
+	public TimeBasedHdfsOutputPath(FileSystem fileSystem, String topic, KaboomConfiguration kaboomConfig, String pathTemplate, Integer durationSeconds)
 	{
 		this.fileSystem = fileSystem;
+		this.topic = topic;
 		this.config = kaboomConfig;
 		this.durationSeconds = durationSeconds;
 		this.dirTemplate = pathTemplate;
+		this.totalFlushTime = config.getTotalHdfsFlushTime();		
+		this.topicFlushTime = config.getTopicToHdfsFlushTime().get(topic);
 	}
 	
 	private static String dateString(Long ts)
@@ -169,7 +176,7 @@ public class TimeBasedHdfsOutputPath
 					  config.getBoomFileBlocksize(), 
 					  null);
 				 
-				 boomWriter = new FastBoomWriter(fsDataOut, partitionId);						 
+				 boomWriter = new FastBoomWriter(fsDataOut, partitionId, topicFlushTime, totalFlushTime);
 				 boomWriter.setPeriodicHdfsFlushInterval(config.getPeriodicHdfsFlushInterval());				 
 
 			} 

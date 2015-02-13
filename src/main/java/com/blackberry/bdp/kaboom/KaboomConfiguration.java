@@ -77,7 +77,9 @@ public class KaboomConfiguration
 	private final Boolean useTempOpenFileDirectory;
 	private final Long periodicHdfsFlushInterval;
 	private final Map<String, Meter> topicToBoomWrites = new HashMap<>();
+	private final Map<String, Meter> topicToHdfsFlushTime = new HashMap<>();
 	private final Meter totalBoomWritesMeter;
+	private final Meter totalHdfsFlushTime;
 	
 	/**
 	 * These are required for boom files
@@ -172,6 +174,7 @@ public class KaboomConfiguration
 		mapTopicToHdfsPathFromProps(props);
 		
 		totalBoomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
+		totalHdfsFlushTime = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:hdfs flush time");
 	}
 	
 	/**
@@ -217,6 +220,11 @@ public class KaboomConfiguration
 				{
 					getTopicToBoomWrites().put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes"));
 				}
+
+				if (!topicToHdfsFlushTime.containsKey(topic))
+				{
+					getTopicToBoomWrites().put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":hdfs flush time"));
+				}
 				
 				String directory = String.format("%s/%s", hdfsRootDir, e.getValue().toString());
 				String durationProperty = String.format("topic.%s.hdfsDir.%d.duration", topic, Integer.parseInt(pathNumber));
@@ -226,6 +234,7 @@ public class KaboomConfiguration
 				
 				TimeBasedHdfsOutputPath path = new TimeBasedHdfsOutputPath(
 					 proxyUserToFileSystem.get(topicToProxyUser.get(topic)), 
+					 topic,
 					 this,
 					 directory, 
 					 duration);				
@@ -771,5 +780,21 @@ public class KaboomConfiguration
 	public Meter getTotalBoomWritesMeter()
 	{
 		return totalBoomWritesMeter;
+	}
+
+	/**
+	 * @return the topicToHdfsFlushTime
+	 */
+	public Map<String, Meter> getTopicToHdfsFlushTime()
+	{
+		return topicToHdfsFlushTime;
+	}
+
+	/**
+	 * @return the totalHdfsFlushTime
+	 */
+	public Meter getTotalHdfsFlushTime()
+	{
+		return totalHdfsFlushTime;
 	}
 }
