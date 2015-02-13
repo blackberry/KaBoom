@@ -28,7 +28,7 @@ public class TimeBasedHdfsOutputPath
 	private static final Logger LOG = LoggerFactory.getLogger(TimeBasedHdfsOutputPath.class);
 
 	private final KaboomConfiguration config;
-	private String topic;
+	private final String topic;
 	private final FileSystem fileSystem;
 	private String partitionId = "unknown-partitionId";
 	private final String dirTemplate;
@@ -55,7 +55,7 @@ public class TimeBasedHdfsOutputPath
 		this.durationSeconds = durationSeconds;
 		this.dirTemplate = pathTemplate;
 		this.totalFlushTime = config.getTotalHdfsFlushTime();		
-		this.topicFlushTime = config.getTopicToHdfsFlushTime().get(topic);
+		this.topicFlushTime = config.getTopicToHdfsFlushTime().get(this.topic);
 	}
 	
 	private static String dateString(Long ts)
