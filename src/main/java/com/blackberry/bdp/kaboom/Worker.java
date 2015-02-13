@@ -81,6 +81,7 @@ public class Worker implements Runnable
 	
 	private Meter boomWritesMeter;
 	private Meter boomWritesMeterTopic;
+	private Meter boomWritesMeterTotal;
 	
 	private ArrayList<TimeBasedHdfsOutputPath> hdfsOutputPaths;
 
@@ -273,6 +274,7 @@ public class Worker implements Runnable
 		this.messagesWritten = 0;
 		this.hdfsOutputPaths = config.getTopicToHdfsPaths().get(topic);
 		this.boomWritesMeterTopic = config.getTopicToBoomWrites().get(topic);
+		this.boomWritesMeterTotal = config.getTotalBoomWritesMeter();
 		
 		
 		partitionId = topic + "-" + partition;
@@ -581,9 +583,9 @@ public class Worker implements Runnable
 					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
 					{
 						path.getBoomWriter(timestamp, partitionId + "-" + offset +".bm").writeLine(timestamp, bytes, pos, length - pos);
-						boomWritesMeter.mark();
+						boomWritesMeter.mark();						
 						boomWritesMeterTopic.mark();
-						config.getTotalBoomWritesMeter().mark();
+						boomWritesMeterTotal.mark();
 					}
 
 					/*
@@ -625,6 +627,19 @@ public class Worker implements Runnable
 			{
 				storeOffset();
 				storeOffsetTimestamp(getPartitionId(), maxTimestamp);
+				
+				// Let's validate that the ZK offset was written correctly... 
+				
+				long verifyOffset = getOffset();
+				
+				if (verifyOffset == offset)
+				{
+					LOG.info("[{}] offset {} validated", offset);
+				}
+				else
+				{
+					LOG.error("[{}] offset {} validation error because {} was returned", partitionId, offset, verifyOffset);
+				}
 			
 				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.", getPartitionId(), offset, maxTimestamp);
 			} 
@@ -658,9 +673,13 @@ public class Worker implements Runnable
 		{
 			curator.create().creatingParentsIfNeeded()
 				 .withMode(CreateMode.PERSISTENT).forPath(zkPath, Converter.getBytes(offset));
-		} else
+			
+			LOG.info("[{}] new ZK path created to write offset {} to {}", partitionId, offset, zkPath);
+		} 
+		else
 		{
 			curator.setData().forPath(zkPath, Converter.getBytes(offset));
+			LOG.info("[{}] wrote offset {} to existing path {}", partitionId, offset, zkPath);
 		}
 
 	}
@@ -673,12 +692,15 @@ public class Worker implements Runnable
 	{
 		if (curator.checkExists().forPath(zkPath) == null)
 		{
+			LOG.info("[{}] offset path {} does not exist, returning zero", partitionId, zkPath);
 			return 0L;
 		} 
 		else
 		{
-			long zkOffset = Converter.longFromBytes(curator.getData().forPath(zkPath), 0);
-
+			long zkOffset = Converter.longFromBytes(curator.getData().forPath(zkPath), 0);			
+			
+			LOG.info("[{}] offset {} found in path {}", partitionId, zkOffset, zkPath);
+			
 			if (curator.checkExists().forPath(zkPath_offSetOverride) != null)
 			{
 				long zkOffsetOverride = Converter.longFromBytes(curator.getData().forPath(zkPath_offSetOverride), 0);
