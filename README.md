@@ -79,7 +79,7 @@ The file created for a message received at the time of this writing for partitio
 
 hdfs://hadoop.site.cluster-01/service/82/devtest/logs/20150212/17/test1/data/0_12345678.bm
 
-### Example Configuration FIle: /opt/klogger/config/klogger.properties (defines Klogger configuration, topics, and ports)
+### Example Configuration FIle: /opt/kaboom/config/kaboom.properties (defines Klogger configuration, topics, and ports)
 ```
 # This must be unique amongst all KaBoom instances
 kaboom.id=666

@@ -123,7 +123,7 @@ public class TimeBasedHdfsOutputPath
 				iter.remove();
 				LOG.info("[{}] expired open file has been closed: {}  ({} files still open): {}", partitionId, entry.getValue().openFilePath, outputFileMap.size());
 			}
-			LOG.info("[{}] {} does not expire until {}", partitionId, entry.getValue().openFilePath, dateString(entry.getValue().closeTime));
+			LOG.trace("[{}] {} does not expire until {}", partitionId, entry.getValue().openFilePath, dateString(entry.getValue().closeTime));
 		}
 		
 		lastPeriodicClosePollTime = System.currentTimeMillis();
