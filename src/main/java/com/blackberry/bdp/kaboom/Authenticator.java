@@ -170,10 +170,12 @@ public class Authenticator {
 			
 
 			try {
-				if (UserGroupInformation.getLoginUser().isFromKeytab() == false) 
-				{
+				if (UserGroupInformation.getLoginUser().isFromKeytab() == false) 					
+				{					
 					LOG.error("Using a keytab for authentication is {}, shutting down", UserGroupInformation.getLoginUser().isFromKeytab());
-					LOG.info("Is the current user from keytab: {}", curUser.isFromKeytab());
+					LOG.info("curUser.isFromKeytab(): {}", curUser.isFromKeytab());
+					LOG.info("UserGroupInformation.getCurrentUser().isLoginKeytabBased(): {}", UserGroupInformation.getCurrentUser().isLoginKeytabBased());
+					LOG.info("UserGroupInformation.isLoginKeytabBased(): {}", UserGroupInformation.isLoginKeytabBased());
 					System.exit(1);
 				}
 			} catch (IOException e) {
