@@ -167,8 +167,10 @@ public class Authenticator {
 			}
 
 			try {
-				if (UserGroupInformation.getLoginUser().isFromKeytab() == false) {
-					LOG.error("Not using a keytab for authentication.  Shutting down.");
+				if (UserGroupInformation.getLoginUser().isFromKeytab() == false) 
+				{
+					LOG.error("Using a keytab for authentication is {}, shutting down", UserGroupInformation.getLoginUser().isFromKeytab());
+					LOG.info("Is the current user from keytab: {}", curUser.isFromKeytab());
 					System.exit(1);
 				}
 			} catch (IOException e) {
