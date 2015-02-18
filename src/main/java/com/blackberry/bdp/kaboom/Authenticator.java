@@ -176,6 +176,7 @@ public class Authenticator {
 					LOG.info("curUser.isFromKeytab(): {}", curUser.isFromKeytab());
 					LOG.info("UserGroupInformation.getCurrentUser().isLoginKeytabBased(): {}", UserGroupInformation.getCurrentUser().isLoginKeytabBased());
 					LOG.info("UserGroupInformation.isLoginKeytabBased(): {}", UserGroupInformation.isLoginKeytabBased());
+					LOG.info("curUser.getAuthenticationMethod(): {}", curUser.getAuthenticationMethod());
 					System.exit(1);
 				}
 			} catch (IOException e) {
