@@ -1,12 +1,33 @@
+Changes in 0.7.2:
+
+- Bumps Krackle dependency to 0.7.10 to have the consumer's broker socket have the keep alive flag set
+
+Changes in 0.7.1:
+
+- New timer metrics for HDFS flush time for topic-partition, topic, and total per server
+- New meter metrics for boom writes for topic-partition, topic, and total per server
+- Adds new required configuration option: hadoop.fs.uri
+- Adds new required topic configuration for HDFS root directory (string): topic.<topicName>.hdfsRootDir
+- Supports multiple numbered template based HDFS output paths per topic 
+- Topic HDFS output paths are now configurable to be left open for specific durations
+- Adds new optional configuration option (boolean): kaboom.useTempOpenFileDirectory
+- Adds new optional configuration option (Integer): boom.file.buffer.size, default=16384
+- Adds new optional configuration option (Short): boom.file.replicas, default=3
+- Adds new optional configuration option (Long): boom.file.block.size=268435456
+- Adds new optional configuration option (String): boom.file.temp.prefix, default=_tmp_
+- Adds new optional configuration option (Long): boom.file.flush.interval, default=30000
+- Adds new optional configuration option (Long): boom.file.close.expired.interval, default=60000
+
+
 Changes in 0.7.0:
 
 - Deprecates all CDH-specific content, configuration, and project files
 - New dependency on Krackle 0.7.7 for configuring socket timeouts
 - New KaboomConfiguration class that encapsulates all the configuration
-- New accessor methods for intantiating CuratorFramework objects
+- New accessor methods for instantiating CuratorFramework objects
 - Project builds produce an RPM artifact 
 - Fixes synchronization on non-final workersLock object (used when instantiating metrics)
-- Removes unused import java.util.Calendar
+- Removes unused imports
 - Worker.java, int length; byte version; int pos; are no longer initialized with default values that are never used
 - New method: private Map<String, String> getTopicPathsFromProps(Properties props)
 - New method: private Map<String, String> getTopicProxyUsersFromProps(Properties props)
