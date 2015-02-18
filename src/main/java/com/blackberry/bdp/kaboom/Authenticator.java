@@ -145,6 +145,7 @@ public class Authenticator {
 			UserGroupInformation curUser = null;
 			if (prevUser != null && prevUser.equals(newUser)) {
 				try {
+					LOG.info("Attempting login as {} with cached credentials", prevUser.getPrincipal());
 					curUser = UserGroupInformation.getLoginUser();
 				} catch (IOException e) {
 					LOG.warn("User unexpectedly had no active login. Continuing with "
@@ -166,18 +167,16 @@ public class Authenticator {
 			} else {
 				LOG.debug("{}: Using existing principal login: {}", this, curUser);
 			}
-			
-			
 
 			try {
 				if (UserGroupInformation.getLoginUser().isFromKeytab() == false) 					
 				{					
-					LOG.error("Using a keytab for authentication is {}, shutting down", UserGroupInformation.getLoginUser().isFromKeytab());
-					LOG.info("curUser.isFromKeytab(): {}", curUser.isFromKeytab());
-					LOG.info("UserGroupInformation.getCurrentUser().isLoginKeytabBased(): {}", UserGroupInformation.getCurrentUser().isLoginKeytabBased());
-					LOG.info("UserGroupInformation.isLoginKeytabBased(): {}", UserGroupInformation.isLoginKeytabBased());
-					LOG.info("curUser.getAuthenticationMethod(): {}", curUser.getAuthenticationMethod());
-					System.exit(1);
+					LOG.warn("Using a keytab for authentication is {}", UserGroupInformation.getLoginUser().isFromKeytab());
+					LOG.warn("curUser.isFromKeytab(): {}", curUser.isFromKeytab());
+					LOG.warn("UserGroupInformation.getCurrentUser().isLoginKeytabBased(): {}", UserGroupInformation.getCurrentUser().isLoginKeytabBased());
+					LOG.warn("UserGroupInformation.isLoginKeytabBased(): {}", UserGroupInformation.isLoginKeytabBased());
+					LOG.warn("curUser.getAuthenticationMethod(): {}", curUser.getAuthenticationMethod());
+					//System.exit(1);
 				}
 			} catch (IOException e) {
 				LOG.error("Failed to get login user.", e);
