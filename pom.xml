@@ -303,14 +303,19 @@ limitations under the License.
 						<require>shadow-utils</require>
 					</requires>
 
+					<defaultDirmode>755</defaultDirmode>
+					<defaultFilemode>644</defaultFilemode>
+					<defaultGroupname>kaboom</defaultGroupname>
+					<defaultUsername>kaboom</defaultUsername>
+
 					<mappings>
 
 						<!-- Libraries -->
 						<mapping>
 							<directory>/opt/kaboom/lib</directory>
-							<filemode>644</filemode>
-							<username>root</username>
-							<groupname>root</groupname>
+							<!--<filemode>644</filemode>
+							<username>kaboom</username>
+							<groupname>kaboom</groupname>-->
 							<artifact></artifact>
 							<dependency/>
 						</mapping>
@@ -318,14 +323,13 @@ limitations under the License.
 						<!-- Config -->
 						<mapping>
 							<directory>/opt/kaboom/config</directory>
-							<filemode>644</filemode>
-							<username>kafka</username>
-							<groupname>kafka</groupname>
+							<!--<filemode>644</filemode>
+							<username>kaboom</username>
+							<groupname>kaboom</groupname>-->
 							<sources>
 								<source>
 									<location>${project.basedir}/conf</location>
 									<includes>
-										<include>*.properties</include>
 										<include>*</include>
 									</includes>
 								</source>
@@ -336,8 +340,8 @@ limitations under the License.
 						<mapping>
 							<directory>/opt/kaboom/bin</directory>
 							<filemode>744</filemode>
-							<username>kafka</username>
-							<groupname>kafka</groupname>
+							<!--<username>kaboom</username>
+							<groupname>kaboom</groupname>-->
 							<sources>
 								<source>
 									<location>${project.basedir}/bin</location>
@@ -351,17 +355,17 @@ limitations under the License.
 						<!-- PID dir -->
 						<mapping>
 							<directory>/var/run/kaboom</directory>
-							<filemode>755</filemode>
-							<username>kafka</username>
-							<groupname>kafka</groupname>
+							<!--<filemode>755</filemode>
+							<username>kaboom</username>
+							<groupname>kaboom</groupname>-->
 						</mapping>
 
 						<!-- Logs -->
 						<mapping>
 							<directory>/var/log/kaboom</directory>
-							<filemode>755</filemode>
-							<username>kafka</username>
-							<groupname>kafka</groupname>
+							<!--<filemode>755</filemode>
+							<username>kaboom</username>
+							<groupname>kaboom</groupname>-->
 						</mapping>
 						
 					</mappings>
