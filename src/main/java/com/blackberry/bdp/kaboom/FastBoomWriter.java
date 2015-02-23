@@ -33,6 +33,7 @@ public class FastBoomWriter
 	private final Timer hdfsFlushTimerTopic;
 	private final Timer hdfsFlushTimerTotal;
 	private final Timer hdfsFlushTimer;
+	private final Timer compressionTimer;
 	
 	private static final byte[] MAGIC_NUMBER = new byte[]		 
 	{
@@ -81,16 +82,19 @@ public class FastBoomWriter
 
 	private final FSDataOutputStream  fsDataOut;
 
-	public FastBoomWriter(FSDataOutputStream out, String partitionId, Timer topicFlushTimer, Timer totalFlushTimer) throws IOException
+	public FastBoomWriter(FSDataOutputStream out, 
+		 String partitionId, 
+		 Timer topicFlushTimer, 
+		 Timer totalFlushTimer,
+		 Timer compressionTimer) throws IOException
 	{
 		this.fsDataOut = out;
 		this.partitionId = partitionId;
 		this.hdfsFlushTimerTopic = topicFlushTimer;
 		this.hdfsFlushTimerTotal = totalFlushTimer;		
+		this.compressionTimer = compressionTimer;			 
+		
 		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");
-		
-		
-		
 		
 		Random rand = new Random();
 		syncMarker = new byte[16];
@@ -378,26 +382,34 @@ public class FastBoomWriter
 		encodeLong(avroBlockRecordCount);
 		fsDataOut.write(longBytes, 0, longBuffer.position());
 
-		while (true)
+		final Timer.Context timerContextCompression = compressionTimer.time();
+		try
 		{
-			deflater.reset();
-			deflater.setInput(avroBlockBytes, 0, avroBlockBuffer.position());
-			deflater.finish();
-			
-			compressedSize = deflater.deflate(compressedBlockBytes, 0, compressedBlockBytes.length);
-			
-			if (compressedSize == compressedBlockBytes.length)
+			while (true)
 			{
-				// it probably didn't actually compress all of it. Expand and retry
-				LOG.debug("Expanding compression buffer {} -> {}", compressedBlockBytes.length, compressedBlockBytes.length * 2);
-				compressedBlockBytes = new byte[compressedBlockBytes.length * 2];
+				deflater.reset();
+				deflater.setInput(avroBlockBytes, 0, avroBlockBuffer.position());
+				deflater.finish();
+
+				compressedSize = deflater.deflate(compressedBlockBytes, 0, compressedBlockBytes.length);
+
+				if (compressedSize == compressedBlockBytes.length)
+				{
+					// it probably didn't actually compress all of it. Expand and retry
+					LOG.debug("Expanding compression buffer {} -> {}", compressedBlockBytes.length, compressedBlockBytes.length * 2);
+					compressedBlockBytes = new byte[compressedBlockBytes.length * 2];
+				}
+				else
+				{
+					LOG.debug("Compressed {} bytes to {} bytes ({}% reduction)",
+						 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
+					break;
+				}
 			}
-			else
-			{
-				LOG.debug("Compressed {} bytes to {} bytes ({}% reduction)",
-					 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
-				break;
-			}
+		}
+		finally
+		{
+			timerContextCompression.stop();
 		}
 
 		encodeLong(compressedSize);

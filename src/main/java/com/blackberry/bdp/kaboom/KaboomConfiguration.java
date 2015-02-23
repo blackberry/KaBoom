@@ -82,6 +82,7 @@ public class KaboomConfiguration
 	private final Map<String, Timer> topicToHdfsFlushTimer = new HashMap<>();
 	private final Meter totalBoomWritesMeter;
 	private final Timer totalHdfsFlushTimer;
+	private final Timer totalCompressionTimer;
 	
 	/**
 	 * These are required for boom files
@@ -151,6 +152,7 @@ public class KaboomConfiguration
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));		
 		totalBoomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 		totalHdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:hdfs flush timer");
+		totalCompressionTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:compression timer");
 		
 		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
@@ -808,5 +810,13 @@ public class KaboomConfiguration
 	public Long getPeriodicFileCloseInterval()
 	{
 		return periodicFileCloseInterval;
+	}
+
+	/**
+	 * @return the totalCompressionTimer
+	 */
+	public Timer getTotalCompressionTimer()
+	{
+		return totalCompressionTimer;
 	}
 }

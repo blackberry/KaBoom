@@ -187,7 +187,7 @@ public class TimeBasedHdfsOutputPath
 					  config.getBoomFileBlocksize(), 
 					  null);
 				 
-				 boomWriter = new FastBoomWriter(fsDataOut, partitionId, topicFlushTimer, totalFlushTimer);
+				 boomWriter = new FastBoomWriter(fsDataOut, partitionId, topicFlushTimer, totalFlushTimer, config.getTotalCompressionTimer());
 				 boomWriter.setPeriodicHdfsFlushInterval(config.getPeriodicHdfsFlushInterval());				 
 
 			} 

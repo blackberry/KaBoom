@@ -492,6 +492,11 @@ public class Worker implements Runnable
 					offset = consumer.getNextOffset();
 					lag = consumer.getHighWaterMark() - offset;
 
+					
+					// (byte) 0xFE: -2
+					// (byte) 0x00: 0
+					// (byte) 0xFF: -1
+
 					// Check for version
 					if (bytes[0] == (byte) 0xFE)
 					{
