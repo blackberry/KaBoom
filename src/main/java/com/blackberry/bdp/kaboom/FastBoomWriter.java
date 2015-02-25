@@ -34,6 +34,7 @@ public class FastBoomWriter
 	private final Timer hdfsFlushTimerTotal;
 	private final Timer hdfsFlushTimer;
 	private final Timer compressionTimer;
+	private boolean useNativeCompression = false;
 	
 	private static final byte[] MAGIC_NUMBER = new byte[]		 
 	{
@@ -385,25 +386,33 @@ public class FastBoomWriter
 		final Timer.Context timerContextCompression = compressionTimer.time();
 		try
 		{
-			while (true)
+			if (useNativeCompression)
 			{
-				deflater.reset();
-				deflater.setInput(avroBlockBytes, 0, avroBlockBuffer.position());
-				deflater.finish();
-
-				compressedSize = deflater.deflate(compressedBlockBytes, 0, compressedBlockBytes.length);
-
-				if (compressedSize == compressedBlockBytes.length)
+				compressedBlockBytes = KaBoom.compress(compressedBlockBytes, 6);
+				compressedSize = compressedBlockBytes.length;
+			}
+			else
+			{
+				while (true)
 				{
-					// it probably didn't actually compress all of it. Expand and retry
-					LOG.debug("Expanding compression buffer {} -> {}", compressedBlockBytes.length, compressedBlockBytes.length * 2);
-					compressedBlockBytes = new byte[compressedBlockBytes.length * 2];
-				}
-				else
-				{
-					LOG.debug("Compressed {} bytes to {} bytes ({}% reduction)",
-						 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
-					break;
+					deflater.reset();
+					deflater.setInput(avroBlockBytes, 0, avroBlockBuffer.position());
+					deflater.finish();
+
+					compressedSize = deflater.deflate(compressedBlockBytes, 0, compressedBlockBytes.length);
+
+					if (compressedSize == compressedBlockBytes.length)
+					{
+						// it probably didn't actually compress all of it. Expand and retry
+						LOG.debug("Expanding compression buffer {} -> {}", compressedBlockBytes.length, compressedBlockBytes.length * 2);
+						compressedBlockBytes = new byte[compressedBlockBytes.length * 2];
+					}
+					else
+					{
+						LOG.debug("Compressed {} bytes to {} bytes ({}% reduction)",
+							 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
+						break;
+					}
 				}
 			}
 		}
@@ -451,6 +460,22 @@ public class FastBoomWriter
 	public void setPeriodicHdfsFlushInterval(Long periodicHdfsFlushInterval)
 	{
 		this.periodicHdfsFlushInterval = periodicHdfsFlushInterval;
+	}
+
+	/**
+	 * @return the useNativeCompression
+	 */
+	public boolean isUseNativeCompression()
+	{
+		return useNativeCompression;
+	}
+
+	/**
+	 * @param useNativeCompression the useNativeCompression to set
+	 */
+	public void setUseNativeCompression(boolean useNativeCompression)
+	{
+		this.useNativeCompression = useNativeCompression;
 	}
 
 }

@@ -44,6 +44,13 @@ public class KaBoom
 	private static final Charset UTF8 = Charset.forName("UTF-8");	
 	boolean shutdown = false;	
 	private KaboomConfiguration config;
+	
+	static
+	{
+		System.loadLibrary("NativeDeflate");
+	}
+
+	public static synchronized native byte[] compress(byte[] bytesIn, int compressionLevel);	
 
 	public static void main(String[] args) throws Exception
 	{

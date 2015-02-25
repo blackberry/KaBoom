@@ -83,6 +83,7 @@ public class KaboomConfiguration
 	private final Meter totalBoomWritesMeter;
 	private final Timer totalHdfsFlushTimer;
 	private final Timer totalCompressionTimer;
+	private final Boolean useNativeCompression;
 	
 	/**
 	 * These are required for boom files
@@ -116,11 +117,12 @@ public class KaboomConfiguration
 		LOG.info("useTempOpenFileDirectory: {}", getUseTempOpenFileDirectory());
 		LOG.info("periodicHdfsFlushInterval: {}", getPeriodicHdfsFlushInterval());
 		LOG.info("periodicFileCloseInterval: {}", getPeriodicFileCloseInterval());
+		LOG.info("periodicFileCloseInterval: {}", getPeriodicFileCloseInterval());
 		
 		LOG.info("boomFileBufferSize: {}", getBoomFileBufferSize());
 		LOG.info("boomFileReplicas: {}", getBoomFileReplicas());
 		LOG.info("boomFileBlocksize: {}", getBoomFileBlocksize());
-		LOG.info("boomFileTmpPrefix: {}", getBoomFileTmpPrefix());
+		LOG.info("useNativeCompression: {}", getUseNativeCompression());
 		
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
@@ -168,6 +170,7 @@ public class KaboomConfiguration
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
 		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);				
+		useNativeCompression = propsParser.parseBoolean("kaboom.use.native.compression", false);
 		
 		boomFileBufferSize = propsParser.parseInteger("boom.file.buffer.size", boomFileBufferSize);
 		boomFileReplicas = propsParser.parseShort("boom.file.replicas", boomFileReplicas);
@@ -818,5 +821,13 @@ public class KaboomConfiguration
 	public Timer getTotalCompressionTimer()
 	{
 		return totalCompressionTimer;
+	}
+
+	/**
+	 * @return the useNativeCompression
+	 */
+	public Boolean getUseNativeCompression()
+	{
+		return useNativeCompression;
 	}
 }

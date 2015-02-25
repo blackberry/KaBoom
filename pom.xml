@@ -19,7 +19,7 @@ limitations under the License.
 
 	<groupId>com.blackberry.bdp.kaboom</groupId>
 	<artifactId>kaboom-dev</artifactId>
-	<version>0.7.2</version>
+	<version>0.7.3</version>
 	<packaging>jar</packaging>
 
 	<name>kaboom-dev</name>
@@ -206,6 +206,7 @@ limitations under the License.
 									<paths>
 										<path>/opt/kaboom/config</path>
 										<path>/opt/kaboom/lib</path>
+										<path>/opt/kaboom/src</path>
 										<path>/opt/kaboom/file_positions_cache</path>										
 										<path>/var/log/kaboom</path>
 										<path>/var/run/kaboom</path>
@@ -242,6 +243,20 @@ limitations under the License.
 										<filemode>644</filemode>
 										<user>root</user>
 										<group>root</group>
+									</mapper>
+								</data>
+								
+								<!-- Copy all source for NativeDeflate -->
+								<data>
+									<type>directory</type>
+									<src>src/main/c</src>
+									<includes>*</includes>
+									<mapper>
+										<type>perm</type>
+										<prefix>/opt/kaboom/src</prefix>
+										<filemode>644</filemode>
+										<user>kaboom</user>
+										<group>kaboom</group>
 									</mapper>
 								</data>
 								
