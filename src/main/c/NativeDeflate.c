@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "zlib.h"
-#include "include/com_blackberry_bdp_kaboom_KaBoom.h"
+#include "com_blackberry_bdp_kaboom_KaBoom.h"
  
 JNIEXPORT jbyteArray JNICALL Java_com_blackberry_bdp_kaboom_KaBoom_compress
 	(JNIEnv *env, jobject thisObj, jbyteArray bytesIn, jint compressionLevel) 

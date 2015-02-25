@@ -388,7 +388,7 @@ public class FastBoomWriter
 		{
 			if (useNativeCompression)
 			{
-				compressedBlockBytes = KaBoom.compress(compressedBlockBytes, 6);
+				compressedBlockBytes = KaBoom.compress(avroBlockBytes, 6);
 				compressedSize = compressedBlockBytes.length;
 			}
 			else
