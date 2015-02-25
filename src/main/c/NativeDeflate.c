@@ -5,49 +5,48 @@
 #include <string.h>
 #include "zlib.h"
 #include "com_blackberry_bdp_kaboom_KaBoom.h"
- 
+
 JNIEXPORT jbyteArray JNICALL Java_com_blackberry_bdp_kaboom_KaBoom_compress
-	(JNIEnv *env, jobject thisObj, jbyteArray bytesIn, jint compressionLevel) 
+        (JNIEnv *env, jobject thisObj, jbyteArray bytesIn, jint position, jint compressionLevel)
 {
-	int len = (*env)->GetArrayLength(env, bytesIn);
-	char istream[len];
-	(*env)->GetByteArrayRegion(env, bytesIn, 0, len, istream);
+        int len = (*env)->GetArrayLength(env, bytesIn);
+        jbyte * istream;
+        istream = (*env)->GetByteArrayElements(env, bytesIn, JNI_FALSE);
+        ulong srcLen = strlen(istream) + 1;
+        ulong destLen = compressBound(srcLen);
+        char* ostream = malloc(destLen);
 
-	// +1 below is for trailing \0
+        int res = compress2(ostream, &destLen, (char*)istream, srcLen, compressionLevel);
 
-	ulong srcLen = strlen(istream) + 1;
-	ulong destLen = compressBound(srcLen); 
-	char* ostream = malloc(destLen);
-	int res = compress2(ostream, &destLen, istream, srcLen, compressionLevel);
+        // destLen is now the size of actuall buffer needed for compression
+        // you don't want to uncompress the whole buffer later, only this
 
-	// destLen is now the size of actuall buffer needed for compression
-	// you don't want to uncompress the whole buffer later, only this
+        if (res == Z_BUF_ERROR)
+        {
+                printf("ERROR: Buffer was too small!\n");
+                return;
+        }
 
-	if (res == Z_BUF_ERROR)
-	{
-		printf("ERROR: Buffer was too small!\n");
-		return;
-	}
+        if (res ==  Z_MEM_ERROR)
+        {
+                printf("ERROR: Insufficient memory for compression!\n");
+                return;
+        }
 
-	if (res ==  Z_MEM_ERROR)
-	{
-		printf("ERROR: Insufficient memory for compression!\n");
-		return;
-	}
+        /* there's no need to decompress this now, useful for testing....
+        
+        const char *i2stream = ostream;
+        char* o2stream = malloc(srcLen);
+        ulong destLen2 = destLen; 
+        int des = uncompress(o2stream, &srcLen, i2stream, destLen2);
+        printf("%s\n", o2stream);
+        */
 
-	/* there's no need to decompress this now, useful for testing....
-	
-	const char *i2stream = ostream;
-	char* o2stream = malloc(srcLen);
-	ulong destLen2 = destLen; 
-	int des = uncompress(o2stream, &srcLen, i2stream, destLen2);
-	printf("%s\n", o2stream);
-	*/
-	
-	// Convert the compressed char array to a jbyteArray and return
+        // Convert the compressed char array to a jbyteArray and return
 
-	jbyteArray bytesOut = (*env)->NewByteArray(env, destLen);
-	(*env)->SetByteArrayRegion(env, bytesOut, 0, destLen, (jbyte*)ostream);
-	
-	return bytesOut;
-} 
+        jbyteArray bytesOut = (*env)->NewByteArray(env, destLen);
+        (*env)->SetByteArrayRegion(env, bytesOut, 0, destLen, (jbyte*)ostream);
+        (*env)->ReleaseByteArrayElements(env, bytesIn, istream, JNI_ABORT);
+
+        return bytesOut;
+}

@@ -390,6 +390,8 @@ public class FastBoomWriter
 			{
 				compressedBlockBytes = KaBoom.compress(avroBlockBytes, avroBlockBuffer.position(), 6);
 				compressedSize = compressedBlockBytes.length;
+				LOG.info("Natively compressed {} bytes to {} bytes ({}% reduction)",
+							 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 			}
 			else
 			{
