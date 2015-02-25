@@ -50,7 +50,7 @@ public class KaBoom
 		System.loadLibrary("NativeDeflate");
 	}
 
-	public static synchronized native byte[] compress(byte[] bytesIn, int compressionLevel);	
+	public static synchronized native byte[] compress(byte[] bytesIn, int position, int compressionLevel);	
 
 	public static void main(String[] args) throws Exception
 	{
