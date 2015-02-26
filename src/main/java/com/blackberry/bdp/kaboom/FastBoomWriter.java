@@ -16,6 +16,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Random;
 import java.util.zip.Deflater;
+import java.util.zip.Inflater;
 import org.apache.hadoop.fs.FSDataOutputStream;
 
 import org.slf4j.Logger;
@@ -427,9 +428,29 @@ public class FastBoomWriter
 				compressedBlockBytes = new byte[256 * 1024];
 				compressedBlockBytes = compress(avroBlockBytes, avroBlockBuffer.position(), 6);
 				compressedSize = compressedBlockBytes.length;				
-				
-				
+								
 				LOG.info("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId, avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
+				
+				try
+				{
+					//Test decompressing it...
+					Inflater decompresser = new Inflater();
+					decompresser.setInput(compressedBlockBytes, 0, compressedSize);
+					byte[] uncompresedResult = new byte[2 * 1024 * 1024];
+					int resultUncompressLength = decompresser.inflate(uncompresedResult);
+					decompresser.end();
+
+					String decompressedString = new String(uncompresedResult, "UTF-8");
+
+					LOG.trace("The decompressed string ({} bytes) is: {}",
+						 resultUncompressLength, decompressedString);
+					
+				}
+				catch (Exception e)
+				{
+					LOG.error("There was an exception decompressing the data: ", e);
+				}
+				
 				
 				encodeLong(compressedSize);
 
