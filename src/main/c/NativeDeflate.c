@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "zlib.h"
-#include "com_blackberry_bdp_kaboom_KaBoom.h"
+#include "com_blackberry_bdp_kaboom_FastBoomWriter.h"
 
 JNIEXPORT jbyteArray JNICALL Java_ca_ariens_zlib_testing_Main_compress
     (JNIEnv *env, jobject thisObj, jbyteArray bytesIn, jint length, jint compressionLevel)
