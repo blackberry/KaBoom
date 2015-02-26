@@ -395,15 +395,9 @@ public class FastBoomWriter
 		{
 			if (useNativeCompression)
 			{
-				LOG.info("[{}] About to call native compress", partitionId);
-				compressedBlockBytes = compress(avroBlockBytes, avroBlockBuffer.position(), 6);
-				compressedSize = compressedBlockBytes.length;
-				LOG.info("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId,
-							 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 				
-				LOG.info("[{}] About to call java's deflate", partitionId);
-				
-				compressedBlockBytes = new byte[256 * 1024];
+				LOG.info("[{}] About to call java's deflate", partitionId);		
+				compressedBlockBytes = new byte[256 * 1024];				
 				
 				while (true)
 				{
@@ -428,6 +422,20 @@ public class FastBoomWriter
 				}
 				
 				
+				LOG.info("[{}] About to call native compress", partitionId);
+				
+				compressedBlockBytes = new byte[256 * 1024];
+				compressedBlockBytes = compress(avroBlockBytes, avroBlockBuffer.position(), 6);
+				compressedSize = compressedBlockBytes.length;				
+				
+				
+				LOG.info("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId, avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
+				
+				encodeLong(compressedSize);
+
+				fsDataOut.write(longBytes, 0, longBuffer.position());
+				fsDataOut.write(compressedBlockBytes, 0, compressedSize);
+				fsDataOut.write(syncMarker);				
 				
 				
 			}
@@ -454,6 +462,12 @@ public class FastBoomWriter
 						break;
 					}
 				}
+				
+				encodeLong(compressedSize);
+		
+				fsDataOut.write(longBytes, 0, longBuffer.position());
+				fsDataOut.write(compressedBlockBytes, 0, compressedSize);
+				fsDataOut.write(syncMarker);
 			}
 		}
 		finally
@@ -461,11 +475,7 @@ public class FastBoomWriter
 			timerContextCompression.stop();
 		}
 
-		encodeLong(compressedSize);
-		
-		fsDataOut.write(longBytes, 0, longBuffer.position());
-		fsDataOut.write(compressedBlockBytes, 0, compressedSize);
-		fsDataOut.write(syncMarker);
+
 
 		avroBlockBuffer.clear();
 		avroBlockRecordCount = 0L;

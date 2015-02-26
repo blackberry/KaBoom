@@ -58,6 +58,8 @@ JNIEXPORT jbyteArray JNICALL Java_com_blackberry_bdp_kaboom_FastBoomWriter_compr
     (*env)->SetByteArrayRegion(env, bytesOut, 0, destLen, (jbyte*)ostream);
 
     (*env)->ReleaseByteArrayElements(env, bytesIn, istream, JNI_ABORT);
+	
+	free(ostream);
 
     return bytesOut;
 }
