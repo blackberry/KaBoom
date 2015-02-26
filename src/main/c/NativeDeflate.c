@@ -9,57 +9,61 @@
 JNIEXPORT jbyteArray JNICALL Java_com_blackberry_bdp_kaboom_FastBoomWriter_compress
     (JNIEnv *env, jobject thisObj, jbyteArray bytesIn, jint length, jint compressionLevel)
 {
-    //length = length + 1;
+    jboolean isCopy;
+    unsigned char* istream = (unsigned char*)(*env)->GetByteArrayElements(env, bytesIn, &isCopy);
+    unsigned char* ostream = malloc(length);
 
-    //int len = (*env)->GetArrayLength(env, bytesIn);
+    //printf("strlen(istream): %lu\n", strlen(istream));
 
-    jbyte* istream;
+    z_stream defstream;
 
-    istream = (*env)->GetByteArrayElements(env, bytesIn, JNI_FALSE);
+    defstream.zalloc = Z_NULL;
+    defstream.zfree = Z_NULL;
+    defstream.opaque = Z_NULL;
 
+    deflateInit(&defstream, compressionLevel);
 
-    //(*env)->GetByteArrayRegion(env, bytesIn, 0, length, istream);
-    //return bytesIn;
+    unsigned long chunksRead = 0;
+    unsigned long bytesRead = 0;
+    unsigned char* in; 
+    unsigned char* out;
 
+    do  
+    {   
+        int readAmount = CHUNK;
 
-    //ulong srcLen = strlen(istream) + 1;
-    ulong destLen = compressBound(length); //used to be srcLen
-    char* ostream = malloc(destLen);
+        if (chunksRead * CHUNK + CHUNK > length)
+        {   
+            readAmount = length - chunksRead * CHUNK;
+        }   
+            
+        //printf("reading chunk number: %lu, read amount: %i, total_out: %lu\n", chunksRead + 1, readAmount, defstream.total_out);
 
-    int res = compress2(ostream, &destLen, istream, length, compressionLevel); //position used to be srcLen
+        in = &istream[CHUNK * chunksRead];
+        out = &ostream[defstream.total_out];
 
-    // destLen is now the size of actuall buffer needed for compression
-    // you don't want to uncompress the whole buffer later, only this
+        defstream.next_in = (Bytef*)in;
+        defstream.avail_in = readAmount;
+     
+        defstream.avail_out = CHUNK;
+        defstream.next_out = out;
+                
+        deflate(&defstream, Z_NO_FLUSH);
 
-    if (res == Z_BUF_ERROR)
-    {
-        printf("ERROR: Buffer was too small!\n");
-        return;
-    }
+        bytesRead+= readAmount;
+        chunksRead++;
 
-    if (res ==  Z_MEM_ERROR)
-    {
-        printf("ERROR: Insufficient memory for compression!\n");
-        return;
-    }
+    } while (bytesRead < length);
 
-    /* there's no need to decompress this now, useful for testing....
-    
-    const char *i2stream = ostream;
-    char* o2stream = malloc(srcLen);
-    ulong destLen2 = destLen; 
-    int des = uncompress(o2stream, &srcLen, i2stream, destLen2);
-    printf("%s\n", o2stream);
-    */
+    (void)deflateEnd(&defstream);   
 
-    // Convert the compressed char array to a jbyteArray and return
-
-    jbyteArray bytesOut = (*env)->NewByteArray(env, destLen);
-    (*env)->SetByteArrayRegion(env, bytesOut, 0, destLen, (jbyte*)ostream);
+    //printf("strlen(ostream): %lu\n", strlen(ostream));
 
     (*env)->ReleaseByteArrayElements(env, bytesIn, istream, JNI_ABORT);
-	
-	free(ostream);
+    jbyteArray bytesOut = (*env)->NewByteArray(env, defstream.total_out);
+    (*env)->SetByteArrayRegion(env, bytesOut, 0, defstream.total_out, (jbyte*)ostream);
+
+    free(ostream);
 
     return bytesOut;
 }

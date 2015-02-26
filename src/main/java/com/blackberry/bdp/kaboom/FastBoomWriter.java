@@ -396,41 +396,12 @@ public class FastBoomWriter
 		{
 			if (useNativeCompression)
 			{
-				
-				LOG.info("[{}] About to call java's deflate", partitionId);		
-				compressedBlockBytes = new byte[256 * 1024];				
-				
-				while (true)
-				{
-					deflater.reset();
-					deflater.setInput(avroBlockBytes, 0, avroBlockBuffer.position());
-					deflater.finish();
-
-					compressedSize = deflater.deflate(compressedBlockBytes, 0, compressedBlockBytes.length);
-
-					if (compressedSize == compressedBlockBytes.length)
-					{
-						// it probably didn't actually compress all of it. Expand and retry
-						LOG.debug("Expanding compression buffer {} -> {}", compressedBlockBytes.length, compressedBlockBytes.length * 2);
-						compressedBlockBytes = new byte[compressedBlockBytes.length * 2];
-					}
-					else
-					{
-						LOG.info("[{}] Java compressed {} bytes to {} bytes ({}% reduction)", partitionId,
-							 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
-						break;
-					}
-				}
-				
-				
-				LOG.info("[{}] About to call native compress", partitionId);
-				
 				compressedBlockBytes = new byte[256 * 1024];
 				compressedBlockBytes = compress(avroBlockBytes, avroBlockBuffer.position(), 6);
-				compressedSize = compressedBlockBytes.length;				
+				compressedSize = compressedBlockBytes.length;	
 								
 				LOG.info("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId, avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
-				
+				/*
 				try
 				{
 					//Test decompressing it...
@@ -441,7 +412,8 @@ public class FastBoomWriter
 					decompresser.end();
 
 					String decompressedString = new String(uncompresedResult, "UTF-8");
-											 
+					
+						 
 					LOG.info("The decompressed string ({} bytes) is: {}",
 						 resultUncompressLength, decompressedString);
 					
@@ -450,15 +422,7 @@ public class FastBoomWriter
 				{
 					LOG.error("There was an exception decompressing the data: ", e);
 				}
-				
-				
-				encodeLong(compressedSize);
-
-				fsDataOut.write(longBytes, 0, longBuffer.position());
-				fsDataOut.write(compressedBlockBytes, 0, compressedSize);
-				fsDataOut.write(syncMarker);				
-				
-				
+				*/
 			}
 			else
 			{
@@ -483,13 +447,13 @@ public class FastBoomWriter
 						break;
 					}
 				}
-				
-				encodeLong(compressedSize);
-		
-				fsDataOut.write(longBytes, 0, longBuffer.position());
-				fsDataOut.write(compressedBlockBytes, 0, compressedSize);
-				fsDataOut.write(syncMarker);
 			}
+			
+			encodeLong(compressedSize);
+
+			fsDataOut.write(longBytes, 0, longBuffer.position());
+			fsDataOut.write(compressedBlockBytes, 0, compressedSize);
+			fsDataOut.write(syncMarker);						
 		}
 		finally
 		{
