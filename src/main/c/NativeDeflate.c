@@ -6,7 +6,7 @@
 #include "zlib.h"
 #include "com_blackberry_bdp_kaboom_FastBoomWriter.h"
 
-JNIEXPORT jbyteArray JNICALL Java_ca_ariens_zlib_testing_Main_compress
+JNIEXPORT jbyteArray JNICALL Java_com_blackberry_bdp_kaboom_FastBoomWriter_compress
     (JNIEnv *env, jobject thisObj, jbyteArray bytesIn, jint length, jint compressionLevel)
 {
     //length = length + 1;
