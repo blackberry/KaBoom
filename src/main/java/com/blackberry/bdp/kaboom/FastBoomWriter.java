@@ -388,6 +388,7 @@ public class FastBoomWriter
 		{
 			if (useNativeCompression)
 			{
+				LOG.info("About to call native compress");
 				compressedBlockBytes = KaBoom.compress(avroBlockBytes, avroBlockBuffer.position(), 6);
 				compressedSize = compressedBlockBytes.length;
 				LOG.info("Natively compressed {} bytes to {} bytes ({}% reduction)",
