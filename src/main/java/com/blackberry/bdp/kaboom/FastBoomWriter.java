@@ -395,13 +395,13 @@ public class FastBoomWriter
 		{
 			if (useNativeCompression)
 			{
-				LOG.info("About to call native compress");
+				LOG.info("[{}] About to call native compress", partitionId);
 				compressedBlockBytes = compress(avroBlockBytes, avroBlockBuffer.position(), 6);
 				compressedSize = compressedBlockBytes.length;
-				LOG.info("Natively compressed {} bytes to {} bytes ({}% reduction)",
+				LOG.info("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId,
 							 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 				
-				LOG.info("About to call java's deflate");
+				LOG.info("[{}] About to call java's deflate", partitionId);
 				
 				compressedBlockBytes = new byte[256 * 1024];
 				
@@ -421,7 +421,7 @@ public class FastBoomWriter
 					}
 					else
 					{
-						LOG.info("Java compressed {} bytes to {} bytes ({}% reduction)",
+						LOG.info("[{}] Java compressed {} bytes to {} bytes ({}% reduction)", partitionId,
 							 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 						break;
 					}
@@ -444,12 +444,12 @@ public class FastBoomWriter
 					if (compressedSize == compressedBlockBytes.length)
 					{
 						// it probably didn't actually compress all of it. Expand and retry
-						LOG.debug("Expanding compression buffer {} -> {}", compressedBlockBytes.length, compressedBlockBytes.length * 2);
+						LOG.debug("[{}] Expanding compression buffer {} -> {}", partitionId, compressedBlockBytes.length, compressedBlockBytes.length * 2);
 						compressedBlockBytes = new byte[compressedBlockBytes.length * 2];
 					}
 					else
 					{
-						LOG.debug("Compressed {} bytes to {} bytes ({}% reduction)",
+						LOG.debug("[{}] Compressed {} bytes to {} bytes ({}% reduction)", partitionId,
 							 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 						break;
 					}
