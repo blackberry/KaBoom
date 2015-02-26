@@ -41,7 +41,7 @@ public class FastBoomWriter
 		'O', 'b', 'j', 1		 
 	};
 	
-	static
+	public void loadNativeDeflateLib()
 	{
 		System.loadLibrary("NativeDeflate");
 	}

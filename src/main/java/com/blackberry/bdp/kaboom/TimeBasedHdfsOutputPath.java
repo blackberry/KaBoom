@@ -190,6 +190,11 @@ public class TimeBasedHdfsOutputPath
 				 boomWriter = new FastBoomWriter(fsDataOut, partitionId, topicFlushTimer, totalFlushTimer, config.getTotalCompressionTimer());
 				 boomWriter.setPeriodicHdfsFlushInterval(config.getPeriodicHdfsFlushInterval());				 
 				 boomWriter.setUseNativeCompression(config.getUseNativeCompression());
+				 
+				 if (config.getUseNativeCompression())
+				 {
+					 boomWriter.loadNativeDeflateLib();
+				 }
 
 			} 
 			catch (Exception e)
