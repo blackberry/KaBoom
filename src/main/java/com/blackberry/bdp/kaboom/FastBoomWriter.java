@@ -441,8 +441,8 @@ public class FastBoomWriter
 					decompresser.end();
 
 					String decompressedString = new String(uncompresedResult, "UTF-8");
-
-					LOG.trace("The decompressed string ({} bytes) is: {}",
+											 
+					LOG.info("The decompressed string ({} bytes) is: {}",
 						 resultUncompressLength, decompressedString);
 					
 				}
