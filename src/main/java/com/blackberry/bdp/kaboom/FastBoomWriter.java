@@ -41,6 +41,13 @@ public class FastBoomWriter
 		'O', 'b', 'j', 1		 
 	};
 	
+	static
+	{
+		System.loadLibrary("NativeDeflate");
+	}
+
+	public static native byte[] compress(byte[] bytesIn, int position, int compressionLevel);	
+	
 	/**
 	 * Boom Avro Schema:
 	 * 
@@ -389,7 +396,7 @@ public class FastBoomWriter
 			if (useNativeCompression)
 			{
 				LOG.info("About to call native compress");
-				compressedBlockBytes = KaBoom.compress(avroBlockBytes, avroBlockBuffer.position(), 6);
+				compressedBlockBytes = FastBoomWriter.compress(avroBlockBytes, avroBlockBuffer.position(), 6);
 				compressedSize = compressedBlockBytes.length;
 				LOG.info("Natively compressed {} bytes to {} bytes ({}% reduction)",
 							 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));

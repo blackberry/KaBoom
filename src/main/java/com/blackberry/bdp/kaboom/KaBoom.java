@@ -45,13 +45,6 @@ public class KaBoom
 	boolean shutdown = false;	
 	private KaboomConfiguration config;
 	
-	static
-	{
-		System.loadLibrary("NativeDeflate");
-	}
-
-	public static synchronized native byte[] compress(byte[] bytesIn, int position, int compressionLevel);	
-
 	public static void main(String[] args) throws Exception
 	{
 		new KaBoom().run();
