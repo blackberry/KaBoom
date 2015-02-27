@@ -401,7 +401,7 @@ public class FastBoomWriter
 				compressedSize = compressedBlockBytes.length;	
 								
 				LOG.info("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId, avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
-				/*
+				
 				try
 				{
 					//Test decompressing it...
@@ -414,15 +414,14 @@ public class FastBoomWriter
 					String decompressedString = new String(uncompresedResult, "UTF-8");
 					
 						 
-					LOG.info("The decompressed string ({} bytes) is: {}",
-						 resultUncompressLength, decompressedString);
+					LOG.info("[{}] The decompressed string ({} bytes) is: {}", partitionId, resultUncompressLength);
 					
 				}
 				catch (Exception e)
 				{
 					LOG.error("There was an exception decompressing the data: ", e);
 				}
-				*/
+				
 			}
 			else
 			{
