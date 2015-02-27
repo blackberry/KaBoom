@@ -442,7 +442,7 @@ public class FastBoomWriter
 					}
 					else
 					{
-						LOG.debug("[{}] Compressed {} bytes to {} bytes ({}% reduction)", partitionId,
+						LOG.info("[{}] Compressed {} bytes to {} bytes ({}% reduction)", partitionId,
 							 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 						break;
 					}
