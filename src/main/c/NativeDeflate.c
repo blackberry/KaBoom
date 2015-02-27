@@ -23,8 +23,13 @@ JNIEXPORT jbyteArray JNICALL Java_com_blackberry_bdp_kaboom_FastBoomWriter_compr
     defstream.zfree = Z_NULL;
     defstream.opaque = Z_NULL;
 
-    deflateInit(&defstream, compressionLevel);
-
+    deflateInit2(&defstream, 
+        compressionLevel,
+        Z_DEFLATED,
+        -15,
+        8,
+        Z_DEFAULT_STRATEGY);    
+	
     unsigned long chunksRead = 0;
     unsigned long bytesRead = 0;
     unsigned char* in; 

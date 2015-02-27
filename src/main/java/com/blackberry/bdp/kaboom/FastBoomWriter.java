@@ -401,7 +401,7 @@ public class FastBoomWriter
 				compressedSize = compressedBlockBytes.length;	
 								
 				LOG.info("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId, avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
-				
+				/*
 				try
 				{
 					//Test decompressing it...
@@ -419,6 +419,7 @@ public class FastBoomWriter
 				{
 					LOG.error("There was an exception decompressing the data: ", e);
 				}
+				*/
 				
 			}
 			else
@@ -444,6 +445,8 @@ public class FastBoomWriter
 						break;
 					}
 				}
+				
+				/*
 				try
 				{
 					//Test decompressing it...
@@ -461,6 +464,7 @@ public class FastBoomWriter
 				{
 					LOG.error("There was an exception decompressing the data: ", e);
 				}
+				*/
 
 			}
 			
