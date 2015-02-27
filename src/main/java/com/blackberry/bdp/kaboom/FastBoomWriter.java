@@ -410,10 +410,7 @@ public class FastBoomWriter
 					byte[] uncompresedResult = new byte[2 * 1024 * 1024];
 					int resultUncompressLength = decompresser.inflate(uncompresedResult);
 					decompresser.end();
-
 					String decompressedString = new String(uncompresedResult, "UTF-8");
-					
-						 
 					LOG.info("[{}] The decompressed string ({} bytes) is: {}", partitionId, resultUncompressLength, decompressedString);
 					System.exit(1);
 					
@@ -447,6 +444,24 @@ public class FastBoomWriter
 						break;
 					}
 				}
+				try
+				{
+					//Test decompressing it...
+					Inflater decompresser = new Inflater();
+					decompresser.setInput(compressedBlockBytes, 0, compressedSize);
+					byte[] uncompresedResult = new byte[2 * 1024 * 1024];
+					int resultUncompressLength = decompresser.inflate(uncompresedResult);
+					decompresser.end();
+					String decompressedString = new String(uncompresedResult, "UTF-8");
+					LOG.info("[{}] The decompressed string ({} bytes) is: {}", partitionId, resultUncompressLength, decompressedString);
+					System.exit(1);
+					
+				}
+				catch (Exception e)
+				{
+					LOG.error("There was an exception decompressing the data: ", e);
+				}
+
 			}
 			
 			encodeLong(compressedSize);
