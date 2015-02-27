@@ -414,7 +414,8 @@ public class FastBoomWriter
 					String decompressedString = new String(uncompresedResult, "UTF-8");
 					
 						 
-					LOG.info("[{}] The decompressed string ({} bytes) is: {}", partitionId, resultUncompressLength);
+					LOG.info("[{}] The decompressed string ({} bytes) is: {}", partitionId, resultUncompressLength, decompressedString);
+					System.exit(1);
 					
 				}
 				catch (Exception e)
