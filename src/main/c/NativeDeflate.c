@@ -15,7 +15,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_blackberry_bdp_kaboom_FastBoomWriter_compr
     unsigned char* istream = (unsigned char*)(*env)->GetByteArrayElements(env, bytesIn, &isCopy);
     unsigned char* ostream = malloc(length);
 
-    printf("strlen(istream): %lu\n", strlen(istream));
+    //printf("strlen(istream): %lu\n", strlen(istream));
 
     z_stream defstream;
 
@@ -58,24 +58,28 @@ JNIEXPORT jbyteArray JNICALL Java_com_blackberry_bdp_kaboom_FastBoomWriter_compr
             defstream.avail_out = readAmount;
             deflate(&defstream, flush);
             have = CHUNK - defstream.avail_out;
-            printf("have: %i\tavail_out: %i\n", have, defstream.avail_out);
+            //printf("have: %i\tavail_out: %i\n", have, defstream.avail_out);
         } while (defstream.avail_out == 0); 
 
         bytesRead+= readAmount;
         chunksRead++;
 		  
-        printf("chunk number: %lu\tread amount: %i\tbytes read: %lu\ttotal_in: %lu\t total_out: %lu\n", 
+        /*
+		
+		printf("chunk number: %lu\tread amount: %i\tbytes read: %lu\ttotal_in: %lu\t total_out: %lu\n", 
             chunksRead, 
             readAmount, 
             bytesRead, 
             defstream.total_in, 
             defstream.total_out);
+			
+		*/
 
     } while (bytesRead < length);
 
     (void)deflateEnd(&defstream);   
 
-    printf("strlen(ostream): %lu\n", strlen(ostream));
+    //printf("strlen(ostream): %lu\n", strlen(ostream));
 
     (*env)->ReleaseByteArrayElements(env, bytesIn, istream, JNI_ABORT);
     jbyteArray bytesOut = (*env)->NewByteArray(env, defstream.total_out);
