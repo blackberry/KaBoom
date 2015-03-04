@@ -48,7 +48,7 @@ public class ReadyFlagWriter extends NotifyingThread
 	private static final String ZK_ROOT = "/kaboom";
 	public static final String MERGE_READY_FLAG = "_READY";
 	public static final String KAFKA_READY_FLAG = "_KAFKA_READY";
-	public static final String INCOMING_DIR = "incoming";
+	public static final String DATA_DIR = "data";
 	public static final String WORKING_DIR = "working";
 	public static final String LOG_TAG = "[ready flag writer] ";
 
@@ -175,14 +175,14 @@ public class ReadyFlagWriter extends NotifyingThread
 
 					final Path topicRoot = new Path(Converter.timestampTemplateBuilder(prevHourStartTimestmap, hdfsTemplate));
 					final Path mergeReadyFlag = new Path(topicRoot + "/" + MERGE_READY_FLAG);
-					final Path incomingDirectory = new Path(topicRoot + "/" + INCOMING_DIR);
+					final Path dataDirectory = new Path(topicRoot + "/" + DATA_DIR);
 					final Path workingDirectory = new Path(topicRoot + "/" + WORKING_DIR);
-					final Path kafkaReadyFlag = new Path(incomingDirectory.toString() + "/" + KAFKA_READY_FLAG);
+					final Path kafkaReadyFlag = new Path(dataDirectory.toString() + "/" + KAFKA_READY_FLAG);
 
 					LOG.info(LOG_TAG + "HDFS path for topic root is: {}", topicRoot.toString());
 					LOG.info(LOG_TAG + "HDFS path for merge ready flag is: {}", mergeReadyFlag.toString());
 					LOG.info(LOG_TAG + "HDFS path for kafka ready flag is: {}", kafkaReadyFlag.toString());
-					LOG.info(LOG_TAG + "HDFS path for incoming directory is: {}", incomingDirectory.toString());
+					LOG.info(LOG_TAG + "HDFS path for data directory is: {}", dataDirectory.toString());
 					LOG.info(LOG_TAG + "opening {}", topicRoot.toString());
 
 					Authenticator.getInstance().runPrivileged(config.getTopicToProxyUser().get(topicName),
@@ -206,9 +206,9 @@ public class ReadyFlagWriter extends NotifyingThread
 							 }
 						 });
 
-					if (!fs.exists(incomingDirectory))
+					if (!fs.exists(dataDirectory))
 					{
-						LOG.info(LOG_TAG + "skipping {} since incoming directory {} doesn't exist (no data)", topicName, incomingDirectory.toString());
+						LOG.info(LOG_TAG + "skipping {} since data directory {} doesn't exist", topicName, dataDirectory.toString());
 						continue;
 					}
 
