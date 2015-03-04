@@ -28,6 +28,7 @@ public class TimeBasedHdfsOutputPath
 	private static final Logger LOG = LoggerFactory.getLogger(TimeBasedHdfsOutputPath.class);
 
 	private final KaboomConfiguration config;
+	private Worker kaboomWorker;
 	private final String topic;
 	private final FileSystem fileSystem;
 	private String partitionId = "unknown-partitionId";
@@ -119,9 +120,18 @@ public class TimeBasedHdfsOutputPath
 
 			if (entry.getValue().closeTime < System.currentTimeMillis() - 30 * 1000)
 			{
-				entry.getValue().close();
-				iter.remove();
-				LOG.info("[{}] expired open file has been closed: {}  ({} files still open): {}", partitionId, entry.getValue().openFilePath, outputFileMap.size());
+				try
+				{
+					kaboomWorker.storeOffset();
+					kaboomWorker.storeOffsetTimestamp();
+					entry.getValue().close();
+					iter.remove();
+					LOG.info("[{}] expired open file has been closed: {}  ({} files still open): {}", partitionId, entry.getValue().openFilePath, outputFileMap.size());					
+				}
+				catch (Exception e)
+				{
+					LOG.error("Error closing output path {}", this, e);
+				}
 			}
 			LOG.trace("[{}] {} does not expire until {}", partitionId, entry.getValue().openFilePath, dateString(entry.getValue().closeTime));
 		}
@@ -135,6 +145,22 @@ public class TimeBasedHdfsOutputPath
 	public void setPartitionId(String partitionId)
 	{
 		this.partitionId = partitionId;
+	}
+
+	/**
+	 * @param kaboomWorker the kaboomWorker to set
+	 */
+	public void setKaboomWorker(Worker kaboomWorker)
+	{
+		this.kaboomWorker = kaboomWorker;
+	}
+
+	/**
+	 * @return the kaboomWorker
+	 */
+	public Worker getKaboomWorker()
+	{
+		return kaboomWorker;
 	}
 
 	private class OutputFile

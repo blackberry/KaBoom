@@ -54,6 +54,7 @@ public class Worker implements Runnable
 	private long offset;
 	private long lowerOffsetsReceived = 0;
 	private long timestamp;
+	private long maxTimestamp = -1;
 	private boolean stopping = false;
 
 	private String hostname;
@@ -283,7 +284,7 @@ public class Worker implements Runnable
 		
 		for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths)
 		{
-			outputPath.setPartitionId(partitionId);
+			outputPath.setPartitionId(partitionId);			
 			LOG.info("\t {} {} => {}", config.getKaboomId(), partitionId, outputPath);
 		}
 		
@@ -368,6 +369,11 @@ public class Worker implements Runnable
 	{
 		try
 		{
+			for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths)
+			{
+				outputPath.setKaboomWorker(this);
+			}			
+			
 			zkPath = getZK_ROOT() + "/topics/" + getTopic() + "/" + getPartition();
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
 			zkPath_offSetOverride = zkPath + "/offset_override";						
@@ -405,7 +411,7 @@ public class Worker implements Runnable
 			PriParser pri = new PriParser();
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();
-			long maxTimestamp = -1;
+			
 			
 			while (stopping == false)
 			{
@@ -631,7 +637,7 @@ public class Worker implements Runnable
 			try
 			{
 				storeOffset();
-				storeOffsetTimestamp(getPartitionId(), maxTimestamp);
+				storeOffsetTimestamp();
 				
 				// Let's validate that the ZK offset was written correctly... 
 				
@@ -672,7 +678,7 @@ public class Worker implements Runnable
 		}
 	}
 
-	private void storeOffset() throws Exception
+	public void storeOffset() throws Exception
 	{
 		if (curator.checkExists().forPath(zkPath) == null)
 		{
@@ -731,14 +737,12 @@ public class Worker implements Runnable
 	}
 	
 	/**
-	 * Stores the partitions offset timestamp in ZK
 	 *
 	 * @throws Exception
 	 */
-	
-	private void storeOffsetTimestamp(String partitionId, long offsetTimestamp) throws Exception
+	public void storeOffsetTimestamp() throws Exception
 	{
-		if (offsetTimestamp == -1)
+		if (maxTimestamp == -1)
 		{
 			LOG.info("Partition {} has a -1 offsetTime and will not be written to ZK", partitionId);
 			return;
@@ -748,13 +752,15 @@ public class Worker implements Runnable
 		{
 			curator.create().creatingParentsIfNeeded()
 				 .withMode(CreateMode.PERSISTENT)
-				 .forPath(zkPath_offSetTimestamp, Converter.getBytes(offsetTimestamp));
+				 .forPath(zkPath_offSetTimestamp, Converter.getBytes(maxTimestamp));
 		} 
 		else
 		{
 			curator.setData().forPath(zkPath_offSetTimestamp,
-				 Converter.getBytes(offsetTimestamp));
+				 Converter.getBytes(maxTimestamp));
 		}
+		
+		maxTimestamp = -1;
 	}
 
 	/**
