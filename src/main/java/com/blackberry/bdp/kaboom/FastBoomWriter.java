@@ -16,7 +16,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Random;
 import java.util.zip.Deflater;
-import java.util.zip.Inflater;
 import org.apache.hadoop.fs.FSDataOutputStream;
 
 import org.slf4j.Logger;
@@ -138,7 +137,7 @@ public class FastBoomWriter
 			{
 				LOG.trace("Log block write forced during periodic HDFS flush since buffer position is {}", logBlockBuffer.position());
 				writeLogBlock();				
-				logBlockBufferWritten = true;			
+				logBlockBufferWritten = true;
 			}
 			else
 			{
@@ -169,6 +168,7 @@ public class FastBoomWriter
 			}		
 
 			fsDataOut.hflush();			
+			LOG.info("Flushed putput file for {}", partitionId);
 			numHdfsFlushedAVroBlocks = numAvroBlocksWritten;
 			lastHdfsFlushTimestamp = System.currentTimeMillis();
 		}
@@ -400,7 +400,7 @@ public class FastBoomWriter
 				compressedBlockBytes = compress(avroBlockBytes, avroBlockBuffer.position(), 6);
 				compressedSize = compressedBlockBytes.length;	
 								
-				LOG.info("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId, avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
+				LOG.debug("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId, avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 				/*
 				try
 				{
@@ -440,7 +440,7 @@ public class FastBoomWriter
 					}
 					else
 					{
-						LOG.info("[{}] Compressed {} bytes to {} bytes ({}% reduction)", partitionId,
+						LOG.debug("[{}] Compressed {} bytes to {} bytes ({}% reduction)", partitionId,
 							 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 						break;
 					}
