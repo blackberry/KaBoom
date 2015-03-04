@@ -168,7 +168,7 @@ public class FastBoomWriter
 			}		
 
 			fsDataOut.hflush();			
-			LOG.info("Flushed putput file for {}", partitionId);
+			LOG.trace("Flushed putput file for {}", partitionId);
 			numHdfsFlushedAVroBlocks = numAvroBlocksWritten;
 			lastHdfsFlushTimestamp = System.currentTimeMillis();
 		}
@@ -178,8 +178,6 @@ public class FastBoomWriter
 			timerContextTopic.stop();
 			timerContextTotal.stop();
 		}
-		
-
 	}
 
 	private void writeHeader() throws IOException
@@ -401,26 +399,6 @@ public class FastBoomWriter
 				compressedSize = compressedBlockBytes.length;	
 								
 				LOG.debug("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId, avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
-				/*
-				try
-				{
-					//Test decompressing it...
-					Inflater decompresser = new Inflater();
-					decompresser.setInput(compressedBlockBytes, 0, compressedSize);
-					byte[] uncompresedResult = new byte[2 * 1024 * 1024];
-					int resultUncompressLength = decompresser.inflate(uncompresedResult);
-					decompresser.end();
-					String decompressedString = new String(uncompresedResult, "UTF-8");
-					LOG.info("[{}] The decompressed string ({} bytes) is: {}", partitionId, resultUncompressLength, decompressedString);
-					System.exit(1);
-					
-				}
-				catch (Exception e)
-				{
-					LOG.error("There was an exception decompressing the data: ", e);
-				}
-				*/
-				
 			}
 			else
 			{
@@ -445,27 +423,6 @@ public class FastBoomWriter
 						break;
 					}
 				}
-				
-				/*
-				try
-				{
-					//Test decompressing it...
-					Inflater decompresser = new Inflater();
-					decompresser.setInput(compressedBlockBytes, 0, compressedSize);
-					byte[] uncompresedResult = new byte[2 * 1024 * 1024];
-					int resultUncompressLength = decompresser.inflate(uncompresedResult);
-					decompresser.end();
-					String decompressedString = new String(uncompresedResult, "UTF-8");
-					LOG.info("[{}] The decompressed string ({} bytes) is: {}", partitionId, resultUncompressLength, decompressedString);
-					System.exit(1);
-					
-				}
-				catch (Exception e)
-				{
-					LOG.error("There was an exception decompressing the data: ", e);
-				}
-				*/
-
 			}
 			
 			encodeLong(compressedSize);
@@ -478,9 +435,7 @@ public class FastBoomWriter
 		{
 			timerContextCompression.stop();
 		}
-
-
-
+		
 		avroBlockBuffer.clear();
 		avroBlockRecordCount = 0L;
 		numAvroBlocksWritten++;
