@@ -261,7 +261,7 @@ limitations under the License.
 									</mapper>
 								</data>
 								
-								<!-- Copy all source for NativeDeflate -->
+								<!-- Copy all source for NativeDeflate 
 								<data>
 									<type>directory</type>
 									<src>src/main/c</src>
@@ -273,7 +273,7 @@ limitations under the License.
 										<user>kaboom</user>
 										<group>kaboom</group>
 									</mapper>
-								</data>
+								</data>-->
 								
 								<!-- Copy the config sample(s) -->
 								<data>
