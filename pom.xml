@@ -358,6 +358,7 @@ limitations under the License.
 						<defineStatement>_tmppath /tmp</defineStatement>
 					</defineStatements>
 					<copyright>2014, BlackBerry, Limited.</copyright>
+					<needarch>true</needarch>
 					<group>Application/Hadoop</group>
 					<requires>
 						<require>shadow-utils</require>
