@@ -215,7 +215,7 @@ limitations under the License.
 							<exportAntProperties>true</exportAntProperties>
 							<target>
 								<property name="runtime_classpath" refid="maven.compile.classpath"/>
-								<exec executable="$JAVA_HOME/bin/javah">
+								<exec executable="${java.home}/bin/javah">
 									<arg value="-cp"/>
 									<arg value="${runtime_classpath}"/>
 									<arg value="-d"/>
