@@ -277,7 +277,7 @@ limitations under the License.
 									</mapper>
 								</data>
 								
-								<!-- Copy all required libra	ries -->
+								<!-- Copy all required libraries -->
 								<data>
 									<type>directory</type>
 									<src>target/lib</src>
@@ -303,7 +303,7 @@ limitations under the License.
 										<user>kaboom</user>
 										<group>kaboom</group>
 									</mapper>
-								</data>-->
+								</data>
 								
 								<!-- Copy the config sample(s) -->
 								<data>
@@ -373,9 +373,6 @@ limitations under the License.
 						<!-- Libraries -->
 						<mapping>
 							<directory>/opt/kaboom/lib</directory>
-							<!--<filemode>644</filemode>
-							<username>kaboom</username>
-							<groupname>kaboom</groupname>-->
 							<artifact></artifact>
 							<dependency/>
 						</mapping>
@@ -383,9 +380,6 @@ limitations under the License.
 						<!-- Config -->
 						<mapping>
 							<directory>/opt/kaboom/config</directory>
-							<!--<filemode>644</filemode>
-							<username>kaboom</username>
-							<groupname>kaboom</groupname>-->
 							<sources>
 								<source>
 									<location>${project.basedir}/conf</location>
@@ -396,12 +390,24 @@ limitations under the License.
 							</sources>
 						</mapping>
 
+						<!--  Copy the lib for NativeDeflate -->
+						<mapping>
+							<directory>/opt/kaboom/lib</directory>
+							<filemode>644</filemode>
+							<sources>
+								<source>
+									<location>${project.basedir}/NativeDeflate/lib/</location>
+									<includes>
+										<include>*.so</include>
+									</includes>
+								</source>
+							</sources>
+						</mapping>							
+								
 						<!-- Executables -->
 						<mapping>
 							<directory>/opt/kaboom/bin</directory>
 							<filemode>744</filemode>
-							<!--<username>kaboom</username>
-							<groupname>kaboom</groupname>-->
 							<sources>
 								<source>
 									<location>${project.basedir}/bin</location>
@@ -415,17 +421,11 @@ limitations under the License.
 						<!-- PID dir -->
 						<mapping>
 							<directory>/var/run/kaboom</directory>
-							<!--<filemode>755</filemode>
-							<username>kaboom</username>
-							<groupname>kaboom</groupname>-->
 						</mapping>
 
 						<!-- Logs -->
 						<mapping>
 							<directory>/var/log/kaboom</directory>
-							<!--<filemode>755</filemode>
-							<username>kaboom</username>
-							<groupname>kaboom</groupname>-->
 						</mapping>
 						
 					</mappings>
