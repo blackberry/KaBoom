@@ -194,11 +194,39 @@ limitations under the License.
 					<javahIncludes>
 						<javahInclude>
 							<className>com.blackberry.bdp.kaboom.FastBoomWriter</className>
-							<headerName>Class.h</headerName>
+							<headerName>com.blackberry.bdp.kaboom.FastBoomWriter.h</headerName>
 						</javahInclude>
 					</javahIncludes>
 				</configuration>
 			</plugin>			
+
+			<!-- Cheat and use the antrun plugin that exposes the classpath required for running javah -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<version>1.8</version>
+				<executions>
+					<execution>
+						<phase>process-classes</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<exportAntProperties>true</exportAntProperties>
+							<target>
+								<property name="runtime_classpath" refid="maven.compile.classpath"/>
+								<exec executable="javah">
+									<arg value="-cp"/>
+									<arg value="${runtime_classpath}"/>
+									<arg value="-d"/>
+									<arg value="${project.basedir}/NativeDeflate"/>
+									<arg value="com.blackberry.bdp.kaboom.FastBoomWriter"/>
+								</exec>
+							</target>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 
 			<!-- Build a DEB package -->
 			<plugin>
