@@ -189,6 +189,8 @@ limitations under the License.
 				<version>1.0-alpha-8</version>
 				<extensions>true</extensions>
 				<configuration>
+					
+					<javahClassNames>com.blackberry.bdp.kaboom.FastBoomWriter</javahClassNames>
 					<javahIncludes>
 						<javahInclude>
 							<className>com.blackberry.bdp.kaboom.FastBoomWriter</className>
