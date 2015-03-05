@@ -291,14 +291,14 @@ limitations under the License.
 									</mapper>
 								</data>
 								
-								<!-- Copy all source for NativeDeflate 
+								<!--  Copy the lib for NativeDeflate -->
 								<data>
 									<type>directory</type>
-									<src>src/main/c</src>
-									<includes>*</includes>
+									<src>NativeDeflate/lib</src>
+									<includes>*.so</includes>
 									<mapper>
 										<type>perm</type>
-										<prefix>/opt/kaboom/src</prefix>
+										<prefix>/opt/kaboom/lib</prefix>
 										<filemode>644</filemode>
 										<user>kaboom</user>
 										<group>kaboom</group>
