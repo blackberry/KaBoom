@@ -257,8 +257,6 @@ public class ReadyFlagWriter extends NotifyingThread
 				{
 					LOG.error(LOG_TAG + "topic {} error occured processing a partition: {}", topicName, e.toString());
 				}
-
-				LOG.info(LOG_TAG + "finished {} topic(s) after {} seconds", topicsWithPartitions.size(), (cal.getTimeInMillis() - currentTimestamp) / 1000);
 			}
 		}
 	}

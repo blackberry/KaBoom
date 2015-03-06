@@ -202,13 +202,9 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	@Override
 	public void notifyOfThreadComplete(NotifyingThread notifyingThread, Exception e)
 	{
-		LOG.info("[ready flag writer] thread finished");
-
 		if (e != null)
 		{
 			LOG.error("[ready flag writer] Exception raised in thread: {}", e);
 		}
-
 	}
-
 }
