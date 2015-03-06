@@ -1,3 +1,11 @@
+Changes in 0.7.4:
+
+- Abstracts load balancing and adds two implementation: fair and  local
+
+Changes in 0.7.3:
+
+- Adds native compression 
+
 Changes in 0.7.2:
 
 - Bumps Krackle dependency to 0.7.10 to have the consumer's broker socket have the keep alive flag set

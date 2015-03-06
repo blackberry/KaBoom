@@ -84,6 +84,7 @@ public class KaboomConfiguration
 	private final Timer totalHdfsFlushTimer;
 	private final Timer totalCompressionTimer;
 	private final Boolean useNativeCompression;
+	private final String loadBalancer;
 	
 	/**
 	 * These are required for boom files
@@ -123,6 +124,7 @@ public class KaboomConfiguration
 		LOG.info("boomFileReplicas: {}", getBoomFileReplicas());
 		LOG.info("boomFileBlocksize: {}", getBoomFileBlocksize());
 		LOG.info("useNativeCompression: {}", getUseNativeCompression());
+		LOG.info("loadBalancer: {}", getLoadBalancer());
 		
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
@@ -171,13 +173,14 @@ public class KaboomConfiguration
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
 		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);				
 		useNativeCompression = propsParser.parseBoolean("kaboom.use.native.compression", false);
+		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "fair");
 		
 		boomFileBufferSize = propsParser.parseInteger("boom.file.buffer.size", boomFileBufferSize);
 		boomFileReplicas = propsParser.parseShort("boom.file.replicas", boomFileReplicas);
 		boomFileBlocksize = propsParser.parseLong("boom.file.block.size", boomFileBlocksize);
 		boomFileTmpPrefix = propsParser.parseString("boom.file.temp.prefix", boomFileTmpPrefix);
 		periodicHdfsFlushInterval = propsParser.parseLong("boom.file.flush.interval", 30 * 1000l);
-		periodicFileCloseInterval = propsParser.parseLong("boom.file.close.expired.interval", 60 * 1000l);
+		periodicFileCloseInterval = propsParser.parseLong("boom.file.close.expired.interval", 60 * 1000l);		
 		
 		curator = buildCuratorFramework();		
 		hadoopConfiguration = buildHadoopConfiguration();		
@@ -829,5 +832,13 @@ public class KaboomConfiguration
 	public Boolean getUseNativeCompression()
 	{
 		return useNativeCompression;
+	}
+
+	/**
+	 * @return the loadBalancer
+	 */
+	public String getLoadBalancer()
+	{
+		return loadBalancer;
 	}
 }

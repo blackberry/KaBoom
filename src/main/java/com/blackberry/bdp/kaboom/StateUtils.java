@@ -164,7 +164,9 @@ public class StateUtils
 		// Get a list of active clients from zookeeper
 
 		Yaml yaml = new Yaml(new Constructor(KaBoomNodeInfo.class));
-		for (String client : curator.getChildren().forPath("/kaboom/clients")) {
+		
+		for (String client : curator.getChildren().forPath("/kaboom/clients")) 
+		{
 			byte[] data = curator.getData().forPath("/kaboom/clients/" + client);
 			ByteArrayInputStream bais = new ByteArrayInputStream(data);
 			KaBoomNodeInfo nodeInfo = (KaBoomNodeInfo) yaml.load(bais);

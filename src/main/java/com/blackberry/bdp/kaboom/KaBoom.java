@@ -165,8 +165,17 @@ public class KaBoom
 		}
 
 		// Start leader election thread.  The leader assigns work to each instance
+		Leader loadBalancer  = null;
 		
-		LoadBalancer loadBalancer = new LoadBalancer(config);
+		if (config.getLoadBalancer().equals("fair"))
+		{
+			loadBalancer = new FairLoadBalancer(config);
+		}
+		else if (config.getLoadBalancer().equals("local"))
+		{
+			loadBalancer = new LocalLoadBalancer(config);
+		}			 			 
+
 		final LeaderSelector leaderSelector = new LeaderSelector(curator, "/kaboom/leader", loadBalancer);		
 		leaderSelector.autoRequeue();
 		leaderSelector.start();		
