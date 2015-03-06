@@ -291,17 +291,17 @@ public class FastBoomWriter
 		{
 			if (logBlockBuffer.position() > 0 && second != logBlockSecond)
 			{
-				LOG.debug("New Block ({} lines) (second changed from {} to {})", logLineCount, logBlockSecond, second);
+				LOG.debug("[{}] New Block ({} lines) (second changed from {} to {})", partitionId, logLineCount, logBlockSecond, second);
 			} 
 			else
 			{
 				if (logLinesBytes.length - logLinesBuffer.position() < 10 + 10 + length)
 				{
-					LOG.trace("New Block. ({} lines) (buffer full)", logLineCount);
+					LOG.trace("[{}] New Block. ({} lines) (buffer full)", partitionId, logLineCount);
 				} 
 				else
 				{
-					LOG.trace("New Block. ({} lines)", logLineCount);
+					LOG.trace("[{}] New Block. ({} lines)", partitionId, logLineCount);
 				}
 			}
 
@@ -411,7 +411,7 @@ public class FastBoomWriter
 				compressedBlockBytes = compress(avroBlockBytes, avroBlockBuffer.position(), 6);
 				compressedSize = compressedBlockBytes.length;	
 								
-				LOG.trace("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId, avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
+				LOG.debug("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId, avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 			}
 			else
 			{
@@ -431,7 +431,7 @@ public class FastBoomWriter
 					}
 					else
 					{
-						LOG.trace("[{}] Compressed {} bytes to {} bytes ({}% reduction)", partitionId,
+						LOG.debug("[{}] Compressed {} bytes to {} bytes ({}% reduction)", partitionId,
 							 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 						break;
 					}
