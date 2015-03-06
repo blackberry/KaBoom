@@ -333,7 +333,7 @@ public class FastBoomWriter
 		 */
 		try
 		{
-			LOG.debug("logBlockBuffer: CurPosition {}, InsertMessage-Offset {}, InsertMessage Length {}", logBlockBuffer.position(), offset, length);
+			LOG.debug("[{}] logBlockBuffer: CurPosition {}, InsertMessage-Offset {}, InsertMessage Length {}", partitionId, logBlockBuffer.position(), offset, length);
 
 			
 			encodeLong(ms);
@@ -345,8 +345,9 @@ public class FastBoomWriter
 		} 
 		catch (Exception e)
 		{
-			LOG.info("Exception! Buffer:{}, Length:{}", logLinesBuffer, length, e);
-			LOG.info("???.  {} - {} < 10 + 10 + {}", logBlockBytes.length,
+			LOG.info("[{}] Exception! Buffer:{}, Length:{}", partitionId, logLinesBuffer, length, e);
+			
+			LOG.info("[{}] ???.  {} - {} < 10 + 10 + {}", partitionId, logBlockBytes.length,
 				 logBlockBuffer.position(), length);
 		}
 		logLineCount++;
@@ -368,14 +369,14 @@ public class FastBoomWriter
 			writeAvroBlock();
 		}
 		
-		LOG.debug("avroBlockBuffer adding logBlockBytes: CurPosition {}, insert length {}", avroBlockBuffer.position(), logBlockBuffer.position());
+		LOG.debug("[{}] avroBlockBuffer adding logBlockBytes: CurPosition {}, insert length {}", partitionId, avroBlockBuffer.position(), logBlockBuffer.position());
 
 		avroBlockBuffer.put(logBlockBytes, 0, logBlockBuffer.position());
 		
 		encodeLong(logLineCount);
 		avroBlockBuffer.put(longBytes, 0, longBuffer.position());
 		
-		LOG.debug("avroBlockBuffer adding logLineBytes: CurPosition {}, insert length {}", avroBlockBuffer.position(), logLinesBuffer.position());
+		LOG.debug("[{}] avroBlockBuffer adding logLineBytes: CurPosition {}, insert length {}", partitionId, avroBlockBuffer.position(), logLinesBuffer.position());
 		
 		avroBlockBuffer.put(logLinesBytes, 0, logLinesBuffer.position());
 		
@@ -395,13 +396,15 @@ public class FastBoomWriter
 
 	private void writeAvroBlock() throws IOException
 	{
-		LOG.debug("Writing Avro Block ({} bytes)", avroBlockBuffer.position());
-		encodeLong(avroBlockRecordCount);
-		fsDataOut.write(longBytes, 0, longBuffer.position());
-
 		final Timer.Context timerContextCompression = compressionTimer.time();
+		
 		try
 		{
+			LOG.debug("[{}] Writing Avro Block ({} bytes)", partitionId, avroBlockBuffer.position());
+			encodeLong(avroBlockRecordCount);
+			fsDataOut.write(longBytes, 0, longBuffer.position());
+			
+			
 			if (useNativeCompression)
 			{
 				compressedBlockBytes = new byte[256 * 1024];
@@ -448,11 +451,10 @@ public class FastBoomWriter
 		finally
 		{
 			timerContextCompression.stop();
-		}
-		
-		avroBlockBuffer.clear();
-		avroBlockRecordCount = 0L;
-		numAvroBlocksWritten++;
+			avroBlockBuffer.clear();
+			avroBlockRecordCount = 0L;
+			numAvroBlocksWritten++;
+		}		
 	}
 
 	public void close() throws IOException
