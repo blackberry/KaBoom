@@ -47,11 +47,11 @@ public class KaBoom
 	
 	public static void main(String[] args) throws Exception
 	{
-		new KaBoom().run();
-		
 		LOG.info("*******************************************");
 		LOG.info("***         KABOOM SERVER START         ***");
 		LOG.info("*******************************************");
+		
+		new KaBoom().run();		
 	}
 	
 	public KaBoom() throws Exception
@@ -254,6 +254,13 @@ public class KaBoom
 				{					
 					if (partitionToWorkerMap.containsKey(partitionId))
 					{
+						if (false == partitionToThreadsMap.get(partitionId).isAlive())
+						{
+							LOG.error("[{}] *** worker thead found dead (removed thread/worker objects from mappings) ***", partitionId);
+							partitionToThreadsMap.remove(partitionId);
+							partitionToWorkerMap.remove(partitionId);
+						}
+						
 						LOG.debug("KaBoom clientId {} assigned to partitonId {} and worker is already working", config.getKaboomId(), partitionId);
 						validWorkingPartitions.put(partitionId, true);
 					}
