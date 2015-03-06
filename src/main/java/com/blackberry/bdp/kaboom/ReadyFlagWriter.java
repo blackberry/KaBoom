@@ -179,11 +179,11 @@ public class ReadyFlagWriter extends NotifyingThread
 					final Path workingDirectory = new Path(topicRoot + "/" + WORKING_DIR);
 					final Path kafkaReadyFlag = new Path(dataDirectory.toString() + "/" + KAFKA_READY_FLAG);
 
-					LOG.info(LOG_TAG + "HDFS path for topic root is: {}", topicRoot.toString());
-					LOG.info(LOG_TAG + "HDFS path for merge ready flag is: {}", mergeReadyFlag.toString());
-					LOG.info(LOG_TAG + "HDFS path for kafka ready flag is: {}", kafkaReadyFlag.toString());
-					LOG.info(LOG_TAG + "HDFS path for data directory is: {}", dataDirectory.toString());
-					LOG.info(LOG_TAG + "opening {}", topicRoot.toString());
+					LOG.trace(LOG_TAG + "HDFS path for topic root is: {}", topicRoot.toString());
+					LOG.trace(LOG_TAG + "HDFS path for merge ready flag is: {}", mergeReadyFlag.toString());
+					LOG.trace(LOG_TAG + "HDFS path for kafka ready flag is: {}", kafkaReadyFlag.toString());
+					LOG.trace(LOG_TAG + "HDFS path for data directory is: {}", dataDirectory.toString());
+					LOG.trace(LOG_TAG + "opening {}", topicRoot.toString());
 
 					Authenticator.getInstance().runPrivileged(config.getTopicToProxyUser().get(topicName),
 						 new PrivilegedExceptionAction<Void>()
@@ -208,31 +208,31 @@ public class ReadyFlagWriter extends NotifyingThread
 
 					if (!fs.exists(dataDirectory))
 					{
-						LOG.info(LOG_TAG + "skipping {} since data directory {} doesn't exist", topicName, dataDirectory.toString());
+						LOG.trace(LOG_TAG + "skipping {} since data directory {} doesn't exist", topicName, dataDirectory.toString());
 						continue;
 					}
 
 					if (fs.exists(mergeReadyFlag))
 					{
-						LOG.info(LOG_TAG + "skipping {} since merge's ready flag {} already exists", topicName, mergeReadyFlag.toString());
+						LOG.trace(LOG_TAG + "skipping {} since merge's ready flag {} already exists", topicName, mergeReadyFlag.toString());
 						continue;
 					}
 
 					if (fs.exists(kafkaReadyFlag))
 					{
-						LOG.info(LOG_TAG + "skipping {} since kafka's ready flag {} already exists", topicName, kafkaReadyFlag.toString());
+						LOG.trace(LOG_TAG + "skipping {} since kafka's ready flag {} already exists", topicName, kafkaReadyFlag.toString());
 						continue;
 					}
 
 					if (fs.exists(workingDirectory))
 					{
-						LOG.info(LOG_TAG + "skipping {} since working directory {} already exists", topicName, workingDirectory.toString());
+						LOG.trace(LOG_TAG + "skipping {} since working directory {} already exists", topicName, workingDirectory.toString());
 						continue;
 					}
 
-					LOG.info(LOG_TAG + "topic {} might be candidate for kafka ready flag (incoming data exists, no other flags exist)", topicName);
+					LOG.trace(LOG_TAG + "topic {} might be candidate for kafka ready flag (data dir exists, no other flags exist)", topicName);
 					long oldestTimestamp = oldestPartitionOffsetForTopic(topicName, entry.getValue());
-					LOG.info(LOG_TAG + "oldest timestamp for topic={} is {}", topicName, oldestTimestamp);
+					LOG.trace(LOG_TAG + "oldest timestamp for topic={} is {}", topicName, oldestTimestamp);
 
 					if (oldestTimestamp > startOfHourTimestamp)
 					{
