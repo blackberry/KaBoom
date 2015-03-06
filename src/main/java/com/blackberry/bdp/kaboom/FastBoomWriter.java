@@ -297,11 +297,11 @@ public class FastBoomWriter
 			{
 				if (logLinesBytes.length - logLinesBuffer.position() < 10 + 10 + length)
 				{
-					LOG.debug("New Block. ({} lines) (buffer full)", logLineCount);
+					LOG.trace("New Block. ({} lines) (buffer full)", logLineCount);
 				} 
 				else
 				{
-					LOG.debug("New Block. ({} lines)", logLineCount);
+					LOG.trace("New Block. ({} lines)", logLineCount);
 				}
 			}
 
@@ -333,6 +333,9 @@ public class FastBoomWriter
 		 */
 		try
 		{
+			LOG.debug("logBlockBuffer: CurPosition {}, InsertMessage-Offset {}, InsertMessage Length {}", logBlockBuffer.position(), offset, length);
+
+			
 			encodeLong(ms);
 			logLinesBuffer.put(longBytes, 0, longBuffer.position());
 
@@ -364,12 +367,19 @@ public class FastBoomWriter
 		{
 			writeAvroBlock();
 		}
+		
+		LOG.debug("avroBlockBuffer adding logBlockBytes: CurPosition {}, insert length {}", avroBlockBuffer.position(), logBlockBuffer.position());
 
 		avroBlockBuffer.put(logBlockBytes, 0, logBlockBuffer.position());
+		
 		encodeLong(logLineCount);
 		avroBlockBuffer.put(longBytes, 0, longBuffer.position());
+		
+		LOG.debug("avroBlockBuffer adding logLineBytes: CurPosition {}, insert length {}", avroBlockBuffer.position(), logLinesBuffer.position());
+		
 		avroBlockBuffer.put(logLinesBytes, 0, logLinesBuffer.position());
-		encodeLong(0L);
+		
+		encodeLong(0L);		
 		avroBlockBuffer.put(longBytes, 0, longBuffer.position());
 
 		avroBlockRecordCount++;
@@ -398,7 +408,7 @@ public class FastBoomWriter
 				compressedBlockBytes = compress(avroBlockBytes, avroBlockBuffer.position(), 6);
 				compressedSize = compressedBlockBytes.length;	
 								
-				LOG.debug("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId, avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
+				LOG.trace("[{}] Natively compressed {} bytes to {} bytes ({}% reduction)", partitionId, avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 			}
 			else
 			{
@@ -413,12 +423,12 @@ public class FastBoomWriter
 					if (compressedSize == compressedBlockBytes.length)
 					{
 						// it probably didn't actually compress all of it. Expand and retry
-						LOG.debug("[{}] Expanding compression buffer {} -> {}", partitionId, compressedBlockBytes.length, compressedBlockBytes.length * 2);
+						LOG.trace("[{}] Expanding compression buffer {} -> {}", partitionId, compressedBlockBytes.length, compressedBlockBytes.length * 2);
 						compressedBlockBytes = new byte[compressedBlockBytes.length * 2];
 					}
 					else
 					{
-						LOG.debug("[{}] Compressed {} bytes to {} bytes ({}% reduction)", partitionId,
+						LOG.trace("[{}] Compressed {} bytes to {} bytes ({}% reduction)", partitionId,
 							 avroBlockBuffer.position(), compressedSize, Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 						break;
 					}
@@ -430,6 +440,10 @@ public class FastBoomWriter
 			fsDataOut.write(longBytes, 0, longBuffer.position());
 			fsDataOut.write(compressedBlockBytes, 0, compressedSize);
 			fsDataOut.write(syncMarker);						
+		}
+		catch (Exception e)
+		{
+			LOG.error("[{}] error occured either compressing or writing the avro block: ", partitionId, e);			
 		}
 		finally
 		{
