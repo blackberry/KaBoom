@@ -163,7 +163,7 @@ public class ReadyFlagWriter extends NotifyingThread
 
 				try
 				{
-					LOG.info(LOG_TAG + "Checking {} partition(s) in topic={} for offset timestamps...", entry.getValue().size(), topicName);
+					LOG.trace(LOG_TAG + "Checking {} partition(s) in topic={} for offset timestamps...", entry.getValue().size(), topicName);
 
 					String hdfsTemplate = config.getTopicToHdfsRoot().get(topicName);
 
@@ -236,7 +236,7 @@ public class ReadyFlagWriter extends NotifyingThread
 
 					if (oldestTimestamp > startOfHourTimestamp)
 					{
-						LOG.info(LOG_TAG + "topic {} oldest timestamp is within the current hour, flag write required", topicName);
+						LOG.info(LOG_TAG + "topic {} oldest timestamp has surpassed the current hour, ready flag required", topicName);
 						LOG.info(LOG_TAG + "topic {} need to write {} as proxy user {}", topicName, kafkaReadyFlag.toString(), config.getTopicToProxyUser().get(topicName));
 						synchronized (fsLock)
 						{

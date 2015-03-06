@@ -125,15 +125,19 @@ public class KaboomConfiguration
 		LOG.info("boomFileBlocksize: {}", getBoomFileBlocksize());
 		LOG.info("useNativeCompression: {}", getUseNativeCompression());
 		LOG.info("loadBalancer: {}", getLoadBalancer());
+		LOG.info("Using kerberos uthentication.");
+		LOG.info("Kerberos principal = {}", getKerberosPrincipal());
+		LOG.info("Kerberos keytab = {}", getKerberosKeytab());			
+
 		
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
-			LOG.info("topicToProxyUser: {} -> {}", entry.getKey(), entry.getValue());
+			LOG.debug("topicToProxyUser: {} -> {}", entry.getKey(), entry.getValue());
 		}
 		
 		for (Map.Entry<String, String> entry : getTopicToHdfsRoot().entrySet())
 		{
-			LOG.info("topicToKrFlagPath: {} -> {}", entry.getKey(), entry.getValue());
+			LOG.debug("topicToKrFlagPath: {} -> {}", entry.getKey(), entry.getValue());
 		}
 
 		for (Map.Entry<String, ArrayList<TimeBasedHdfsOutputPath>> entry : getTopicToHdfsPaths().entrySet())
@@ -142,7 +146,7 @@ public class KaboomConfiguration
 				 
 			for (TimeBasedHdfsOutputPath outputPath : outputPaths)
 			{	
-				LOG.info("topic: {} -> {}", entry.getKey(), outputPath);
+				LOG.debug("topic: {} -> {}", entry.getKey(), outputPath);
 			}
 		}
 
@@ -242,7 +246,7 @@ public class KaboomConfiguration
 				String durationProperty = String.format("topic.%s.hdfsDir.%d.duration", topic, Integer.parseInt(pathNumber));
 				Integer duration = Integer.parseInt(props.getProperty(durationProperty, "180"));				
 
-				LOG.info("HDFS output path property matched topic: {} path number: {} duration: {} directory: {}", topic, pathNumber, duration, directory);					
+				LOG.debug("HDFS output path property matched topic: {} path number: {} duration: {} directory: {}", topic, pathNumber, duration, directory);					
 				
 				TimeBasedHdfsOutputPath path = new TimeBasedHdfsOutputPath(
 					 proxyUserToFileSystem.get(topicToProxyUser.get(topic)), 
@@ -309,9 +313,6 @@ public class KaboomConfiguration
 			
 			try
 			{
-				LOG.info("Using kerberos uthentication.");
-				LOG.info("Kerberos principal = {}", getKerberosPrincipal());
-				LOG.info("Kerberos keytab = {}", getKerberosKeytab());			
 			
 				Authenticator.getInstance().setKerbConfPrincipal(getKerberosPrincipal());
 				Authenticator.getInstance().setKerbKeytab(getKerberosKeytab());
@@ -329,7 +330,7 @@ public class KaboomConfiguration
 								 FileSystem fs = hadoopUrlPath.getFileSystem(hadoopConfiguration);
 								 proxyUserToFileSystem.put(proxyUser, fs);
 								 								 
-								 LOG.info("Opening {} for proxy user {}", hadoopUrlPath, proxyUser);
+								 LOG.debug("Opening {} for proxy user {}", hadoopUrlPath, proxyUser);
 							 }
 							 catch (IOException ioe)
 							 {

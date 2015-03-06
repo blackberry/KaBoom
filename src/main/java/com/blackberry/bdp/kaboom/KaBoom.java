@@ -48,6 +48,10 @@ public class KaBoom
 	public static void main(String[] args) throws Exception
 	{
 		new KaBoom().run();
+		
+		LOG.info("*******************************************");
+		LOG.info("***         KABOOM SERVER START         ***");
+		LOG.info("*******************************************");
 	}
 	
 	public KaBoom() throws Exception
