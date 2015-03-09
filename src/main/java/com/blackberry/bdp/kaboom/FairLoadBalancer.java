@@ -28,8 +28,7 @@ import org.slf4j.LoggerFactory;
  * @author dariens
  */
 public class FairLoadBalancer extends Leader
-{
-	
+{	
 	private static final Logger LOG = LoggerFactory.getLogger(FairLoadBalancer.class);
 
 	public FairLoadBalancer(KaboomConfiguration config)
@@ -131,9 +130,10 @@ public class FairLoadBalancer extends Leader
 
 			for (String partition : partitionToHost.keySet())
 			{
-				// If it's already assigned, skip it
+				// If it's already assigned or if it's not supported, skip it
 
-				if (partitionToClient.containsKey(partition))
+				if (partitionToClient.containsKey(partition) 
+					 || (false == config.getTopicToSupportedStatus().containsKey(partition) || false == config.getTopicToSupportedStatus().get(partition)))
 				{
 					continue;
 				}

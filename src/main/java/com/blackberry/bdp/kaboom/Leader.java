@@ -43,7 +43,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 
 	private ReadyFlagWriter readyFlagWriter;
 	private Thread readyFlagThread;
-	final private KaboomConfiguration config;
+	final protected KaboomConfiguration config;
 	Map<String, String> partitionToHost = new HashMap<>();
 	Map<String, List<String>> hostToPartition = new HashMap<>();
 	final Map<String, KaBoomNodeInfo> clients = new HashMap<>();

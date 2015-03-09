@@ -260,9 +260,11 @@ public class KaBoom
 							partitionToThreadsMap.remove(partitionId);
 							partitionToWorkerMap.remove(partitionId);
 						}
-						
-						LOG.debug("KaBoom clientId {} assigned to partitonId {} and worker is already working", config.getKaboomId(), partitionId);
-						validWorkingPartitions.put(partitionId, true);
+						else
+						{
+							LOG.debug("KaBoom clientId {} assigned to partitonId {} and worker is already working", config.getKaboomId(), partitionId);
+							validWorkingPartitions.put(partitionId, true);
+						}
 					}
 					else
 					{

@@ -784,7 +784,7 @@ public class Worker implements Runnable
 
 	public void stop()
 	{
-		LOG.info("Stop request received.");
+		LOG.info("[{}] Stop request received", partitionId);
 		stopping = true;
 	}
 

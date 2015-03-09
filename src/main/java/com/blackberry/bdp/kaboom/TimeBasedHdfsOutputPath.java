@@ -38,7 +38,7 @@ public class TimeBasedHdfsOutputPath
 	private final Timer totalFlushTimer;
 	private long lastPeriodicClosePollTime  = System.currentTimeMillis();
 
-	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();	
+	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();
 	
 	/**
 	 * Reusable objects only exist as class attributes because they are needed very frequently

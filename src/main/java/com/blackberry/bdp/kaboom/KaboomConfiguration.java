@@ -146,10 +146,9 @@ public class KaboomConfiguration
 	
 	public KaboomConfiguration (Properties props) throws Exception
 	{
-		Parser propsParser = new Parser(props);
+		propsParser = new Parser(props);
 		
-		this.props = props;
-		this.propsParser = propsParser;
+		this.props = props;		
 		
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));		
 		totalBoomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
@@ -184,7 +183,27 @@ public class KaboomConfiguration
 		hadoopConfiguration = buildHadoopConfiguration();		
 		mapTopicToProxyUser(props);
 		mapProxyUserToHadoopFileSystem();
+		//mapTopicsToSupportedStatus();
 	}
+	
+	private void mapTopicsToSupportedStatus()
+	{
+		Pattern topicPathPattern = Pattern.compile("^topic\\.([^\\\\.]+)\\.hdfsRootDir");
+
+		for (Map.Entry<Object, Object> e : props.entrySet())
+		{
+			Matcher m = topicPathPattern.matcher(e.getKey().toString());
+			if (m.matches())
+			{								
+				String topic = m.group(1);
+				
+				if (false == getTopicToSupportedStatus().containsKey(topic))
+				{
+					getTopicToSupportedStatus().put(topic, true);
+				}
+			}
+		}
+	}	
 	
 	/**
 	 * Builds the topic to an HDFS paths Map
@@ -197,7 +216,6 @@ public class KaboomConfiguration
 	 * topic.devtest-test1.hdfsDir.2=hourly_temp
 	 * topic.devtest-test1.hdfsDir.2.duration=3600
 	 *
-	 * @param props Properties to parse for topics and paths
 	 * @return Map<String, String>
 	 */
 	public ArrayList<TimeBasedHdfsOutputPath> getHdfsPathsForTopic(String topic)
