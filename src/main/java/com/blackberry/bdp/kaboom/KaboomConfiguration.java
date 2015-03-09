@@ -183,7 +183,7 @@ public class KaboomConfiguration
 		hadoopConfiguration = buildHadoopConfiguration();		
 		mapTopicToProxyUser(props);
 		mapProxyUserToHadoopFileSystem();
-		//mapTopicsToSupportedStatus();
+		mapTopicsToSupportedStatus();
 	}
 	
 	private void mapTopicsToSupportedStatus()
