@@ -274,13 +274,6 @@ public class KaBoom
 						{
 							String topic = m.group(1);
 							int partition = Integer.parseInt(m.group(2));						
-							ArrayList<TimeBasedHdfsOutputPath> paths = config.getTopicToHdfsPaths().get(topic);
-
-							if (paths == null)
-							{
-								LOG.error("Topic has no configured output path: {}", topic);
-								continue;
-							}
 
 							Worker worker = new Worker(config, curator, topic, partition);
 

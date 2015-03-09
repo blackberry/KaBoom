@@ -53,13 +53,14 @@ import com.codahale.metrics.Timer;
 public class KaboomConfiguration
 {
 	private static final String defaultProperyFile = "kaboom.properties";
+	private final Properties props;
+	private final Parser propsParser;
 	private final Object fsLock = new Object();
 	private final Path hadoopUrlPath;
 	private int kaboomId;
 	private long fileRotateInterval;
 	private int weight;
-	private final CuratorFramework curator;
-	private final Map<String, ArrayList<TimeBasedHdfsOutputPath>> topicToHdfsPaths = new HashMap<>();
+	private final CuratorFramework curator;	
 	private final Map<String, String> topicToProxyUser = new HashMap<>();
 	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
 	private final Map<String, String> topicToHdfsRootDir = new HashMap<>();
@@ -140,22 +141,15 @@ public class KaboomConfiguration
 			LOG.debug("topicToKrFlagPath: {} -> {}", entry.getKey(), entry.getValue());
 		}
 
-		for (Map.Entry<String, ArrayList<TimeBasedHdfsOutputPath>> entry : getTopicToHdfsPaths().entrySet())
-		{
-			ArrayList<TimeBasedHdfsOutputPath> outputPaths = entry.getValue();
-				 
-			for (TimeBasedHdfsOutputPath outputPath : outputPaths)
-			{	
-				LOG.debug("topic: {} -> {}", entry.getKey(), outputPath);
-			}
-		}
-
 		LOG.info(" *** end dumping configuration *** ");
 	}
 	
 	public KaboomConfiguration (Properties props) throws Exception
 	{
 		Parser propsParser = new Parser(props);
+		
+		this.props = props;
+		this.propsParser = propsParser;
 		
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));		
 		totalBoomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
@@ -189,8 +183,7 @@ public class KaboomConfiguration
 		curator = buildCuratorFramework();		
 		hadoopConfiguration = buildHadoopConfiguration();		
 		mapTopicToProxyUser(props);
-		mapProxyUserToHadoopFileSystem();		
-		mapTopicToHdfsPathFromProps(props);		
+		mapProxyUserToHadoopFileSystem();
 	}
 	
 	/**
@@ -207,17 +200,18 @@ public class KaboomConfiguration
 	 * @param props Properties to parse for topics and paths
 	 * @return Map<String, String>
 	 */
-	private void mapTopicToHdfsPathFromProps(Properties props)
+	public ArrayList<TimeBasedHdfsOutputPath> getHdfsPathsForTopic(String topic)
 	{
-		Pattern topicPathPattern = Pattern.compile("^topic\\.([^\\.]+)\\.hdfsDir\\.(\\d+)");
+		ArrayList<TimeBasedHdfsOutputPath> paths = new ArrayList<>();
+		
+		Pattern topicPathPattern = Pattern.compile("^topic\\." + topic + "\\.hdfsDir\\.(\\d+)");
 
 		for (Map.Entry<Object, Object> e : props.entrySet())
 		{
 			Matcher m = topicPathPattern.matcher(e.getKey().toString());
 			if (m.matches())
 			{								
-				String topic = m.group(1);				
-				String pathNumber = m.group(2);
+				String pathNumber = m.group(1);
 				
 				if (!props.containsKey(String.format("topic.%s.hdfsRootDir", topic)))
 				{
@@ -254,19 +248,8 @@ public class KaboomConfiguration
 					 this,
 					 directory, 
 					 duration);				
-								
-				ArrayList<TimeBasedHdfsOutputPath> paths = topicToHdfsPaths.get(topic);
 				
-				if (paths == null)
-				{
-					paths = new ArrayList<>();
-					paths.add(path);
-					topicToHdfsPaths.put(topic, paths);
-				}
-				else
-				{
-					paths.add(path);
-				}
+				paths.add(path);
 				
 				if (false == getTopicToSupportedStatus().containsKey(topic))
 				{
@@ -274,6 +257,8 @@ public class KaboomConfiguration
 				}
 			}
 		}
+		
+		return paths;
 	}
 
 	/**
@@ -497,14 +482,6 @@ public class KaboomConfiguration
 	public void setWeight(int weight)
 	{
 		this.weight = weight;
-	}
-
-	/**
-	 * @return the topicToHdfsPaths
-	 */
-	public Map<String, ArrayList<TimeBasedHdfsOutputPath>> getTopicToHdfsPaths()
-	{
-		return topicToHdfsPaths;
 	}
 
 	/**

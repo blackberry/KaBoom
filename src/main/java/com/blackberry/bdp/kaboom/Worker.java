@@ -273,7 +273,7 @@ public class Worker implements Runnable
 		this.partition = partition;
 		this.startTime = System.currentTimeMillis();
 		this.messagesWritten = 0;
-		this.hdfsOutputPaths = config.getTopicToHdfsPaths().get(topic);
+		this.hdfsOutputPaths = config.getHdfsPathsForTopic(topic);
 		this.boomWritesMeterTopic = config.getTopicToBoomWrites().get(topic);
 		this.boomWritesMeterTotal = config.getTotalBoomWritesMeter();
 		
