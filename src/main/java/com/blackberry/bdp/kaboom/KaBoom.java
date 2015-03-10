@@ -89,20 +89,6 @@ public class KaBoom
 			throw e;
 		}
 		
-		try
-		{
-			LOG.info("using kerberos authentication.");
-			LOG.info("kerberos principal = {}", config.getKerberosPrincipal());
-			LOG.info("kerberos keytab = {}", config.getKerberosKeytab());			
-			
-			Authenticator.getInstance().setKerbConfPrincipal(config.getKerberosPrincipal());
-			Authenticator.getInstance().setKerbKeytab(config.getKerberosKeytab());
-		}
-		catch (Exception e)
-		{
-			LOG.error("there was an error configuring kerberos configuration: ", e);
-		}
-
 		MetricRegistrySingleton.getInstance().enableJmx();
 		
 		/**
@@ -130,7 +116,6 @@ public class KaBoom
 			}			
 		}
 		
-		// Register my existence
 		{
 			Yaml yaml = new Yaml();
 			ByteArrayOutputStream nodeOutputStream = new ByteArrayOutputStream();
