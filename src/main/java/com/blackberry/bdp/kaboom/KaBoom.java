@@ -97,23 +97,25 @@ public class KaBoom
 		 * 
 		 */
 		
-		final CuratorFramework curator = config.getCurator();
-		
 		for (String path : new String[] {"/kaboom/leader", "/kaboom/clients", "/kaboom/assignments"})
 		{
-			if (curator.checkExists().forPath(path) == null)
+			if (config.getCurator().checkExists().forPath(path) == null)
 			{
 				try
 				{
 					LOG.warn("the path {} was not found in ZK and needs to be created", path);
-					curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT).forPath(path);
+					config.getCurator().create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT).forPath(path);
 					LOG.warn("path {} created in ZK", path);
 				} 
 				catch (Exception e)
 				{
 					LOG.error("Error creating ZooKeeper node {} ", path, e);
 				}
-			}			
+			}
+			else
+			{
+				LOG.info("required path {} already exists in zookeeper", path);
+			}
 		}
 		
 		{
@@ -134,7 +136,7 @@ public class KaBoom
 			{
 				try
 				{
-					curator.create().withMode(CreateMode.EPHEMERAL).forPath("/kaboom/clients/" + config.getKaboomId(), nodeContents);
+					config.getCurator().create().withMode(CreateMode.EPHEMERAL).forPath("/kaboom/clients/" + config.getKaboomId(), nodeContents);
 					break;
 				} 
 				catch (Exception e)
@@ -165,7 +167,7 @@ public class KaBoom
 			loadBalancer = new LocalLoadBalancer(config);
 		}			 			 
 
-		final LeaderSelector leaderSelector = new LeaderSelector(curator, "/kaboom/leader", loadBalancer);		
+		final LeaderSelector leaderSelector = new LeaderSelector(config.getCurator(), "/kaboom/leader", loadBalancer);		
 		leaderSelector.autoRequeue();
 		leaderSelector.start();		
 		
@@ -210,7 +212,7 @@ public class KaBoom
 				
 				try
 				{
-					curator.delete().forPath("/kaboom/clients/" + config.getKaboomId());
+					config.getCurator().delete().forPath("/kaboom/clients/" + config.getKaboomId());
 				} 
 				catch (Exception e)
 				{
@@ -218,7 +220,7 @@ public class KaBoom
 				}
 				
 				leaderSelector.close();
-				curator.close();
+				config.getCurator().close();
 			}
 		}));
 
@@ -231,9 +233,9 @@ public class KaBoom
 			/**
 			 * Get all my assignments and create a worker if there's anything not already being worked
 			 */			
-			for (String partitionId : curator.getChildren().forPath("/kaboom/assignments"))
+			for (String partitionId : config.getCurator().getChildren().forPath("/kaboom/assignments"))
 			{
-				String assignee = new String(curator.getData().forPath("/kaboom/assignments/" + partitionId), UTF8);
+				String assignee = new String(config.getCurator().getData().forPath("/kaboom/assignments/" + partitionId), UTF8);
 				
 				if (assignee.equals(Integer.toString(config.getKaboomId())))
 				{					
@@ -262,7 +264,7 @@ public class KaBoom
 							String topic = m.group(1);
 							int partition = Integer.parseInt(m.group(2));						
 
-							Worker worker = new Worker(config, curator, topic, partition);
+							Worker worker = new Worker(config, config.getCurator(), topic, partition);
 
 							partitionToWorkerMap.put(partitionId, worker);
 							partitionToThreadsMap.put(partitionId, new Thread(worker));
