@@ -197,10 +197,18 @@ public class KaboomConfiguration
 			{								
 				String topic = m.group(1);
 				
-				if (false == getTopicToSupportedStatus().containsKey(topic))
+				if (!getTopicToSupportedStatus().containsKey(topic))
 				{
 					getTopicToSupportedStatus().put(topic, true);
 				}
+
+				String hdfsRootDir = hadoopUrlPath + props.getProperty(String.format("topic.%s.hdfsRootDir", topic));				
+				
+				if (!topicToHdfsRootDir.containsKey(topic))
+				{					
+					topicToHdfsRootDir.put(topic, hdfsRootDir);
+				}
+				
 			}
 		}
 	}	
@@ -216,7 +224,9 @@ public class KaboomConfiguration
 	 * topic.devtest-test1.hdfsDir.2=hourly_temp
 	 * topic.devtest-test1.hdfsDir.2.duration=3600
 	 *
-	 * @return Map<String, String>
+	 * @param topic
+	 * @return ArrayList<TimeBasedHdfsOutputPath>
+
 	 */
 	public ArrayList<TimeBasedHdfsOutputPath> getHdfsPathsForTopic(String topic)
 	{
@@ -237,13 +247,6 @@ public class KaboomConfiguration
 					continue;
 				}
 				
-				String hdfsRootDir = hadoopUrlPath + props.getProperty(String.format("topic.%s.hdfsRootDir", topic));				
-				
-				if (!topicToHdfsRootDir.containsKey(topic))
-				{					
-					topicToHdfsRootDir.put(topic, hdfsRootDir);
-				}
-				
 				if (!topicToBoomWritesMeter.containsKey(topic))
 				{
 					topicToBoomWritesMeter.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes"));
@@ -254,6 +257,7 @@ public class KaboomConfiguration
 					topicToHdfsFlushTimer.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":hdfs flush timer"));
 				}
 				
+				String hdfsRootDir = hadoopUrlPath + props.getProperty(String.format("topic.%s.hdfsRootDir", topic));				
 				String directory = String.format("%s/%s", hdfsRootDir, e.getValue().toString());
 				String durationProperty = String.format("topic.%s.hdfsDir.%d.duration", topic, Integer.parseInt(pathNumber));
 				Integer duration = Integer.parseInt(props.getProperty(durationProperty, "180"));				
@@ -269,7 +273,7 @@ public class KaboomConfiguration
 				
 				paths.add(path);
 				
-				if (false == getTopicToSupportedStatus().containsKey(topic))
+				if (!getTopicToSupportedStatus().containsKey(topic))
 				{
 					getTopicToSupportedStatus().put(topic, true);
 				}
@@ -305,6 +309,9 @@ public class KaboomConfiguration
 	 */
 	private void mapProxyUserToHadoopFileSystem() 
 	{
+		Authenticator.getInstance().setKerbConfPrincipal(getKerberosPrincipal());
+		Authenticator.getInstance().setKerbKeytab(getKerberosKeytab());
+		
 		for (Map.Entry<String, String> entry : topicToProxyUser.entrySet())
 		{
 			final String proxyUser = entry.getValue();
@@ -315,11 +322,7 @@ public class KaboomConfiguration
 			}
 			
 			try
-			{
-			
-				Authenticator.getInstance().setKerbConfPrincipal(getKerberosPrincipal());
-				Authenticator.getInstance().setKerbKeytab(getKerberosKeytab());
-				
+			{	
 				LOG.info("Attempting to create file system {} for {}", hadoopUrlPath, proxyUser);
 				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>()
 				 {
