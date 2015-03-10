@@ -222,10 +222,9 @@ public class ReadyFlagWriter extends NotifyingThread
 						continue;
 					}
 
-					LOG.trace(LOG_TAG + "topic {} might be candidate for kafka ready flag (data dir exists, working dir doesn't, no flags exist)", topicName);
-					
+					LOG.trace(LOG_TAG + "topic {} might be candidate for kafka ready flag (data dir exists, working dir doesn't, no flags exist)", topicName);					
 
-					if (oldestTimestamp > startOfHourTimestamp)
+					if (oldestTimestamp > prevHourStartTimestmap)
 					{
 						synchronized (fsLock)
 						{
