@@ -609,8 +609,7 @@ public class Worker implements Runnable
 					
 					if (timestamp > maxTimestamp || maxTimestamp == -1)
 					{
-						maxTimestamp = timestamp;
-						LOG.info("[{}] new max timestamp {}", partitionId, maxTimestamp);
+						maxTimestamp = timestamp;						
 					}
 
 				} 
@@ -637,10 +636,10 @@ public class Worker implements Runnable
 			
 			try
 			{
+				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.", partitionId, offset, maxTimestamp);
+				
 				storeOffset();
 				storeOffsetTimestamp();
-			
-				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.", partitionId, offset, maxTimestamp);
 			} 
 			catch (Exception e)
 			{
