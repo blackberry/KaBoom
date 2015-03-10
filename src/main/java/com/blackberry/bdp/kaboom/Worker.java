@@ -610,6 +610,7 @@ public class Worker implements Runnable
 					if (timestamp > maxTimestamp || maxTimestamp == -1)
 					{
 						maxTimestamp = timestamp;
+						LOG.info("[{}] new max timestamp {}", partitionId, maxTimestamp);
 					}
 
 				} 
@@ -638,19 +639,6 @@ public class Worker implements Runnable
 			{
 				storeOffset();
 				storeOffsetTimestamp();
-				
-				// Let's validate that the ZK offset was written correctly... 
-				
-				long verifyOffset = getOffset();
-				
-				if (verifyOffset == offset)
-				{
-					LOG.info("[{}] offset {} validated", partitionId, offset);
-				}
-				else
-				{
-					LOG.error("[{}] offset {} validation error because {} was returned", partitionId, offset, verifyOffset);
-				}
 			
 				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.", partitionId, offset, maxTimestamp);
 			} 

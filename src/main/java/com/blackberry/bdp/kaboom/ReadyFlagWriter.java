@@ -17,7 +17,6 @@
 package com.blackberry.bdp.kaboom;
 
 import java.io.IOException;
-import java.security.PrivilegedExceptionAction;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
