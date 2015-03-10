@@ -170,7 +170,7 @@ public class ReadyFlagWriter extends NotifyingThread
 					TimeUnit.MILLISECONDS.toMinutes(oldestTimestampMillisAgo),
 					TimeUnit.MILLISECONDS.toSeconds(oldestTimestampMillisAgo) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(oldestTimestampMillisAgo))));			
 							
-			for (Integer hourNum = 1; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
+			for (Integer hourNum = 0; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
 			{
 				/**
 				 * We know what the current timestamp was when we started, so start subtracting 
@@ -240,14 +240,16 @@ public class ReadyFlagWriter extends NotifyingThread
 							}
 						}
 					}
-					
-					long kaboomBehindMillisForHour = startOfHourTimestamp - oldestTimestamp;
-					
-					LOG.info(LOG_TAG + "skipping {} because KaBoom is {} earlier than top of hour",
-						 kafkaReadyFlag.toString(),
-						 String.format("%d minutes and  %d seconds", 
-							TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour),
-							TimeUnit.MILLISECONDS.toSeconds(kaboomBehindMillisForHour) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour))));
+					else
+					{
+						long kaboomBehindMillisForHour = prevHourStartTimestmap - oldestTimestamp;
+
+						LOG.info(LOG_TAG + "skipping {} because KaBoom is {} earlier than top of hour",
+							 kafkaReadyFlag.toString(),
+							 String.format("%d minutes and  %d seconds", 
+								TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour),
+								TimeUnit.MILLISECONDS.toSeconds(kaboomBehindMillisForHour) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour))));
+					}
 				} 
 				catch (Exception e)
 				{
