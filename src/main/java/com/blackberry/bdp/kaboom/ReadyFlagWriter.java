@@ -165,11 +165,10 @@ public class ReadyFlagWriter extends NotifyingThread
 			long oldestTimestamp = oldestPartitionOffsetForTopic(topicName, entry.getValue());
 			long oldestTimestampMillisAgo = System.currentTimeMillis() - oldestTimestamp;
 					
-			LOG.info(LOG_TAG + "oldest timestamp for topic={} is {}", topicName, 
-				 String.format("%d min, %d sec ago", 
+			LOG.info(LOG_TAG + "oldest timestamp for topic {} is {}", topicName, 
+				 String.format("%d minutes and %d seconds ago", 
 					TimeUnit.MILLISECONDS.toMinutes(oldestTimestampMillisAgo),
-					TimeUnit.MILLISECONDS.toSeconds(oldestTimestampMillisAgo) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(oldestTimestampMillisAgo))
-			));			
+					TimeUnit.MILLISECONDS.toSeconds(oldestTimestampMillisAgo) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(oldestTimestampMillisAgo))));			
 							
 			for (Integer hourNum = 1; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
 			{
@@ -244,12 +243,11 @@ public class ReadyFlagWriter extends NotifyingThread
 					
 					long kaboomBehindMillisForHour = startOfHourTimestamp - oldestTimestamp;
 					
-					LOG.info(LOG_TAG + "skipping flag for {} because KaBoom is {} earlier than top of hour",
-						 topicName,
+					LOG.info(LOG_TAG + "skipping {} because KaBoom is {} earlier than top of hour",
+						 kafkaReadyFlag.toString(),
 						 String.format("%d minutes and  %d seconds", 
 							TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour),
-							TimeUnit.MILLISECONDS.toSeconds(kaboomBehindMillisForHour) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour))),
-						kafkaReadyFlag.toString());
+							TimeUnit.MILLISECONDS.toSeconds(kaboomBehindMillisForHour) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour))));
 				} 
 				catch (Exception e)
 				{
