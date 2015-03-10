@@ -44,13 +44,14 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	private ReadyFlagWriter readyFlagWriter;
 	private Thread readyFlagThread;
 	final protected KaboomConfiguration config;
+	CuratorFramework curator;
+	
 	Map<String, String> partitionToHost = new HashMap<>();
 	Map<String, List<String>> hostToPartition = new HashMap<>();
-	final Map<String, KaBoomNodeInfo> clients = new HashMap<>();
+	Map<String, KaBoomNodeInfo> clients = new HashMap<>();
 	Map<String, List<String>> clientToPartitions = new HashMap<>();
 	Map<String, String> partitionToClient = new HashMap<>();			
-	List<String> topics = new ArrayList<>();
-	CuratorFramework curator;
+	List<String> topics = new ArrayList<>();	
 	
 	public Leader(KaboomConfiguration config)
 	{
@@ -73,13 +74,20 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 		Thread.sleep(30 * 1000);
 
 		while (true)
-		{
+		{			
+			// (Re-)build the data structures and maps that our leader needs to make balancing decisions
 			
-			// Build the data structures and maps that our load balancers need to make balancing decisions
-			
+			topics = new ArrayList<>();			
 			StateUtils.readTopicsFromZooKeeper(config.getKafkaZkConnectionString(), topics, config.getTopicToSupportedStatus());
+			
+			partitionToHost = new HashMap<>();
+			hostToPartition = new HashMap<>();
 			StateUtils.getPartitionHosts(config.getKafkaSeedBrokers(), topics, partitionToHost, hostToPartition);
+			
+			clients = new HashMap<>();
 			StateUtils.getActiveClients(curator, clients);
+			
+			clientToPartitions = new HashMap<>();
 			StateUtils.calculateLoad(partitionToHost, clients, clientToPartitions);
 			
 			LOG.info("Found a total of {} supported topics in ZooKeeper", topics.size());
@@ -128,6 +136,8 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			// Build up our clientToPartitions and partitionsToClients, while 
 			// deleting any assignments for clients that are not connected
 			
+			partitionToClient = new HashMap<>();			
+			
 			for (String partition : partitionToHost.keySet())
 			{
 				Stat stat = curator.checkExists().forPath("/kaboom/assignments/" + partition);
@@ -157,6 +167,17 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 					}
 				}
 			}
+			
+			// Call the load balancer's implementation of run_balancer()
+			
+			try
+			{
+				run_balancer();
+			}
+			catch (Exception e)
+			{
+				LOG.error("The load balancer raised an exception: ", e);
+			}						
 
 			/*
 			 *  Check to see if the kafka_ready flag writer thread exists and is alive:
@@ -176,18 +197,6 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				readyFlagThread.start();
 				LOG.info("[ready flag writer] thread created and started");
 			}
-
-			
-			// Call the load balancer's implementation of run_balancer()
-			
-			try
-			{
-				run_balancer();
-			}
-			catch (Exception e)
-			{
-				LOG.error("The load balancer raised an exception: ", e);
-			}						
 
 			Thread.sleep(config.getLeaderSleepDurationMs());
 		}
