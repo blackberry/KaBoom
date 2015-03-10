@@ -86,6 +86,7 @@ public class EvenLoadBalancer extends Leader
 					try
 					{
 						curator.delete().forPath("/kaboom/assignments/" + partitionToDelete);
+						LOG.info("Deleted assignment {}:", "/kaboom/assignments/" + partitionToDelete);
 					}
 					catch (Exception ex)
 					{

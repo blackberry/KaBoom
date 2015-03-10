@@ -138,7 +138,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 					
 					if (clients.containsKey(client))
 					{
-						LOG.debug("Partition {} : client {} is connected", partition, client);
+						LOG.info("Partition {} : client {} is connected", partition, client);
 						
 						partitionToClient.put(partition, client);						
 						List<String> parts = clientToPartitions.get(client);
