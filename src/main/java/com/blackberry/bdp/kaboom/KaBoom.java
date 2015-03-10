@@ -171,9 +171,9 @@ public class KaBoom
 		// Start leader election thread.  The leader assigns work to each instance
 		Leader loadBalancer  = null;
 		
-		if (config.getLoadBalancer().equals("fair"))
+		if (config.getLoadBalancer().equals("even"))
 		{
-			loadBalancer = new FairLoadBalancer(config);
+			loadBalancer = new EvenLoadBalancer(config);
 		}
 		else if (config.getLoadBalancer().equals("local"))
 		{

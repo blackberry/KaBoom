@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
 public class LocalLoadBalancer extends Leader
 {
 	
-	private static final Logger LOG = LoggerFactory.getLogger(FairLoadBalancer.class);
+	private static final Logger LOG = LoggerFactory.getLogger(EvenLoadBalancer.class);
 
 	public LocalLoadBalancer(KaboomConfiguration config)
 	{

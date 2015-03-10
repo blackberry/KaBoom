@@ -10,12 +10,14 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The fair load balancer
+ * The even load balancer
  * 
  * Partitions are assigned based off a weighted workload.  
  * 
@@ -27,14 +29,14 @@ import org.slf4j.LoggerFactory;
  * 
  * @author dariens
  */
-public class FairLoadBalancer extends Leader
+public class EvenLoadBalancer extends Leader
 {	
-	private static final Logger LOG = LoggerFactory.getLogger(FairLoadBalancer.class);
+	private static final Logger LOG = LoggerFactory.getLogger(EvenLoadBalancer.class);
 
-	public FairLoadBalancer(KaboomConfiguration config)
+	public EvenLoadBalancer(KaboomConfiguration config)
 	{		
 		super(config);
-		LOG.info("The fair load balancer has been instantiated");
+		LOG.info("The even load balancer has been instantiated");
 	}
 	
 	@Override
@@ -132,12 +134,32 @@ public class FairLoadBalancer extends Leader
 			{
 				// If it's already assigned or if it's not supported, skip it
 
-				if (partitionToClient.containsKey(partition) 
-					 || (false == config.getTopicToSupportedStatus().containsKey(partition) || false == config.getTopicToSupportedStatus().get(partition)))
+				if (partitionToClient.containsKey(partition))
+				{					
+					LOG.info("[{}] is already assigned", partition);
+					continue;
+				}
+				
+				Pattern topicPartitionPattern = Pattern.compile("^(.*)-(\\d+)$");
+				Matcher m = topicPartitionPattern.matcher(partition);
+				String topic;
+				
+				if (m.matches())
 				{
+					topic = m.group(1);
+				}
+				else
+				{
+					LOG.error("[{}] can't parse topic from partitionId");
 					continue;
 				}
 
+				if (false == config.getTopicToSupportedStatus().containsKey(topic) 
+					|| false == config.getTopicToSupportedStatus().get(topic))
+				{
+					continue;
+				}
+				
 				Collections.sort(sortedClients, comparator);
 
 				/**
