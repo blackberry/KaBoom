@@ -137,7 +137,7 @@ public class EvenLoadBalancer extends Leader
 
 				if (partitionToClient.containsKey(partition))
 				{					
-					LOG.info("[{}] is already assigned", partition);
+					LOG.debug("[{}] is already assigned", partition);
 					continue;
 				}
 				

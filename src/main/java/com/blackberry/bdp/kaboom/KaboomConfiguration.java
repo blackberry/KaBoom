@@ -267,7 +267,7 @@ public class KaboomConfiguration
 				LOG.debug("HDFS output path property matched topic: {} path number: {} duration: {} directory: {}", topic, pathNumber, duration, directory);					
 				
 				TimeBasedHdfsOutputPath path = new TimeBasedHdfsOutputPath(
-					 proxyUserToFileSystem.get(topicToProxyUser.get(topic)), 
+					 getProxyUserToFileSystem().get(topicToProxyUser.get(topic)), 
 					 topic,
 					 this,
 					 directory, 
@@ -318,7 +318,7 @@ public class KaboomConfiguration
 		{
 			final String proxyUser = entry.getValue();
 			
-			if (proxyUserToFileSystem.containsKey(proxyUser))
+			if (getProxyUserToFileSystem().containsKey(proxyUser))
 			{
 				continue;
 			}
@@ -336,7 +336,7 @@ public class KaboomConfiguration
 							 try
 							 {
 								 FileSystem fs = hadoopUrlPath.getFileSystem(hadoopConfiguration);
-								 proxyUserToFileSystem.put(proxyUser, fs);
+								 getProxyUserToFileSystem().put(proxyUser, fs);
 								 								 
 								 LOG.debug("Opening {} for proxy user {}", hadoopUrlPath, proxyUser);
 							 }
@@ -849,5 +849,13 @@ public class KaboomConfiguration
 	public long getLeaderSleepDurationMs()
 	{
 		return leaderSleepDurationMs;
+	}
+
+	/**
+	 * @return the proxyUserToFileSystem
+	 */
+	public Map<String, FileSystem> getProxyUserToFileSystem()
+	{
+		return proxyUserToFileSystem;
 	}
 }

@@ -230,7 +230,7 @@ public class StateUtils
 				topics.add(node);
 			}
 			
-			LOG.info("Reading topics from ZooKeeper skipped the following unsupported topics:  {}", StringUtils.join(skippedTopicNames, ", "));				
+			LOG.debug("Reading topics from ZooKeeper skipped the following unsupported topics:  {}", StringUtils.join(skippedTopicNames, ", "));				
 		} 
 		finally 
 		{

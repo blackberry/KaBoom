@@ -103,7 +103,7 @@ public class ReadyFlagWriter extends NotifyingThread
 			if (stat != null)
 			{
 				Long thisTimestamp = Converter.longFromBytes(curator.getData().forPath(zk_offset_path), 0);
-				LOG.info(LOG_TAG + "found topic={} partition={} offset timestamp={}", topicName, partition.partitionId(), thisTimestamp);
+				LOG.debug(LOG_TAG + "found topic={} partition={} offset timestamp={}", topicName, partition.partitionId(), thisTimestamp);
 				if (thisTimestamp < oldestTimestamp || oldestTimestamp == -1)
 				{
 					oldestTimestamp = thisTimestamp;
@@ -149,12 +149,14 @@ public class ReadyFlagWriter extends NotifyingThread
 		for (Map.Entry<String, List<PartitionMetadata>> entry : topicsWithPartitions.entrySet())
 		{
 			String topicName = entry.getKey();
+			
+			fs = config.getProxyUserToFileSystem().get(config.getTopicToProxyUser().get(topicName));
 				
 			for (Integer hourNum = 1; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
 			{
 				/**
 				 * We know what the current timestamp was when we started, so start subtracting 
-				 * hourNum * 60 * 60 * 100 from it so we're checking previous hours... Note hourNum 
+				 * hourNum * 60 * 60 * 1000 from it so we're checking previous hours... Note hourNum 
 				 * starts at 0 so we're not skipping the immediate previous hour
 				 */
 
@@ -184,27 +186,6 @@ public class ReadyFlagWriter extends NotifyingThread
 					LOG.trace(LOG_TAG + "HDFS path for kafka ready flag is: {}", kafkaReadyFlag.toString());
 					LOG.trace(LOG_TAG + "HDFS path for data directory is: {}", dataDirectory.toString());
 					LOG.trace(LOG_TAG + "opening {}", topicRoot.toString());
-
-					Authenticator.getInstance().runPrivileged(config.getTopicToProxyUser().get(topicName),
-						 new PrivilegedExceptionAction<Void>()
-						 {
-							 @Override
-							 public Void run() throws Exception
-							 {
-								 synchronized (fsLock)
-								 {
-									 try
-									 {
-										 fs = topicRoot.getFileSystem(config.getHadoopConfiguration());
-									 } 
-									 catch (IOException e)
-									 {
-										 LOG.error(LOG_TAG + "Error getting file system for path {}, error: {}.", topicRoot.toString(), e);
-									 }
-								 }
-								 return null;
-							 }
-						 });
 
 					if (!fs.exists(dataDirectory))
 					{
@@ -238,6 +219,7 @@ public class ReadyFlagWriter extends NotifyingThread
 					{
 						LOG.info(LOG_TAG + "topic {} oldest timestamp has surpassed the current hour, ready flag required", topicName);
 						LOG.info(LOG_TAG + "topic {} need to write {} as proxy user {}", topicName, kafkaReadyFlag.toString(), config.getTopicToProxyUser().get(topicName));
+						
 						synchronized (fsLock)
 						{
 							try
@@ -249,9 +231,9 @@ public class ReadyFlagWriter extends NotifyingThread
 								LOG.error("Error getting File System: {}", e.toString());
 							}
 						}
+						
 						LOG.info(LOG_TAG + "topic {} flag {} written as {}", topicName, kafkaReadyFlag.toString(), config.getTopicToProxyUser().get(topicName));
 					}
-
 				}
 				catch (Exception e)
 				{
