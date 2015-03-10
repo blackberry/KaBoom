@@ -158,17 +158,6 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				}
 			}
 
-			// Call the load balancer's implementation of run_balancer()
-			
-			try
-			{
-				run_balancer();
-			}
-			catch (Exception e)
-			{
-				LOG.error("The load balancer raised an exception: ", e);
-			}			
-			
 			/*
 			 *  Check to see if the kafka_ready flag writer thread exists and is alive:
 			 *  
@@ -188,7 +177,19 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				LOG.info("[ready flag writer] thread created and started");
 			}
 
-			Thread.sleep(10 * 60 * 1000);
+			
+			// Call the load balancer's implementation of run_balancer()
+			
+			try
+			{
+				run_balancer();
+			}
+			catch (Exception e)
+			{
+				LOG.error("The load balancer raised an exception: ", e);
+			}						
+
+			Thread.sleep(config.getLeaderSleepDurationMs());
 		}
 	}
 

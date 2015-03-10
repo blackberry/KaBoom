@@ -86,6 +86,7 @@ public class KaboomConfiguration
 	private final Timer totalCompressionTimer;
 	private final Boolean useNativeCompression;
 	private final String loadBalancer;
+	private long leaderSleepDurationMs = 10 * 60 * 1000;
 	
 	/**
 	 * These are required for boom files
@@ -117,9 +118,9 @@ public class KaboomConfiguration
 		LOG.info("kafkaSeedBrokers: {}", getKafkaSeedBrokers());
 		LOG.info("readyFlagPrevHoursCheck: {}", getReadyFlagPrevHoursCheck());
 		LOG.info("useTempOpenFileDirectory: {}", getUseTempOpenFileDirectory());
-		LOG.info("periodicHdfsFlushInterval: {}", getPeriodicHdfsFlushInterval());
+		LOG.info("periodicHdfsFlushInterval: {}", getPeriodicHdfsFlushInterval());		
 		LOG.info("periodicFileCloseInterval: {}", getPeriodicFileCloseInterval());
-		LOG.info("periodicFileCloseInterval: {}", getPeriodicFileCloseInterval());
+		LOG.info("leaderSleepDurationMs: {}", getLeaderSleepDurationMs());
 		
 		LOG.info("boomFileBufferSize: {}", getBoomFileBufferSize());
 		LOG.info("boomFileReplicas: {}", getBoomFileReplicas());
@@ -171,6 +172,7 @@ public class KaboomConfiguration
 		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);				
 		useNativeCompression = propsParser.parseBoolean("kaboom.use.native.compression", false);
 		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "fair");
+		leaderSleepDurationMs = propsParser.parseLong("leader.sleep.duration.ms", leaderSleepDurationMs);
 		
 		boomFileBufferSize = propsParser.parseInteger("boom.file.buffer.size", boomFileBufferSize);
 		boomFileReplicas = propsParser.parseShort("boom.file.replicas", boomFileReplicas);
@@ -839,5 +841,13 @@ public class KaboomConfiguration
 	public String getLoadBalancer()
 	{
 		return loadBalancer;
+	}
+
+	/**
+	 * @return the leaderSleepDurationMs
+	 */
+	public long getLeaderSleepDurationMs()
+	{
+		return leaderSleepDurationMs;
 	}
 }
