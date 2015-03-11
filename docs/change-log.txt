@@ -1,9 +1,13 @@
 Changes in 0.7.5
 
 - Improved ReadyFlagWriter logic: Previous versions were buggy and had too many operations included in their hourly loop instead of in the topic loop
+- Removes checks on _READY flag in ReadyFlagWriter (_READY flags from LogDriver's LogMaintenance are deprecated by KaBoom 0.7.1 and later)
 - Fixes bugs related to concurrent access on shared TimeBasedHdfsOutputPath objects (each worker now instantiates their own)
 - Reduced INFO level log messages throughout to limit logs to more important messages
-- Seperates the pre-install script for DEB and RPM (as DEB's don't require the /var/run/kaboom)
+- Separates the pre-install script for DEB and RPM (as DEB's don't require the /var/run/kaboom)
+- Adds new optional configuration option (Long): leader.sleep.duration.ms, default=10 * 60 * 1000
+- Adds new optional configuration option (String) kaboom.load.balancer.type, default=even
+
 
 Changes in 0.7.4:
 
