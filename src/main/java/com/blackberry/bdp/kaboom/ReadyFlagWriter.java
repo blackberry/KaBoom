@@ -231,7 +231,7 @@ public class ReadyFlagWriter extends NotifyingThread
 							try
 							{								
 								fs.create(kafkaReadyFlag).close();
-								LOG.info(LOG_TAG + "topic {} flag {} written as {}", topicName, kafkaReadyFlag.toString(), config.getTopicToProxyUser().get(topicName));
+								LOG.info(LOG_TAG + "wrote {} as {}", topicName, kafkaReadyFlag.toString(), config.getTopicToProxyUser().get(topicName));
 							} 
 							catch (IOException e)
 							{
