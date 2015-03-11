@@ -17,6 +17,11 @@ then
 	chown -R kaboom.kaboom /opt/kaboom/lib
 fi
 
+if [[ -e "/var/run/kaboom" ]]
+then
+	chown -R kaboom.kaboom /var/run/kaboom
+fi 
+
 if [[ -e "/var/log/kaboom" ]]
 then
 	chown -R kaboom.kaboom /var/log/kaboom

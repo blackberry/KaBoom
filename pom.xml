@@ -433,7 +433,7 @@ limitations under the License.
 
 					<!-- Create the user and the group if they do not already exist -->
 					<preinstallScriptlet>
-						<scriptFile>src/deb/control/preinst</scriptFile>					
+						<scriptFile>src/rpm/preinst</scriptFile>					
 					</preinstallScriptlet>
 
 				</configuration>

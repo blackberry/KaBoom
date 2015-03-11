@@ -1,6 +1,13 @@
+Changes in 0.7.5
+
+- Improved ReadyFlagWriter logic: Previous versions were buggy and had too many operations included in their hourly loop instead of in the topic loop
+- Fixes bugs related to concurrent access on shared TimeBasedHdfsOutputPath objects (each worker now instantiates their own)
+- Reduced INFO level log messages throughout to limit logs to more important messages
+- Seperates the pre-install script for DEB and RPM (as DEB's don't require the /var/run/kaboom)
+
 Changes in 0.7.4:
 
-- Abstracts load balancing and adds two implementation: fair and  local
+- Abstracts load balancing and adds two implementation: even and local
 
 Changes in 0.7.3:
 
