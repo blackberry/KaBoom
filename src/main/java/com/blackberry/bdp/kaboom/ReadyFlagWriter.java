@@ -119,20 +119,21 @@ public class ReadyFlagWriter extends NotifyingThread
 		return oldestTimestamp;
 	}
 
-	/*
+	/**
 	 * Do we need to write the _KAFKA_READY flag for the last hour?
 	 * 
 	 * Look at all the partitions of a topic If all the topic's partitions's
-	 * offsets have passed the previous hour Then write the _KAFKA_READY flag in
-	 * the previous hour's incoming directory
+	 * offsets have passed a previous hour then write the _KAFKA_READY flag in
+	 * the previous hour's data directory
 	 * 
 	 * Note: This is intended to be invoked infrequently (no more than once every
 	 * 10 minutes or so... If that frequency increases then optimizations should
 	 * be explored.
 	 * 
-	 * Note: This isn't intelligent enough to look earlier than the previous hour.
-	 * If this method isn't called at least once per hour then there will be flags
-	 * that will never become set.
+	 * The number of hours in the past to examine is configurable by 
+	 * 
+	 * kaboom.readyflag.prevhours (default 24)
+	 * 
 	 */
 	@Override
 	public void doRun() throws Exception
