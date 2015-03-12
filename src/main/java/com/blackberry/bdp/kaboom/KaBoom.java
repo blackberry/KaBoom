@@ -19,20 +19,15 @@ package com.blackberry.bdp.kaboom;
 import com.blackberry.bdp.common.utils.props.Parser;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
-
 import java.nio.charset.Charset;
-import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.leader.LeaderSelector;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
-
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import java.util.HashMap;
 import java.util.Map;
@@ -235,6 +230,12 @@ public class KaBoom
 			 */			
 			for (String partitionId : config.getCurator().getChildren().forPath("/kaboom/assignments"))
 			{
+				if (partitionId == null)
+				{
+					LOG.warn("Warning, found a null partitionId when querying ZK for /kaboom/assignments");
+					continue;
+				}
+				
 				String assignee = new String(config.getCurator().getData().forPath("/kaboom/assignments/" + partitionId), UTF8);
 				
 				if (assignee.equals(Integer.toString(config.getKaboomId())))

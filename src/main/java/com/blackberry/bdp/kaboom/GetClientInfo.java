@@ -45,12 +45,13 @@ public class GetClientInfo {
 	}
 
 	public void run() throws Exception {
-		Map<String, String> partitionToHost = new HashMap<String, String>();
-		Map<String, List<String>> hostToPartition = new HashMap<String, List<String>>();
-		final Map<String, KaBoomNodeInfo> clients = new HashMap<String, KaBoomNodeInfo>();
-		Map<String, List<String>> clientToPartitions = new HashMap<String, List<String>>();
-		Map<String, String> partitionToClient = new HashMap<String, String>();
-		List<String> topics = new ArrayList<String>();
+		Map<String, String> partitionToHost = new HashMap<>();
+		Map<String, List<String>> hostToPartition = new HashMap<>();
+		final Map<String, KaBoomNodeInfo> clients = new HashMap<>();
+		Map<String, List<String>> clientToPartitions = new HashMap<>();
+		Map<String, String> partitionToClient = new HashMap<>();
+		Map<String, String> hostnameToClientId = new HashMap<>();			
+		List<String> topics = new ArrayList<>();
 
 		// Load configs from kaboom.properties
 		Properties props = new Properties();
@@ -109,7 +110,7 @@ public class GetClientInfo {
 				hostToPartition);
 
 		// Get a list of active clients from zookeeper
-		StateUtils.getActiveClients(curator, clients);
+		StateUtils.getActiveClients(curator, clients, hostnameToClientId);
 
 		// Get a list of current assignments
 		for (String partition : partitionToHost.keySet()) {

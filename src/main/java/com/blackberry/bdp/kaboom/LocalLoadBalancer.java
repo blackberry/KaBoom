@@ -46,17 +46,19 @@ public class LocalLoadBalancer extends Leader
 		{
 			// Are we assigned?
 			
+			String leaderClientId = hostnameToClientId.get(partitionToHost.get(partition));
+			
 			if (partitionToClient.containsKey(partition))
 			{
-				// Is the assigned client already that partitions leader?
+				// Is the assigned client the leader of the partition?
 				
-				if (partitionToClient.get(partition).equals(partitionToHost.get(partition)))
+				if (partitionToClient.get(partition).equals(leaderClientId))
 				{
 					LOG.info("{} is already assigned to the partition leader");
 				}
 				else
 				{
-					LOG.warn("{} is not assigned to the partiton leader", partition);
+					LOG.warn("partition {} is assigned to {} however {} is the leader", partition, partitionToClient.get(partition), leaderClientId);
 					
 					try
 					{					
@@ -67,11 +69,11 @@ public class LocalLoadBalancer extends Leader
 						curator
 							 .create()
 							 .withMode(CreateMode.PERSISTENT)
-							 .forPath("/kaboom/assignments/" + partition, partitionToHost.get(partition).getBytes(UTF8));					
+							 .forPath("/kaboom/assignments/" + partition, leaderClientId.getBytes(UTF8));					
 						
-						partitionToClient.put(partition, partitionToHost.get(partition));
+						partitionToClient.put(partition, leaderClientId);
 						
-						LOG.info("{} previously assigned to remote client now assigned to local client: {}", partition, partitionToClient.get(partition));
+						LOG.info("{} previously assigned to remote client now assigned to local client: {}", partition, leaderClientId);
 					}
 					catch (Exception e)
 					{
@@ -88,15 +90,15 @@ public class LocalLoadBalancer extends Leader
 					curator
 						 .create()
 						 .withMode(CreateMode.PERSISTENT)
-						 .forPath("/kaboom/assignments/" + partition, partitionToHost.get(partition).getBytes(UTF8));					
+						 .forPath("/kaboom/assignments/" + partition, leaderClientId.getBytes(UTF8));					
 
-					partitionToClient.put(partition, partitionToHost.get(partition));
+					partitionToClient.put(partition, leaderClientId);
 
-					LOG.info("{} assigned to local client: {}", partition, partitionToClient.get(partition));
+					LOG.info("{} assigned to local client: {}", partition, leaderClientId);
 				}
 				catch (Exception e)
 				{
-					LOG.error("[{}] error trying to assign to {}", partition, partitionToHost.get(partition));
+					LOG.error("[{}] error trying to assign to {}", partition, leaderClientId);
 				}
 			}
 		}

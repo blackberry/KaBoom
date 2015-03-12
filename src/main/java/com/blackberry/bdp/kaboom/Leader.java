@@ -48,7 +48,8 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	
 	Map<String, String> partitionToHost = new HashMap<>();
 	Map<String, List<String>> hostToPartition = new HashMap<>();
-	Map<String, KaBoomNodeInfo> clients = new HashMap<>();
+	Map<String, KaBoomNodeInfo> clientIdToNodeInfo = new HashMap<>();
+	Map<String, String> hostnameToClientId = new HashMap<>();			
 	Map<String, List<String>> clientToPartitions = new HashMap<>();
 	Map<String, String> partitionToClient = new HashMap<>();			
 	List<String> topics = new ArrayList<>();	
@@ -84,11 +85,12 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			hostToPartition = new HashMap<>();
 			StateUtils.getPartitionHosts(config.getKafkaSeedBrokers(), topics, partitionToHost, hostToPartition);
 			
-			clients = new HashMap<>();
-			StateUtils.getActiveClients(curator, clients);
+			clientIdToNodeInfo = new HashMap<>();
+			hostnameToClientId = new HashMap<>();
+			StateUtils.getActiveClients(curator, clientIdToNodeInfo, hostnameToClientId);
 			
 			clientToPartitions = new HashMap<>();
-			StateUtils.calculateLoad(partitionToHost, clients, clientToPartitions);
+			StateUtils.calculateLoad(partitionToHost, clientIdToNodeInfo, clientToPartitions);
 			
 			LOG.info("Found a total of {} supported topics in ZooKeeper", topics.size());
 			
@@ -134,7 +136,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			}			
 
 			// Build up our clientToPartitions and partitionsToClients, while 
-			// deleting any assignments for clients that are not connected
+			// deleting any assignments for clientIdToNodeInfo that are not connected
 			
 			partitionToClient = new HashMap<>();			
 			
@@ -146,7 +148,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				{	
 					String client = new String(curator.getData().forPath("/kaboom/assignments/" + partition), UTF8);
 					
-					if (clients.containsKey(client))
+					if (clientIdToNodeInfo.containsKey(client))
 					{
 						LOG.debug("Partition {} : client {} is connected", partition, client);
 						

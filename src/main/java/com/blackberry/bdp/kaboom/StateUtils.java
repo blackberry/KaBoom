@@ -160,8 +160,9 @@ public class StateUtils
 	}
 
 	public static void getActiveClients(CuratorFramework curator,
-			Map<String, KaBoomNodeInfo> clients) throws Exception {
-		// Get a list of active clients from zookeeper
+			Map<String, KaBoomNodeInfo> clientIdToNodeInfo,
+			Map<String, String> hostnameToClientId) throws Exception {
+		// Get a list of active clientIdToNodeInfo from zookeeper
 
 		Yaml yaml = new Yaml(new Constructor(KaBoomNodeInfo.class));
 		
@@ -171,7 +172,8 @@ public class StateUtils
 			ByteArrayInputStream bais = new ByteArrayInputStream(data);
 			KaBoomNodeInfo nodeInfo = (KaBoomNodeInfo) yaml.load(bais);
 			LOG.debug("Found active client {} ({})", client, nodeInfo);
-			clients.put(client, nodeInfo);
+			clientIdToNodeInfo.put(client, nodeInfo);
+			hostnameToClientId.put(nodeInfo.getHostname(), client);
 		}
 	}
 

@@ -44,7 +44,7 @@ public class EvenLoadBalancer extends Leader
 	{
 		// For every client, determine if it's doing too much work and remove assignments (remote ones first)
 
-		for (Map.Entry<String, KaBoomNodeInfo> e : clients.entrySet())
+		for (Map.Entry<String, KaBoomNodeInfo> e : clientIdToNodeInfo.entrySet())
 		{
 			String client = e.getKey();
 			KaBoomNodeInfo info = e.getValue();
@@ -97,7 +97,7 @@ public class EvenLoadBalancer extends Leader
 			}
 		}
 
-		// Sort the clients by percent load, then add unassigned clients to the lowest loaded client			
+		// Sort the clientIdToNodeInfo by percent load, then add unassigned clientIdToNodeInfo to the lowest loaded client			
 		{
 			List<String> sortedClients = new ArrayList<>();
 			Comparator<String> comparator = new Comparator<String>()
@@ -105,10 +105,10 @@ public class EvenLoadBalancer extends Leader
 				@Override
 				public int compare(String a, String b)
 				{
-					KaBoomNodeInfo infoA = clients.get(a);
+					KaBoomNodeInfo infoA = clientIdToNodeInfo.get(a);
 					double valA = infoA.getLoad() / infoA.getTargetLoad();
 
-					KaBoomNodeInfo infoB = clients.get(b);
+					KaBoomNodeInfo infoB = clientIdToNodeInfo.get(b);
 					double valB = infoB.getLoad() / infoB.getTargetLoad();
 
 					if (valA == valB)
@@ -129,7 +129,7 @@ public class EvenLoadBalancer extends Leader
 				}
 			};
 
-			sortedClients.addAll(clients.keySet());
+			sortedClients.addAll(clientIdToNodeInfo.keySet());
 
 			for (String partition : partitionToHost.keySet())
 			{
@@ -174,7 +174,7 @@ public class EvenLoadBalancer extends Leader
 				for (String client : sortedClients)
 				{
 					LOG.info("- Checking {}", client);						
-					KaBoomNodeInfo info = clients.get(client);						
+					KaBoomNodeInfo info = clientIdToNodeInfo.get(client);						
 					LOG.info("- Current load = {}, Target load =  {}", info.getLoad(), info.getTargetLoad());
 
 					if (info.getLoad() >= info.getTargetLoad())
@@ -184,7 +184,7 @@ public class EvenLoadBalancer extends Leader
 					} 
 					else
 					{
-						if (clients.get(client).getHostname().equals(partitionToHost.get(partition)))
+						if (clientIdToNodeInfo.get(client).getHostname().equals(partitionToHost.get(partition)))
 						{
 							chosenClient = client;
 							break;
@@ -223,7 +223,7 @@ public class EvenLoadBalancer extends Leader
 
 				partitionToClient.put(partition, chosenClient);
 
-				clients.get(chosenClient).setLoad(clients.get(chosenClient).getLoad() + 1);
+				clientIdToNodeInfo.get(chosenClient).setLoad(clientIdToNodeInfo.get(chosenClient).getLoad() + 1);
 			}
 		}		
 	}
