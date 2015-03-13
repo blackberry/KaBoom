@@ -161,7 +161,7 @@ public class KaboomConfiguration
 		totalBoomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 		totalHdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:hdfs flush timer");
 		totalCompressionTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:compression timer");
-		totalCompressionRatioHistogram = MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:total:compresssion ratio");
+		totalCompressionRatioHistogram = MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:total:compression ratio");
 		
 		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
