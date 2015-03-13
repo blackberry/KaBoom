@@ -454,7 +454,7 @@ public class FastBoomWriter
 				}
 			}
 			
-			LOG.info("[{}] Compressed {} bytes to {} bytes ({}% reduction) in {} ms (native={}, compression level={})", 
+			LOG.debug("[{}] Compressed {} bytes to {} bytes ({}% reduction) in {} ms (native={}, compression level={})", 
 				 partitionId,
 				 avroBlockBuffer.position(), 
 				 compressedSize, 
