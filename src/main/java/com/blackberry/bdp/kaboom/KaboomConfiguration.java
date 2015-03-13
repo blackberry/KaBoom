@@ -238,11 +238,13 @@ public class KaboomConfiguration
 				
 				try
 				{
+					short topicCompressionLevel = defaultCompressionLevel;
 					if (props.containsKey(topicCompressionPropName))
 					{
-						Short topicCompressionLevel = propsParser.parseShort(topicCompressionPropName);
+						topicCompressionLevel = propsParser.parseShort(topicCompressionPropName);
 						LOG.info("Topic {} configured with a non-default compression level: {} ({} is the default)", topic, topicCompressionLevel, defaultCompressionLevel);
 					}
+					topicToCompressionLevel.put(topic, topicCompressionLevel);
 				}
 				catch (Exception ex)
 				{
