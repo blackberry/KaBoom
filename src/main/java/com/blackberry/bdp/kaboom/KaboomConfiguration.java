@@ -44,7 +44,6 @@ import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import com.codahale.metrics.Histogram;
-import com.codahale.metrics.ExponentiallyDecayingReservoir;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 
@@ -187,13 +186,11 @@ public class KaboomConfiguration
 		periodicHdfsFlushInterval = propsParser.parseLong("boom.file.flush.interval", 30 * 1000l);
 		periodicFileCloseInterval = propsParser.parseLong("boom.file.close.expired.interval", 60 * 1000l);
 		
+		mapTopicsToSupportedStatus();
 		curator = buildCuratorFramework();		
 		hadoopConfiguration = buildHadoopConfiguration();		
 		mapTopicToProxyUser(props);
 		mapProxyUserToHadoopFileSystem();
-		mapTopicsToSupportedStatus();
-		
-		
 	}
 	
 	private void mapTopicsToSupportedStatus()
