@@ -32,6 +32,7 @@ import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import org.apache.zookeeper.KeeperException.NoNodeException;
 
 public class KaBoom
 {
@@ -230,13 +231,15 @@ public class KaBoom
 			 */			
 			for (String partitionId : config.getCurator().getChildren().forPath("/kaboom/assignments"))
 			{
-				if (partitionId == null)
+				String assignee = null;
+				try
 				{
-					LOG.warn("Warning, found a null partitionId when querying ZK for /kaboom/assignments");
-					continue;
+					assignee = new String(config.getCurator().getData().forPath("/kaboom/assignments/" + partitionId), UTF8);
+				}				
+				catch (NoNodeException nne)
+				{
+					LOG.warn("The weird 'NoNodeException' has been raised, let's just continue and it'll retry (stack trace intentionally supressed)");
 				}
-				
-				String assignee = new String(config.getCurator().getData().forPath("/kaboom/assignments/" + partitionId), UTF8);
 				
 				if (assignee.equals(Integer.toString(config.getKaboomId())))
 				{					
