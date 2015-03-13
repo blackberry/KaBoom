@@ -40,6 +40,30 @@ public class FastBoomWriter
 	private boolean useNativeCompression = false;
 	private final Histogram compressionRatioHistogram;
 	
+	private int compressedSize;
+	private byte[] compressedBlockBytes = new byte[256 * 1024];
+	private Deflater deflater;
+	
+	private long avroBlockRecordCount = 0L;
+	private final byte[] avroBlockBytes = new byte[2 * 1024 * 1024];
+	private final ByteBuffer avroBlockBuffer = ByteBuffer.wrap(avroBlockBytes);
+
+	private long ms;
+	private long second;
+
+	private long blockNumber = 0L;
+
+	private long logBlockSecond = 0L;
+	private final byte[] logBlockBytes = new byte[1024 * 1024];
+	private final ByteBuffer logBlockBuffer = ByteBuffer.wrap(logBlockBytes);
+
+	private long logLineCount;
+	private final byte[] logLinesBytes = new byte[logBlockBytes.length - 41];
+	private final ByteBuffer logLinesBuffer = ByteBuffer.wrap(logLinesBytes);
+	
+	private final byte[] longBytes = new byte[10];
+	private final ByteBuffer longBuffer = ByteBuffer.wrap(longBytes);
+	
 	private static final byte[] MAGIC_NUMBER = new byte[]		 
 	{
 		'O', 'b', 'j', 1		 
@@ -96,19 +120,16 @@ public class FastBoomWriter
 
 	public FastBoomWriter(FSDataOutputStream out,  String topic, int partition, KaboomConfiguration config) throws IOException
 	{
-		this.fsDataOut = out;
-		
+		this.fsDataOut = out;		
 		this.topic = topic;		
 		this.partitionId = topic + "-" + partition;
-		this.config = config;
-		
+		this.config = config;		
 		this.hdfsFlushTimerTopic = config.getTopicToHdfsFlushTimer().get(topic);
-		this.hdfsFlushTimerTotal = config.getTotalHdfsFlushTimer();
-		
+		this.hdfsFlushTimerTotal = config.getTotalHdfsFlushTimer();		
 		this.compressionTimer = config.getTotalCompressionTimer();
-		this.compressionRatioHistogram = config.getTopicToCompressionRatioHistogram().get(topic);
-		
-		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");
+		this.compressionRatioHistogram = config.getTopicToCompressionRatioHistogram().get(topic);		
+		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");		
+		this.deflater = new Deflater(config.getTopicToCompressionLevel().get(topic), true);		
 		
 		LOG.info("[{}] FastBoomWriter instantiated with compression level {}", partitionId, config.getTopicToCompressionLevel().get(topic));
 		
@@ -218,9 +239,6 @@ public class FastBoomWriter
 		fsDataOut.write(bytes);
 	}
 
-	private byte[] longBytes = new byte[10];
-	private ByteBuffer longBuffer = ByteBuffer.wrap(longBytes);
-
 	private void encodeLong(long n)
 	{
 		longBuffer.clear();
@@ -273,21 +291,7 @@ public class FastBoomWriter
 		longBuffer.put((byte) n);
 	}
 
-	private long ms;
-	private long second;
-
-	private long blockNumber = 0L;
-
-	private long logBlockSecond = 0L;
-	private final byte[] logBlockBytes = new byte[1024 * 1024];
-	private final ByteBuffer logBlockBuffer = ByteBuffer.wrap(logBlockBytes);
-
-	private long logLineCount;
-	private final byte[] logLinesBytes = new byte[logBlockBytes.length - 41];
-	private final ByteBuffer logLinesBuffer = ByteBuffer.wrap(logLinesBytes);
-
-	public void writeLine(long timestamp, byte[] message, int offset, int length)
-		 throws IOException
+	public void writeLine(long timestamp, byte[] message, int offset, int length) throws IOException
 	{
 		ms = timestamp % 1000l;
 		second = timestamp / 1000l;
@@ -362,9 +366,7 @@ public class FastBoomWriter
 		periodicHdfsFlushPoll();
 	}
 
-	private long avroBlockRecordCount = 0L;
-	private final byte[] avroBlockBytes = new byte[2 * 1024 * 1024];
-	private final ByteBuffer avroBlockBuffer = ByteBuffer.wrap(avroBlockBytes);
+	
 
 	private void writeLogBlock() throws IOException
 	{
@@ -397,10 +399,6 @@ public class FastBoomWriter
 		logLineCount = 0L;
 		logLinesBuffer.clear();
 	}
-
-	private int compressedSize;
-	private byte[] compressedBlockBytes = new byte[256 * 1024];
-	private final Deflater deflater = new Deflater(config.getTopicToCompressionLevel().get(topic), true);
 	
 	private void writeAvroBlock() throws IOException
 	{
