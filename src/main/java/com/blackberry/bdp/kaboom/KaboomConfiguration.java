@@ -82,6 +82,7 @@ public class KaboomConfiguration
 	private final Long periodicFileCloseInterval;
 	private final Map<String, Meter> topicToBoomWritesMeter = new HashMap<>();
 	private final Map<String, Timer> topicToHdfsFlushTimer = new HashMap<>();
+	private final Map<String, Timer> topicToCompressionTimer = new HashMap<>();
 	private final Map<String, Histogram> topicToCompressionRatioHistogram = new HashMap<>();
 	private final Map<String, Short> topicToCompressionLevel = new HashMap<>();
 	private final Meter totalBoomWritesMeter;
@@ -175,7 +176,7 @@ public class KaboomConfiguration
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
 		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);				
 		useNativeCompression = propsParser.parseBoolean("kaboom.use.native.compression", false);
-		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "fair");
+		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
 		leaderSleepDurationMs = propsParser.parseLong("leader.sleep.duration.ms", leaderSleepDurationMs);
 		defaultCompressionLevel = propsParser.parseShort("kaboom.deflate.compression.level", defaultCompressionLevel);
 		
@@ -224,6 +225,11 @@ public class KaboomConfiguration
 				if (!topicToHdfsFlushTimer.containsKey(topic))
 				{
 					topicToHdfsFlushTimer.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":hdfs flush timer"));
+				}
+				
+				if (!topicToCompressionTimer.containsKey(topic))
+				{
+					topicToCompressionTimer.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":compression timer"));
 				}
 				
 				if (!topicToCompressionRatioHistogram.containsKey(topic))
@@ -908,5 +914,13 @@ public class KaboomConfiguration
 	public short getDefaultCompressionLevel()
 	{
 		return defaultCompressionLevel;
+	}
+
+	/**
+	 * @return the topicToCompressionTimer
+	 */
+	public Map<String, Timer> getTopicToCompressionTimer()
+	{
+		return topicToCompressionTimer;
 	}
 }
