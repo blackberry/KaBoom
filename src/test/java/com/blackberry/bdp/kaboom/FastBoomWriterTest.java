@@ -40,11 +40,12 @@ public class FastBoomWriterTest {
 	private final Timer timer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("boom writes");
 
 	@Test
-	public void testWriteFile() throws IOException {		
+	public void testWriteFile() throws IOException, Exception {		
 		FileSystem.Statistics fsDataStats = null;
+		KaboomConfiguration config = new KaboomConfiguration(null);
 		FileOutputStream out = new FileOutputStream("/tmp/test2.bm");		
 		FSDataOutputStream fsDataOut = new FSDataOutputStream(out, fsDataStats);
-		FastBoomWriter writer = new FastBoomWriter(fsDataOut, "unknown-partitionId1", timer, timer, timer);
+		FastBoomWriter writer = new FastBoomWriter(fsDataOut, "topic1", 0, config);
 
 
 		byte[] message = "This is a test.  Let's make the line a bit longer by writing some stuff here."
@@ -56,11 +57,12 @@ public class FastBoomWriterTest {
 	}
 
 	@Test
-	public void testWriteBigFile() throws IOException {
+	public void testWriteBigFile() throws IOException, Exception {
 		FileSystem.Statistics fsDataStats = null;
+		KaboomConfiguration config = new KaboomConfiguration(null);
 		FileOutputStream out = new FileOutputStream("/tmp/test2.bm");		
 		FSDataOutputStream fsDataOut = new FSDataOutputStream(out, fsDataStats);
-		FastBoomWriter writer = new FastBoomWriter(fsDataOut, "unknown-partitionId2", timer, timer, timer);
+		FastBoomWriter writer = new FastBoomWriter(fsDataOut, "topic1", 0, config);
 
 		byte[] chars = "abc".getBytes(UTF8);
 		List<byte[]> messages = new ArrayList<>();
