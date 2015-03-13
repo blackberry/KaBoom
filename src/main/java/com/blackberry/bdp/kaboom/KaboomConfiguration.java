@@ -88,6 +88,7 @@ public class KaboomConfiguration
 	private final Meter totalBoomWritesMeter;
 	private final Timer totalHdfsFlushTimer;
 	private final Timer totalCompressionTimer;
+	private final Histogram totalCompressionRatioHistogram;
 	private final Boolean useNativeCompression;
 	private final String loadBalancer;
 	private long leaderSleepDurationMs = 10 * 60 * 1000;
@@ -160,6 +161,7 @@ public class KaboomConfiguration
 		totalBoomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 		totalHdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:hdfs flush timer");
 		totalCompressionTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:compression timer");
+		totalCompressionRatioHistogram = MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:total:compresssion ratio");
 		
 		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
@@ -922,5 +924,13 @@ public class KaboomConfiguration
 	public Map<String, Timer> getTopicToCompressionTimer()
 	{
 		return topicToCompressionTimer;
+	}
+
+	/**
+	 * @return the totalCompressionRatioHistogram
+	 */
+	public Histogram getTotalCompressionRatioHistogram()
+	{
+		return totalCompressionRatioHistogram;
 	}
 }

@@ -39,7 +39,8 @@ public class FastBoomWriter
 	private final Timer compressionTimerTotal;
 	private final Timer compressionTimerTopic;
 	private boolean useNativeCompression = false;
-	private final Histogram compressionRatioHistogram;
+	private final Histogram compressionRatioHistogramTopic;
+	private final Histogram compressionRatioHistogramTotal;
 	
 	private int compressedSize;
 	private byte[] compressedBlockBytes = new byte[256 * 1024];
@@ -129,7 +130,8 @@ public class FastBoomWriter
 		this.hdfsFlushTimerTotal = config.getTotalHdfsFlushTimer();		
 		this.compressionTimerTotal = config.getTotalCompressionTimer();
 		this.compressionTimerTopic = config.getTopicToCompressionTimer().get(topic);
-		this.compressionRatioHistogram = config.getTopicToCompressionRatioHistogram().get(topic);		
+		this.compressionRatioHistogramTopic = config.getTopicToCompressionRatioHistogram().get(topic);		
+		this.compressionRatioHistogramTotal = config.getTotalCompressionRatioHistogram();
 		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");		
 		this.deflater = new Deflater(config.getTopicToCompressionLevel().get(topic), true);		
 		
@@ -461,7 +463,8 @@ public class FastBoomWriter
 				 useNativeCompression,
 				 config.getTopicToCompressionLevel().get(topic));			
 			
-			compressionRatioHistogram.update(Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
+			compressionRatioHistogramTopic.update(Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
+			compressionRatioHistogramTotal.update(Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 			
 			encodeLong(compressedSize);
 

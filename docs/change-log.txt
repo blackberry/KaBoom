@@ -1,6 +1,11 @@
+Changes in 0.7.8
+
+- Adds a total compression ratio histogram
+
 Changes in 0.7.7
 
 - Adds new optional configuration option (Short): kaboom.deflate.compression.level, default=6
+- Adds new optional configuration option (Short): topic.<topic>.compression.level
 - Adds new histogram metric for compression ratio 
 
 Changes in 0.7.6:
