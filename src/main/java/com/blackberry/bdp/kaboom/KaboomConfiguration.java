@@ -43,6 +43,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.ExponentiallyDecayingReservoir;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 
@@ -81,12 +83,15 @@ public class KaboomConfiguration
 	private final Long periodicFileCloseInterval;
 	private final Map<String, Meter> topicToBoomWritesMeter = new HashMap<>();
 	private final Map<String, Timer> topicToHdfsFlushTimer = new HashMap<>();
+	private final Map<String, Histogram> topicToCompressionRatioHistogram = new HashMap<>();
+	private final Map<String, Short> topicToCompressionLevel = new HashMap<>();
 	private final Meter totalBoomWritesMeter;
 	private final Timer totalHdfsFlushTimer;
 	private final Timer totalCompressionTimer;
 	private final Boolean useNativeCompression;
 	private final String loadBalancer;
 	private long leaderSleepDurationMs = 10 * 60 * 1000;
+	private short defaultCompressionLevel = 6;
 	
 	/**
 	 * These are required for boom files
@@ -121,6 +126,7 @@ public class KaboomConfiguration
 		LOG.info("periodicHdfsFlushInterval: {}", getPeriodicHdfsFlushInterval());		
 		LOG.info("periodicFileCloseInterval: {}", getPeriodicFileCloseInterval());
 		LOG.info("leaderSleepDurationMs: {}", getLeaderSleepDurationMs());
+		LOG.info("defaultCompressionLevel: {}", getDefaultCompressionLevel());
 		
 		LOG.info("boomFileBufferSize: {}", getBoomFileBufferSize());
 		LOG.info("boomFileReplicas: {}", getBoomFileReplicas());
@@ -129,8 +135,7 @@ public class KaboomConfiguration
 		LOG.info("loadBalancer: {}", getLoadBalancer());
 		LOG.info("Using kerberos uthentication.");
 		LOG.info("Kerberos principal = {}", getKerberosPrincipal());
-		LOG.info("Kerberos keytab = {}", getKerberosKeytab());			
-
+		LOG.info("Kerberos keytab = {}", getKerberosKeytab());
 		
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
@@ -173,19 +178,22 @@ public class KaboomConfiguration
 		useNativeCompression = propsParser.parseBoolean("kaboom.use.native.compression", false);
 		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "fair");
 		leaderSleepDurationMs = propsParser.parseLong("leader.sleep.duration.ms", leaderSleepDurationMs);
+		defaultCompressionLevel = propsParser.parseShort("kaboom.deflate.compression.level", defaultCompressionLevel);
 		
 		boomFileBufferSize = propsParser.parseInteger("boom.file.buffer.size", boomFileBufferSize);
 		boomFileReplicas = propsParser.parseShort("boom.file.replicas", boomFileReplicas);
 		boomFileBlocksize = propsParser.parseLong("boom.file.block.size", boomFileBlocksize);
 		boomFileTmpPrefix = propsParser.parseString("boom.file.temp.prefix", boomFileTmpPrefix);
 		periodicHdfsFlushInterval = propsParser.parseLong("boom.file.flush.interval", 30 * 1000l);
-		periodicFileCloseInterval = propsParser.parseLong("boom.file.close.expired.interval", 60 * 1000l);		
+		periodicFileCloseInterval = propsParser.parseLong("boom.file.close.expired.interval", 60 * 1000l);
 		
 		curator = buildCuratorFramework();		
 		hadoopConfiguration = buildHadoopConfiguration();		
 		mapTopicToProxyUser(props);
 		mapProxyUserToHadoopFileSystem();
 		mapTopicsToSupportedStatus();
+		
+		
 	}
 	
 	private void mapTopicsToSupportedStatus()
@@ -209,6 +217,36 @@ public class KaboomConfiguration
 				if (!topicToHdfsRootDir.containsKey(topic))
 				{					
 					topicToHdfsRootDir.put(topic, hdfsRootDir);
+				}
+				
+				if (!topicToBoomWritesMeter.containsKey(topic))
+				{
+					topicToBoomWritesMeter.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes"));
+				}
+
+				if (!topicToHdfsFlushTimer.containsKey(topic))
+				{
+					topicToHdfsFlushTimer.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":hdfs flush timer"));
+				}
+				
+				if (!topicToCompressionRatioHistogram.containsKey(topic))
+				{
+					topicToCompressionRatioHistogram.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:topic:" + topic + ":compresssion ratio"));
+				}
+				
+				String topicCompressionPropName = String.format("topic.%s.deflate.compression.level", topic);
+				
+				try
+				{
+					if (props.containsKey(topicCompressionPropName))
+					{
+						Short topicCompressionLevel = propsParser.parseShort(topicCompressionPropName);
+						LOG.info("Topic {} configured with a non-default compression level: {} ({} is the default)", topic, topicCompressionLevel, defaultCompressionLevel);
+					}
+				}
+				catch (Exception ex)
+				{
+					LOG.error("Failed to set the topic specific compression level for topic {}", topic, e);
 				}
 				
 			}
@@ -247,16 +285,6 @@ public class KaboomConfiguration
 				{
 					LOG.error("Topic {} configuration property missing", String.format("topic.%s.hdfsRootDir", topic));
 					continue;
-				}
-				
-				if (!topicToBoomWritesMeter.containsKey(topic))
-				{
-					topicToBoomWritesMeter.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes"));
-				}
-
-				if (!topicToHdfsFlushTimer.containsKey(topic))
-				{
-					topicToHdfsFlushTimer.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":hdfs flush timer"));
 				}
 				
 				String hdfsRootDir = hadoopUrlPath + props.getProperty(String.format("topic.%s.hdfsRootDir", topic));				
@@ -857,5 +885,29 @@ public class KaboomConfiguration
 	public Map<String, FileSystem> getProxyUserToFileSystem()
 	{
 		return proxyUserToFileSystem;
+	}
+
+	/**
+	 * @return the topicToCompressionRatioHistogram
+	 */
+	public Map<String, Histogram> getTopicToCompressionRatioHistogram()
+	{
+		return topicToCompressionRatioHistogram;
+	}
+
+	/**
+	 * @return the topicToCompressionLevel
+	 */
+	public Map<String, Short> getTopicToCompressionLevel()
+	{
+		return topicToCompressionLevel;
+	}
+
+	/**
+	 * @return the defaultCompressionLevel
+	 */
+	public short getDefaultCompressionLevel()
+	{
+		return defaultCompressionLevel;
 	}
 }

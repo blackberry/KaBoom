@@ -284,6 +284,7 @@ public class Worker implements Runnable
 		
 		for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths)
 		{
+			outputPath.setPartition(partition);
 			outputPath.setPartitionId(partitionId);			
 			LOG.info("\t {} {} => {}", config.getKaboomId(), partitionId, outputPath);
 		}

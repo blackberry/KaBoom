@@ -1,3 +1,12 @@
+Changes in 0.7.7
+
+- Adds new optional configuration option (Short): kaboom.deflate.compression.level, default=6
+- Adds new histogram metric for compression ratio 
+
+Changes in 0.7.6:
+
+- Resolves hostname bug in the LocalLoadBalancer
+
 Changes in 0.7.5
 
 - Improved ReadyFlagWriter logic: Previous versions were buggy and had too many operations included in their hourly loop instead of in the topic loop

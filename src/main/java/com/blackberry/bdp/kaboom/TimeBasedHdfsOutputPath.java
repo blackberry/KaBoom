@@ -30,6 +30,7 @@ public class TimeBasedHdfsOutputPath
 	private final KaboomConfiguration config;
 	private Worker kaboomWorker;
 	private final String topic;
+	private int partition;
 	private final FileSystem fileSystem;
 	private String partitionId = "unknown-partitionId";
 	private final String dirTemplate;
@@ -163,6 +164,22 @@ public class TimeBasedHdfsOutputPath
 		return kaboomWorker;
 	}
 
+	/**
+	 * @return the partition
+	 */
+	public int getPartition()
+	{
+		return partition;
+	}
+
+	/**
+	 * @param partition the partition to set
+	 */
+	public void setPartition(int partition)
+	{
+		this.partition = partition;
+	}
+
 	private class OutputFile
 	{
 		private String dir;
@@ -213,7 +230,12 @@ public class TimeBasedHdfsOutputPath
 					  config.getBoomFileBlocksize(), 
 					  null);
 				 
-				 boomWriter = new FastBoomWriter(fsDataOut, partitionId, topicFlushTimer, totalFlushTimer, config.getTotalCompressionTimer());
+				 boomWriter = new FastBoomWriter(
+					  fsDataOut, 
+					  topic, 
+					  partition,
+					  config);
+				 
 				 boomWriter.setPeriodicHdfsFlushInterval(config.getPeriodicHdfsFlushInterval());				 
 				 boomWriter.setUseNativeCompression(config.getUseNativeCompression());
 				 
