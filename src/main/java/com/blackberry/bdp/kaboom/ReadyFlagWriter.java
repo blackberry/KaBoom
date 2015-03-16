@@ -171,12 +171,13 @@ public class ReadyFlagWriter extends NotifyingThread
 					TimeUnit.MILLISECONDS.toMinutes(oldestTimestampMillisAgo),
 					TimeUnit.MILLISECONDS.toSeconds(oldestTimestampMillisAgo) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(oldestTimestampMillisAgo))));			
 							
-			for (Integer hourNum = 0; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
+			for (Integer hourNum = 1; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
 			{
 				/**
 				 * We know what the current timestamp was when we started, so start subtracting 
-				 * hourNum * 60 * 60 * 1000 from it so we're checking previous hours... Note hourNum 
-				 * starts at 0 so we're not skipping the immediate previous hour
+				 * hourNum * 60 * 60 * 1000 from it so we're checking previous hours... 
+				 * 
+				 * NOTE: Must start looking in the previous hour, as there's no certainty for the current hour
 				 */
 
 				long prevHourStartTimestmap = startOfHourTimestamp - (60 * 60 * 1000) * hourNum;

@@ -1,8 +1,14 @@
-Changes in 0.7.8
+Changes in 0.7.9:
+
+- Fixes a ReadyFlagWriter bug that would write flags to the current hour
+- Adds logging around the maxTimestamps that are stored in ZK
+- Depends on common-utils-dev 0.0.5 (to get the new ZK get/set utility)
+
+Changes in 0.7.8:
 
 - Adds a total compression ratio histogram
 
-Changes in 0.7.7
+Changes in 0.7.7:
 
 - Adds new optional configuration option (Short): kaboom.deflate.compression.level, default=6
 - Adds new optional configuration option (Short): topic.<topic>.compression.level

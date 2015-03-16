@@ -35,6 +35,8 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.Meter;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class Worker implements Runnable
 {
@@ -365,6 +367,14 @@ public class Worker implements Runnable
 		LOG.info("[{}] Created worker.", partitionId);
 	}
 
+	private static String dateString(Long ts)
+	{		
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");		
+		Date now = new Date();
+		String strDate = sdf.format(ts);
+		return strDate;		
+	}		
+	
 	@Override
 	public void run()
 	{
@@ -747,6 +757,8 @@ public class Worker implements Runnable
 			curator.setData().forPath(zkPath_offSetTimestamp,
 				 Converter.getBytes(maxTimestamp));
 		}
+		
+		LOG.info("[{}] stored offset timestamp in ZK {} ({})", partitionId, maxTimestamp, dateString(maxTimestamp));
 		
 		maxTimestamp = -1;
 	}

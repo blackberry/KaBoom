@@ -447,8 +447,7 @@ public class FastBoomWriter
 						compressedBlockBytes = new byte[compressedBlockBytes.length * 2];
 					}
 					else
-					{
-						
+					{						
 						break;
 					}
 				}
