@@ -27,7 +27,7 @@ import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.blackberry.bdp.common.utils.conversion.Converter;
+import com.blackberry.bdp.common.conversion.Converter;
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import com.blackberry.bdp.krackle.consumer.Consumer;
 

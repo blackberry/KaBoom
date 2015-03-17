@@ -30,8 +30,8 @@ import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.blackberry.bdp.common.utils.threads.NotifyingThread;
-import com.blackberry.bdp.common.utils.threads.ThreadCompleteListener;
+import com.blackberry.bdp.common.threads.NotifyingThread;
+import com.blackberry.bdp.common.threads.ThreadCompleteListener;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 

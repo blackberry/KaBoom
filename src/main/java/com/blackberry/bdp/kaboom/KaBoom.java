@@ -16,7 +16,9 @@
 
 package com.blackberry.bdp.kaboom;
 
-import com.blackberry.bdp.common.utils.props.Parser;
+import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
+import com.blackberry.bdp.common.logger.InstrumentedLoggerSingleton;
+import com.blackberry.bdp.common.props.Parser;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
@@ -28,14 +30,13 @@ import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
-import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import org.apache.zookeeper.KeeperException.NoNodeException;
 
 public class KaBoom
-{
+{			
 	private static final Logger LOG = LoggerFactory.getLogger(KaBoom.class);
 	private static final Charset UTF8 = Charset.forName("UTF-8");	
 	boolean shutdown = false;	
@@ -43,11 +44,15 @@ public class KaBoom
 	
 	public static void main(String[] args) throws Exception
 	{
+		InstrumentedLoggerSingleton.getInstance();
+		MetricRegistrySingleton.getInstance().enableJmx();
+		
 		LOG.info("*******************************************");
 		LOG.info("***         KABOOM SERVER START         ***");
 		LOG.info("*******************************************");
 		
-		new KaBoom().run();		
+		new KaBoom().run();
+		
 	}
 	
 	public KaBoom() throws Exception
@@ -56,7 +61,6 @@ public class KaBoom
 	
 	private void run() throws Exception
 	{
-
 		if (Boolean.parseBoolean(System.getProperty("metrics.to.console", "false").trim()))
 		{
 			MetricRegistrySingleton.getInstance().enableConsole();
@@ -85,7 +89,7 @@ public class KaBoom
 			throw e;
 		}
 		
-		MetricRegistrySingleton.getInstance().enableJmx();
+		
 		
 		/**
 		 * 
