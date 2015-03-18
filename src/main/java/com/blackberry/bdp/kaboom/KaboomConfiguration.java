@@ -16,33 +16,40 @@
 
 package com.blackberry.bdp.kaboom;
 
-import java.util.Map;
 import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
+import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
+
+import java.net.InetAddress;
+import java.security.PrivilegedExceptionAction;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.io.IOException;
+
+import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.Map;
+
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.net.InetAddress;
-import java.util.HashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import com.blackberry.bdp.common.props.Parser;
-import java.io.IOException;
-import java.security.PrivilegedExceptionAction;
-import java.util.ArrayList;
+
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
-import com.blackberry.bdp.krackle.MetricRegistrySingleton;
+
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;

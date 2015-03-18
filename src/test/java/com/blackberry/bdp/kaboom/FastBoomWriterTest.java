@@ -16,7 +16,7 @@
 
 package com.blackberry.bdp.kaboom;
 
-import com.blackberry.bdp.krackle.MetricRegistrySingleton;
+import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 import com.codahale.metrics.Timer;
 import java.io.FileOutputStream;
 import java.io.IOException;

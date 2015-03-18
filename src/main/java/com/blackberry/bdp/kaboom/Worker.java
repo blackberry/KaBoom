@@ -16,8 +16,12 @@
 
 package com.blackberry.bdp.kaboom;
 
+import java.text.SimpleDateFormat;
+
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.ArrayList;
@@ -28,15 +32,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.blackberry.bdp.common.conversion.Converter;
-import com.blackberry.bdp.krackle.MetricRegistrySingleton;
+import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 import com.blackberry.bdp.krackle.consumer.Consumer;
 
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.Meter;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
 public class Worker implements Runnable
 {
