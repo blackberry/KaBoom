@@ -45,6 +45,7 @@ public class KaBoom
 	public static void main(String[] args) throws Exception
 	{
 		InstrumentedLoggerSingleton.getInstance();
+		MetricRegistrySingleton.getInstance().enableJmx();
 		
 		LOG.info("*******************************************");
 		LOG.info("***         KABOOM SERVER START         ***");
