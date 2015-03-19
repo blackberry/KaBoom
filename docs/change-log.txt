@@ -1,3 +1,8 @@
+Changes in 0,8.0:
+
+- Supports bdp-common 0,0,6 which provides all logging and monitoring deps
+- Instruments log4j2 with io.dropwizard.metrics
+
 Changes in 0.7.9:
 
 - Fixes a ReadyFlagWriter bug that would write flags to the current hour

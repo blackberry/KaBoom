@@ -120,6 +120,8 @@ limitations under the License.
 						<configuration>
 							<outputDirectory>${project.build.directory}/lib</outputDirectory>
 							<includeScope>runtime</includeScope>
+							<!-- We want all our dependencies included, except for log4j1.x related stuff -->
+							<excludeArtifactIds>slf4j-log4j12,log4j</excludeArtifactIds>
 						</configuration>
 					</execution>
 				</executions>
@@ -141,7 +143,7 @@ limitations under the License.
 				<configuration>
 					<doCheck>false</doCheck>
 					<doUpdate>false</doUpdate>		
-				</configuration>					
+				</configuration>	
 			</plugin>
 			
 			<!-- Insert the build branch and commit hash into the manifest -->
