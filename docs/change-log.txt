@@ -1,3 +1,7 @@
+Changes in 0.7.12:
+
+- Fixes bug that threw an NPE when there was no work assigned to a client and the load balancer tries to check if it's over worked
+
 Changes in 0.7.11:
 
 - Adds an additional kafka ready flag in the topic root
