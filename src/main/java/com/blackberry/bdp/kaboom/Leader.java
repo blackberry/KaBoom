@@ -87,8 +87,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			
 			clientIdToNodeInfo = new HashMap<>();
 			hostnameToClientId = new HashMap<>();
-			StateUtils.getActiveClients(curator, clientIdToNodeInfo, hostnameToClientId);
-			
+			StateUtils.getActiveClients(curator, clientIdToNodeInfo, hostnameToClientId);			
 			
 			LOG.info("Found a total of {} supported topics in ZooKeeper", topics.size());
 			

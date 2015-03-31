@@ -55,8 +55,11 @@ public class EvenLoadBalancer extends Leader
 			List<String> localPartitions = new ArrayList<>();
 			List<String> remotePartitions = new ArrayList<>();
 
-			LOG.info("Testing: client: {}", client);
-			
+			if (!clientToPartitions.containsKey(client))
+			{
+				LOG.info("Skipping checking client {} for being overloaded because it has no work assigned", client);
+				continue;
+			}			
 			
 			for (String partition : clientToPartitions.get(client))
 			{
