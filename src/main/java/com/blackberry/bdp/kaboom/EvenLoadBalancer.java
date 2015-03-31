@@ -44,6 +44,8 @@ public class EvenLoadBalancer extends Leader
 	{
 		// For every client, determine if it's doing too much work and remove assignments (remote ones first)
 
+		LOG.info("The even load balancer is now going to balance the load for {} clients", clientIdToNodeInfo.entrySet().size());
+		
 		for (Map.Entry<String, KaBoomNodeInfo> e : clientIdToNodeInfo.entrySet())
 		{
 			String client = e.getKey();

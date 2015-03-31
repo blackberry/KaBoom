@@ -89,8 +89,6 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			hostnameToClientId = new HashMap<>();
 			StateUtils.getActiveClients(curator, clientIdToNodeInfo, hostnameToClientId);
 			
-			clientToPartitions = new HashMap<>();
-			StateUtils.calculateLoad(partitionToHost, clientIdToNodeInfo, clientToPartitions);
 			
 			LOG.info("Found a total of {} supported topics in ZooKeeper", topics.size());
 			
@@ -139,6 +137,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			// deleting any assignments for clientIdToNodeInfo that are not connected
 			
 			partitionToClient = new HashMap<>();			
+			clientToPartitions = new HashMap<>();			
 			
 			for (String partition : partitionToHost.keySet())
 			{
@@ -170,7 +169,8 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				}
 			}
 			
-			// Call the load balancer's implementation of run_balancer()
+			// Calculate our existing load
+			StateUtils.calculateLoad(partitionToHost, clientIdToNodeInfo, clientToPartitions);
 			
 			try
 			{
