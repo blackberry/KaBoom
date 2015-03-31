@@ -45,6 +45,7 @@ public class EvenLoadBalancer extends Leader
 		// For every client, determine if it's doing too much work and remove assignments (remote ones first)
 
 		LOG.info("The even load balancer is now going to balance the load for {} clients", clientIdToNodeInfo.entrySet().size());
+		LOG.info("There are {} entries in the clientToPartitions HashMap", clientToPartitions.size());
 		
 		for (Map.Entry<String, KaBoomNodeInfo> e : clientIdToNodeInfo.entrySet())
 		{
@@ -54,6 +55,9 @@ public class EvenLoadBalancer extends Leader
 			List<String> localPartitions = new ArrayList<>();
 			List<String> remotePartitions = new ArrayList<>();
 
+			LOG.info("Testing: client: {}", client);
+			
+			
 			for (String partition : clientToPartitions.get(client))
 			{
 				if (partitionToHost.get(partition).equals(info.getHostname()))
