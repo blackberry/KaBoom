@@ -1,3 +1,7 @@
+Changes in 0.7.10:
+
+- Adds a new optional configuration option (String) kaboom.kafkaReady.flag.filename, default=_KAFKA_READY
+
 Changes in 0.7.9:
 
 - Fixes a ReadyFlagWriter bug that would write flags to the current hour
