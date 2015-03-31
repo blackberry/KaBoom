@@ -48,27 +48,27 @@ public class EvenLoadBalancer extends Leader
 		{
 			String client = e.getKey();
 			KaBoomNodeInfo info = e.getValue();
+			
+			List<String> localPartitions = new ArrayList<>();
+			List<String> remotePartitions = new ArrayList<>();
+
+			for (String partition : clientToPartitions.get(client))
+			{
+				if (partitionToHost.get(partition).equals(info.getHostname()))
+				{
+					localPartitions.add(partition);
+				} 
+				else
+				{
+					remotePartitions.add(partition);
+				}
+			}
+			
+			LOG.info("Client {} has {} local partitions and {} remote partitions assigned, load={} and target load={}",
+				 client, localPartitions.size(), remotePartitions.size(), info.getLoad(), info.getTargetLoad());
 
 			if (info.getLoad() >= info.getTargetLoad() + 1)
 			{
-				List<String> localPartitions = new ArrayList<>();
-				List<String> remotePartitions = new ArrayList<>();
-
-				for (String partition : clientToPartitions.get(client))
-				{
-					if (partitionToHost.get(partition).equals(info.getHostname()))
-					{
-						localPartitions.add(partition);
-					} 
-					else
-					{
-						remotePartitions.add(partition);
-					}
-				}
-				
-				LOG.debug("Client {} has {} local partitions and {} remote partitions assigned, load={} and target load={}", 
-					 client, localPartitions.size(), remotePartitions.size(), info.getLoad(), info.getTargetLoad());
-
 				while (info.getLoad() > info.getTargetLoad())
 				{
 					String partitionToDelete;
