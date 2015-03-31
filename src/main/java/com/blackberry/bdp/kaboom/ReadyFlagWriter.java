@@ -46,8 +46,7 @@ public class ReadyFlagWriter extends NotifyingThread
 	private final KaboomConfiguration config;
 
 	private static final String ZK_ROOT = "/kaboom";
-	public static final String MERGE_READY_FLAG = "_READY";
-	public static final String KAFKA_READY_FLAG = "_KAFKA_READY";
+	public static String KAFKA_READY_FLAG = "_KAFKA_READY";
 	public static final String DATA_DIR = "data";
 	public static final String WORKING_DIR = "working";
 	public static final String LOG_TAG = "[ready flag writer] ";
@@ -56,6 +55,7 @@ public class ReadyFlagWriter extends NotifyingThread
 	{
 		this.config = config;
 		this.curator = config.getCurator();
+		this.KAFKA_READY_FLAG = config.getKafkaReadyFlagFilename();
 	}
 
 	/*
@@ -186,7 +186,7 @@ public class ReadyFlagWriter extends NotifyingThread
 				try
 				{
 					final Path topicRoot = new Path(Converter.timestampTemplateBuilder(prevHourStartTimestmap, hdfsTemplate));
-					//final Path mergeReadyFlag = new Path(topicRoot + "/" + MERGE_READY_FLAG);
+					
 					final Path dataDirectory = new Path(topicRoot + "/" + DATA_DIR);
 					final Path workingDirectory = new Path(topicRoot + "/" + WORKING_DIR);
 					final Path kafkaReadyFlag = new Path(dataDirectory.toString() + "/" + KAFKA_READY_FLAG);

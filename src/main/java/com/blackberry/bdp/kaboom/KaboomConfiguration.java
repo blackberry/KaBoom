@@ -93,6 +93,7 @@ public class KaboomConfiguration
 	private final String loadBalancer;
 	private long leaderSleepDurationMs = 10 * 60 * 1000;
 	private short defaultCompressionLevel = 6;
+	private String kafkaReadyFlagFilename = "_KAFKA_READY";
 	
 	/**
 	 * These are required for boom files
@@ -135,8 +136,9 @@ public class KaboomConfiguration
 		LOG.info("useNativeCompression: {}", getUseNativeCompression());
 		LOG.info("loadBalancer: {}", getLoadBalancer());
 		LOG.info("Using kerberos uthentication.");
-		LOG.info("Kerberos principal = {}", getKerberosPrincipal());
-		LOG.info("Kerberos keytab = {}", getKerberosKeytab());
+		LOG.info("Kerberos principal: {}", getKerberosPrincipal());
+		LOG.info("Kerberos keytab: {}", getKerberosKeytab());
+		LOG.info("kafkaReadyFlagFilename: {}", getKafkaReadyFlagFilename());
 		
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
@@ -181,6 +183,7 @@ public class KaboomConfiguration
 		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
 		leaderSleepDurationMs = propsParser.parseLong("leader.sleep.duration.ms", leaderSleepDurationMs);
 		defaultCompressionLevel = propsParser.parseShort("kaboom.deflate.compression.level", defaultCompressionLevel);
+		kafkaReadyFlagFilename = propsParser.parseString("kaboom.kafkaReady.flag.filename", kafkaReadyFlagFilename);
 		
 		boomFileBufferSize = propsParser.parseInteger("boom.file.buffer.size", boomFileBufferSize);
 		boomFileReplicas = propsParser.parseShort("boom.file.replicas", boomFileReplicas);
@@ -932,5 +935,13 @@ public class KaboomConfiguration
 	public Histogram getTotalCompressionRatioHistogram()
 	{
 		return totalCompressionRatioHistogram;
+	}
+
+	/**
+	 * @return the kafkaReadyFlagFilename
+	 */
+	public String getKafkaReadyFlagFilename()
+	{
+		return kafkaReadyFlagFilename;
 	}
 }
