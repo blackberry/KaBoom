@@ -65,6 +65,9 @@ public class EvenLoadBalancer extends Leader
 						remotePartitions.add(partition);
 					}
 				}
+				
+				LOG.debug("Client {} has {} local partitions and {} remote partitions assigned, load={} and target load={}", 
+					 client, localPartitions.size(), remotePartitions.size(), info.getLoad(), info.getTargetLoad());
 
 				while (info.getLoad() > info.getTargetLoad())
 				{
