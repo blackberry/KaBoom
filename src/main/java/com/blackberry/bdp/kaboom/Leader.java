@@ -199,6 +199,10 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				readyFlagThread.start();
 				LOG.info("[ready flag writer] thread created and started");
 			}
+			else
+			{
+				LOG.warn("[ready flag writer] is either not null or is still alive (could it be hung?)");
+			}
 
 			Thread.sleep(config.getLeaderSleepDurationMs());
 		}

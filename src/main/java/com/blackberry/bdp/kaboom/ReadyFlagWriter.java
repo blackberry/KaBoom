@@ -46,7 +46,7 @@ public class ReadyFlagWriter extends NotifyingThread
 	private final KaboomConfiguration config;
 
 	private static final String ZK_ROOT = "/kaboom";
-	public static String KAFKA_READY_FLAG = "_KAFKA_READY";
+	public static String KAFKA_READY_FLAG;
 	public static final String DATA_DIR = "data";
 	public static final String WORKING_DIR = "working";
 	public static final String LOG_TAG = "[ready flag writer] ";
@@ -166,7 +166,7 @@ public class ReadyFlagWriter extends NotifyingThread
 			long oldestTimestamp = oldestPartitionOffsetForTopic(topicName, entry.getValue());
 			long oldestTimestampMillisAgo = System.currentTimeMillis() - oldestTimestamp;
 					
-			LOG.info(LOG_TAG + "oldest timestamp for topic {} is {}", topicName, 
+			LOG.info(LOG_TAG + "oldest partition for topic {} is {}", topicName, 
 				 String.format("%d minutes and %d seconds ago", 
 					TimeUnit.MILLISECONDS.toMinutes(oldestTimestampMillisAgo),
 					TimeUnit.MILLISECONDS.toSeconds(oldestTimestampMillisAgo) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(oldestTimestampMillisAgo))));			
@@ -182,6 +182,18 @@ public class ReadyFlagWriter extends NotifyingThread
 
 				long prevHourStartTimestmap = startOfHourTimestamp - (60 * 60 * 1000) * hourNum;
 				previousHourCal.setTimeInMillis(prevHourStartTimestmap);
+				
+				if (oldestTimestamp < prevHourStartTimestmap)
+				{
+					long kaboomBehindMillisForHour = prevHourStartTimestmap - oldestTimestamp;
+
+					LOG.info(LOG_TAG + "[{}] skipping flags for {} hour(s) ago because furthest ahead partition is still {} before the top of that hour",
+						 topicName,
+						 hourNum,
+						 String.format("%d minutes and  %d seconds", 
+							TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour),
+							TimeUnit.MILLISECONDS.toSeconds(kaboomBehindMillisForHour) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour))));
+				}
 
 				try
 				{
@@ -189,67 +201,56 @@ public class ReadyFlagWriter extends NotifyingThread
 					
 					final Path dataDirectory = new Path(topicRoot + "/" + DATA_DIR);
 					final Path workingDirectory = new Path(topicRoot + "/" + WORKING_DIR);
-					final Path kafkaReadyFlag = new Path(dataDirectory.toString() + "/" + KAFKA_READY_FLAG);
-
-					LOG.trace(LOG_TAG + "HDFS path for topic root is: {}", topicRoot.toString());
-					//LOG.trace(LOG_TAG + "HDFS path for merge ready flag is: {}", mergeReadyFlag.toString());
-					LOG.trace(LOG_TAG + "HDFS path for kafka ready flag is: {}", kafkaReadyFlag.toString());
+					
+					final Path kafkaReadyFlag1 = new Path(dataDirectory.toString() + "/" + KAFKA_READY_FLAG);
+					final Path kafkaReadyFlag2 = new Path(topicRoot.toString() + "/" + KAFKA_READY_FLAG);
+					
+					Path[] kafkaReadyFlags = {kafkaReadyFlag1, kafkaReadyFlag2};
+					
+					LOG.trace(LOG_TAG + "HDFS path for topic root is: {}", topicRoot.toString());					
 					LOG.trace(LOG_TAG + "HDFS path for data directory is: {}", dataDirectory.toString());
+
+					for (int i = 0; i < kafkaReadyFlags.length; i++)
+					{
+						LOG.trace(LOG_TAG + "HDFS path for kafka ready flag #{} is: {}", i + 1, kafkaReadyFlags[i].toString());																						
+					}
 					
 					if (!fs.exists(dataDirectory))
 					{
 						LOG.trace(LOG_TAG + "skipping {} since data directory {} doesn't exist", topicName, dataDirectory.toString());
 						continue;
 					}
-
-					/*
-					We shouldn't need this anymore... 
 					
-					if (fs.exists(mergeReadyFlag))
-					{
-						LOG.trace(LOG_TAG + "skipping {} since merge's ready flag {} already exists", topicName, mergeReadyFlag.toString());
-						continue;
-					}
-					*/
-
-					if (fs.exists(kafkaReadyFlag))
-					{
-						LOG.trace(LOG_TAG + "skipping {} since kafka's ready flag {} already exists", topicName, kafkaReadyFlag.toString());
-						continue;
-					}
-
 					if (fs.exists(workingDirectory))
 					{
 						LOG.trace(LOG_TAG + "skipping {} since working directory {} exists", topicName, workingDirectory.toString());
 						continue;
 					}
+					
+					/**
+					 * We now have multiple flag path support, iterate over them and check if they exist
+					 */
 
-					LOG.trace(LOG_TAG + "topic {} might be candidate for kafka ready flag (data dir exists, working dir doesn't, no flags exist)", topicName);					
-
-					if (oldestTimestamp > prevHourStartTimestmap)
+					for (Path flagPath : kafkaReadyFlags)
 					{
+						if (fs.exists(flagPath))
+						{
+							LOG.trace(LOG_TAG + "skipping {} since kafka's ready flag {} already exists", topicName, flagPath.toString());
+							continue;
+						}
+
 						synchronized (fsLock)
 						{
 							try
 							{								
-								fs.create(kafkaReadyFlag).close();
-								LOG.info(LOG_TAG + "wrote {} as {}", topicName, kafkaReadyFlag.toString(), config.getTopicToProxyUser().get(topicName));
+								fs.create(flagPath).close();
+								LOG.info(LOG_TAG + "[{}] wrote {} as {}", topicName, flagPath.toString(), config.getTopicToProxyUser().get(topicName));									
 							} 
 							catch (IOException e)
 							{
 								LOG.error("Error getting File System: {}", e.toString());
 							}
 						}
-					}
-					else
-					{
-						long kaboomBehindMillisForHour = prevHourStartTimestmap - oldestTimestamp;
-
-						LOG.info(LOG_TAG + "skipping {} because KaBoom is {} earlier than top of hour",
-							 kafkaReadyFlag.toString(),
-							 String.format("%d minutes and  %d seconds", 
-								TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour),
-								TimeUnit.MILLISECONDS.toSeconds(kaboomBehindMillisForHour) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour))));
 					}
 				} 
 				catch (Exception e)

@@ -1,3 +1,8 @@
+Changes in 0.7.11:
+
+- Adds an additional kafka ready flag in the topic root
+- Logs a warning if the load balancer is still running after leader.sleep.duration.ms
+
 Changes in 0.7.10:
 
 - Adds a new optional configuration option (String) kaboom.kafkaReady.flag.filename, default=_KAFKA_READY
