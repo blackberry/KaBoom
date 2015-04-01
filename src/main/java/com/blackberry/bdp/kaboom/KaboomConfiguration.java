@@ -35,6 +35,17 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import com.blackberry.bdp.common.utils.props.Parser;
+import java.io.IOException;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsAction;
+import org.apache.hadoop.fs.permission.FsPermission;
+import com.blackberry.bdp.krackle.MetricRegistrySingleton;
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.Timer;
 
 /**
  *
@@ -43,12 +54,18 @@ import com.blackberry.bdp.common.utils.props.Parser;
 public class KaboomConfiguration
 {
 	private static final String defaultProperyFile = "kaboom.properties";
-	
+	private final Properties props;
+	private final Parser propsParser;
+	private final Object fsLock = new Object();
+	private final Path hadoopUrlPath;
 	private int kaboomId;
 	private long fileRotateInterval;
 	private int weight;
-	private Map<String, String> topicToHdfsPath;
-	private Map<String, String> topicToProxyUser;
+	private final CuratorFramework curator;	
+	private final Map<String, String> topicToProxyUser = new HashMap<>();
+	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
+	private final Map<String, String> topicToHdfsRootDir = new HashMap<>();
+	private final Map<String, Boolean> topicToSupportedStatus = new HashMap<>();
 	private String kerberosPrincipal;
 	private String kerberosKeytab;
 	private String hostname;
@@ -60,6 +77,35 @@ public class KaboomConfiguration
 	private Configuration hadoopConfiguration;
 	private String kafkaSeedBrokers;
 	private Integer readyFlagPrevHoursCheck;
+	private final Boolean useTempOpenFileDirectory;
+	private final Long periodicHdfsFlushInterval;
+	private final Long periodicFileCloseInterval;
+	private final Map<String, Meter> topicToBoomWritesMeter = new HashMap<>();
+	private final Map<String, Timer> topicToHdfsFlushTimer = new HashMap<>();
+	private final Map<String, Timer> topicToCompressionTimer = new HashMap<>();
+	private final Map<String, Histogram> topicToCompressionRatioHistogram = new HashMap<>();
+	private final Map<String, Short> topicToCompressionLevel = new HashMap<>();
+	private final Meter totalBoomWritesMeter;
+	private final Timer totalHdfsFlushTimer;
+	private final Timer totalCompressionTimer;
+	private final Histogram totalCompressionRatioHistogram;
+	private final Boolean useNativeCompression;
+	private final String loadBalancer;
+	private long leaderSleepDurationMs = 10 * 60 * 1000;
+	private short defaultCompressionLevel = 6;
+	private String kafkaReadyFlagFilename = "_KAFKA_READY";
+	
+	/**
+	 * These are required for boom files
+	 */
+	
+	private final FsPermission boomFilePerms = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);
+	
+	private int boomFileBufferSize = 16 * 1024;
+	private short boomFileReplicas = 3;
+	private long boomFileBlocksize = 256 * 1024 * 1024;		
+	private String boomFileTmpPrefix = "_tmp_";	
+
 	
 	private static final Logger LOG = LoggerFactory.getLogger(KaboomConfiguration.class);
 	
@@ -78,25 +124,48 @@ public class KaboomConfiguration
 		LOG.info("sinkToHighWatermark: {}", getSinkToHighWatermark());
 		LOG.info("kafkaSeedBrokers: {}", getKafkaSeedBrokers());
 		LOG.info("readyFlagPrevHoursCheck: {}", getReadyFlagPrevHoursCheck());
+		LOG.info("useTempOpenFileDirectory: {}", getUseTempOpenFileDirectory());
+		LOG.info("periodicHdfsFlushInterval: {}", getPeriodicHdfsFlushInterval());		
+		LOG.info("periodicFileCloseInterval: {}", getPeriodicFileCloseInterval());
+		LOG.info("leaderSleepDurationMs: {}", getLeaderSleepDurationMs());
+		LOG.info("defaultCompressionLevel: {}", getDefaultCompressionLevel());
 		
-		for (Map.Entry<String, String> entry : getTopicToHdfsPath().entrySet())
-		{
-			LOG.info("topicToHdfsPath: {} -> {}", entry.getKey(), entry.getValue());
-		}
-
+		LOG.info("boomFileBufferSize: {}", getBoomFileBufferSize());
+		LOG.info("boomFileReplicas: {}", getBoomFileReplicas());
+		LOG.info("boomFileBlocksize: {}", getBoomFileBlocksize());
+		LOG.info("useNativeCompression: {}", getUseNativeCompression());
+		LOG.info("loadBalancer: {}", getLoadBalancer());
+		LOG.info("Using kerberos uthentication.");
+		LOG.info("Kerberos principal: {}", getKerberosPrincipal());
+		LOG.info("Kerberos keytab: {}", getKerberosKeytab());
+		LOG.info("kafkaReadyFlagFilename: {}", getKafkaReadyFlagFilename());
+		
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
-			LOG.info("topicToProxyUser: {} -> {}", entry.getKey(), entry.getValue());
+			LOG.debug("topicToProxyUser: {} -> {}", entry.getKey(), entry.getValue());
 		}
 		
+		for (Map.Entry<String, String> entry : getTopicToHdfsRoot().entrySet())
+		{
+			LOG.debug("topicToKrFlagPath: {} -> {}", entry.getKey(), entry.getValue());
+		}
+
 		LOG.info(" *** end dumping configuration *** ");
 	}
 	
 	public KaboomConfiguration (Properties props) throws Exception
 	{
-		Parser propsParser = new Parser(props);
+		propsParser = new Parser(props);
 		
-		consumerConfiguration = new ConsumerConfiguration(props);	
+		this.props = props;		
+		
+		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));		
+		totalBoomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
+		totalHdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:hdfs flush timer");
+		totalCompressionTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:compression timer");
+		totalCompressionRatioHistogram = MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:total:compression ratio");
+		
+		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
 		fileRotateInterval = propsParser.parseLong("fileRotateInterval", 60L * 3L * 1000L);
 		weight = propsParser.parseInteger("kaboom.weighting", Runtime.getRuntime().availableProcessors());
@@ -109,61 +178,226 @@ public class KaboomConfiguration
 		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
+		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);				
+		useNativeCompression = propsParser.parseBoolean("kaboom.use.native.compression", false);
+		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
+		leaderSleepDurationMs = propsParser.parseLong("leader.sleep.duration.ms", leaderSleepDurationMs);
+		defaultCompressionLevel = propsParser.parseShort("kaboom.deflate.compression.level", defaultCompressionLevel);
+		kafkaReadyFlagFilename = propsParser.parseString("kaboom.kafkaReady.flag.filename", kafkaReadyFlagFilename);
 		
-		topicToHdfsPath = getTopicToHdfsPathFromProps(props);
-		topicToProxyUser = getTopicToProxyUserFromProps(props);
-		hadoopConfiguration = buildHadoopConfiguration();
+		boomFileBufferSize = propsParser.parseInteger("boom.file.buffer.size", boomFileBufferSize);
+		boomFileReplicas = propsParser.parseShort("boom.file.replicas", boomFileReplicas);
+		boomFileBlocksize = propsParser.parseLong("boom.file.block.size", boomFileBlocksize);
+		boomFileTmpPrefix = propsParser.parseString("boom.file.temp.prefix", boomFileTmpPrefix);
+		periodicHdfsFlushInterval = propsParser.parseLong("boom.file.flush.interval", 30 * 1000l);
+		periodicFileCloseInterval = propsParser.parseLong("boom.file.close.expired.interval", 60 * 1000l);
+		
+		mapTopicsToSupportedStatus();
+		curator = buildCuratorFramework();		
+		hadoopConfiguration = buildHadoopConfiguration();		
+		mapTopicToProxyUser(props);
+		mapProxyUserToHadoopFileSystem();
 	}
 	
-	/**
-	 * Creates the topic to HDFS paths Map
-	 *
-	 * @param props Properties to parse for topics and paths
-	 * @return Map<String, String>
-	 */
-	private Map<String, String> getTopicToHdfsPathFromProps(Properties props)
+	private void mapTopicsToSupportedStatus()
 	{
-		Pattern topicPathPattern = Pattern.compile("^topic\\.([^\\.]+)\\.path$");
-		Map<String, String> topicFileLocation = new HashMap<String, String>();
+		Pattern topicPathPattern = Pattern.compile("^topic\\.([^\\\\.]+)\\.hdfsRootDir");
+
 		for (Map.Entry<Object, Object> e : props.entrySet())
 		{
 			Matcher m = topicPathPattern.matcher(e.getKey().toString());
 			if (m.matches())
-			{
-				topicFileLocation.put(m.group(1), e.getValue().toString());
+			{								
+				String topic = m.group(1);
+				
+				if (!getTopicToSupportedStatus().containsKey(topic))
+				{
+					getTopicToSupportedStatus().put(topic, true);
+				}
+
+				String hdfsRootDir = hadoopUrlPath + props.getProperty(String.format("topic.%s.hdfsRootDir", topic));				
+				
+				if (!topicToHdfsRootDir.containsKey(topic))
+				{					
+					topicToHdfsRootDir.put(topic, hdfsRootDir);
+				}
+				
+				if (!topicToBoomWritesMeter.containsKey(topic))
+				{
+					topicToBoomWritesMeter.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes"));
+				}
+
+				if (!topicToHdfsFlushTimer.containsKey(topic))
+				{
+					topicToHdfsFlushTimer.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":hdfs flush timer"));
+				}
+				
+				if (!topicToCompressionTimer.containsKey(topic))
+				{
+					topicToCompressionTimer.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":compression timer"));
+				}
+				
+				if (!topicToCompressionRatioHistogram.containsKey(topic))
+				{
+					topicToCompressionRatioHistogram.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:topic:" + topic + ":compresssion ratio"));
+				}
+				
+				String topicCompressionPropName = String.format("topic.%s.deflate.compression.level", topic);
+				
+				try
+				{
+					short topicCompressionLevel = defaultCompressionLevel;
+					if (props.containsKey(topicCompressionPropName))
+					{
+						topicCompressionLevel = propsParser.parseShort(topicCompressionPropName);
+						LOG.info("Topic {} configured with a non-default compression level: {} ({} is the default)", topic, topicCompressionLevel, defaultCompressionLevel);
+					}
+					topicToCompressionLevel.put(topic, topicCompressionLevel);
+				}
+				catch (Exception ex)
+				{
+					LOG.error("Failed to set the topic specific compression level for topic {}", topic, e);
+				}
+				
 			}
 		}
-		
-		return topicFileLocation;
-	}
-
-		/**
-	 * Creates the topic to proxy user Map
+	}	
+	
+	/**
+	 * Builds the topic to an HDFS paths Map
+	 * 
+	 * Sample property definition:
+	 * 
+	 * topic.devtest-test1.hdfsRootDir=hdfs://hadoop.log82.bblabs/service/82/devtest/logs/%y%M%d/%H/test1
+	 * topic.devtest-test1.proxy.user=dariens
+	 * topic.devtest-test1.hdfsDir.1=incoming/%l
+	 * topic.devtest-test1.hdfsDir.2=hourly_temp
+	 * topic.devtest-test1.hdfsDir.2.duration=3600
 	 *
-	 * @param props Properties to parse for topics and users
-	 * @return Map<String, String>
+	 * @param topic
+	 * @return ArrayList<TimeBasedHdfsOutputPath>
+
 	 */
-	private Map<String, String> getTopicToProxyUserFromProps(Properties props) 
+	public ArrayList<TimeBasedHdfsOutputPath> getHdfsPathsForTopic(String topic)
 	{
-		Pattern topicProxyUsersPattern = Pattern.compile("^topic\\.([^\\.]+)\\.proxy.user$");
-		Map<String, String> topicProxyUsers = new HashMap<String, String>();
+		ArrayList<TimeBasedHdfsOutputPath> paths = new ArrayList<>();
+		
+		Pattern topicPathPattern = Pattern.compile("^topic\\." + topic + "\\.hdfsDir\\.(\\d+)");
 
 		for (Map.Entry<Object, Object> e : props.entrySet())
 		{
-			Matcher m = topicProxyUsersPattern.matcher(e.getKey().toString());
+			Matcher m = topicPathPattern.matcher(e.getKey().toString());
 			if (m.matches())
-			{
-				topicProxyUsers.put(m.group(1), e.getValue().toString());
+			{								
+				String pathNumber = m.group(1);
+				
+				if (!props.containsKey(String.format("topic.%s.hdfsRootDir", topic)))
+				{
+					LOG.error("Topic {} configuration property missing", String.format("topic.%s.hdfsRootDir", topic));
+					continue;
+				}
+				
+				String hdfsRootDir = hadoopUrlPath + props.getProperty(String.format("topic.%s.hdfsRootDir", topic));				
+				String directory = String.format("%s/%s", hdfsRootDir, e.getValue().toString());
+				String durationProperty = String.format("topic.%s.hdfsDir.%d.duration", topic, Integer.parseInt(pathNumber));
+				Integer duration = Integer.parseInt(props.getProperty(durationProperty, "180"));				
+
+				LOG.debug("HDFS output path property matched topic: {} path number: {} duration: {} directory: {}", topic, pathNumber, duration, directory);					
+				
+				TimeBasedHdfsOutputPath path = new TimeBasedHdfsOutputPath(
+					 getProxyUserToFileSystem().get(topicToProxyUser.get(topic)), 
+					 topic,
+					 this,
+					 directory, 
+					 duration);				
+				
+				paths.add(path);
+				
+				if (!getTopicToSupportedStatus().containsKey(topic))
+				{
+					getTopicToSupportedStatus().put(topic, true);
+				}
 			}
 		}
 		
-		return topicProxyUsers;
+		return paths;
+	}
+
+	/**
+	 * Builds the topic to proxy users map
+	 *
+	 * @param props Properties to parse for topics and users
+	 */
+	private void  mapTopicToProxyUser(Properties props) 
+	{
+		Pattern topicProxyUsersPattern = Pattern.compile("^topic\\.([^\\.]+)\\.proxy.user$");
+
+		for (Map.Entry<Object, Object> e : props.entrySet())
+		{
+			String proxyUser = e.getValue().toString();			
+				 
+			Matcher m = topicProxyUsersPattern.matcher(e.getKey().toString());
+			if (m.matches())
+			{				
+				topicToProxyUser.put(m.group(1), proxyUser);
+			}
+		}		
 	}
 	
 	/**
+	 * Builds the proxy user to hadoop file system map
+	 */
+	private void mapProxyUserToHadoopFileSystem() 
+	{
+		Authenticator.getInstance().setKerbConfPrincipal(getKerberosPrincipal());
+		Authenticator.getInstance().setKerbKeytab(getKerberosKeytab());
+		
+		for (Map.Entry<String, String> entry : topicToProxyUser.entrySet())
+		{
+			final String proxyUser = entry.getValue();
+			
+			if (getProxyUserToFileSystem().containsKey(proxyUser))
+			{
+				continue;
+			}
+			
+			try
+			{	
+				LOG.info("Attempting to create file system {} for {}", hadoopUrlPath, proxyUser);
+				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>()
+				 {
+					 @Override
+					 public Void run() throws Exception
+					 {
+						 synchronized (fsLock)
+						 {							 
+							 try
+							 {
+								 FileSystem fs = hadoopUrlPath.getFileSystem(hadoopConfiguration);
+								 getProxyUserToFileSystem().put(proxyUser, fs);
+								 								 
+								 LOG.debug("Opening {} for proxy user {}", hadoopUrlPath, proxyUser);
+							 }
+							 catch (IOException ioe)
+							 {
+								 LOG.error("Error getting file system {} for proxy user {}", hadoopUrlPath, ioe);
+							 }
+						 }
+
+						 return null;
+					 }
+				 });
+			} 
+			catch (Exception e)
+			{
+				LOG.error("Error creating file.", e);
+			}
+		}		
+	}
+
+	/**
 	 * Instantiates properties from either the specified configuration file or the default for the class
 	 *
-	 * @param props Properties to parse for topics and users
 	 * @return Properties
 	 */
 	public static Properties getProperties()
@@ -237,7 +471,7 @@ public class KaboomConfiguration
 	 * 
 	 * @return CuratorFramework
 	 */
-	public CuratorFramework getCuratorFramework()
+	private CuratorFramework buildCuratorFramework()
 	{
 		RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
 		
@@ -245,22 +479,22 @@ public class KaboomConfiguration
 		
 		String[] connStringAndPrefix = getKaboomZkConnectionString().split("/", 2);
 		
-		final CuratorFramework curator;
+		CuratorFramework newCurator;
 		
 		if (connStringAndPrefix.length == 1)
 		{
-			curator = CuratorFrameworkFactory.newClient(kaboomZkConnectionString, retryPolicy);
+			newCurator = CuratorFrameworkFactory.newClient(kaboomZkConnectionString, retryPolicy);
 		}
 		else
 		{
-			curator = CuratorFrameworkFactory.builder()
+			newCurator = CuratorFrameworkFactory.builder()
 				 .namespace(connStringAndPrefix[1])
 				 .connectString(connStringAndPrefix[0]).retryPolicy(retryPolicy)
 				 .build();
 		}
 		
-		curator.start();
-		return curator;			
+		newCurator.start();
+		return newCurator;			
 	}
 	
 	/**
@@ -312,35 +546,11 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the topicToHdfsPath
-	 */
-	public Map<String, String> getTopicToHdfsPath()
-	{
-		return topicToHdfsPath;
-	}
-
-	/**
-	 * @param topicToHdfsPath the topicToHdfsPath to set
-	 */
-	public void setTopicToHdfsPath(Map<String, String> topicToHdfsPath)
-	{
-		this.topicToHdfsPath = topicToHdfsPath;
-	}
-
-	/**
 	 * @return the topicToProxyUser
 	 */
 	public Map<String, String> getTopicToProxyUser()
 	{
 		return topicToProxyUser;
-	}
-
-	/**
-	 * @param topicToProxyUser the topicToProxyUser to set
-	 */
-	public void setTopicToProxyUser(Map<String, String> topicToProxyUser)
-	{
-		this.topicToProxyUser = topicToProxyUser;
 	}
 
 	/**
@@ -517,5 +727,221 @@ public class KaboomConfiguration
 	public void setKafkaZkConnectionString(String kafkaZkConnectionString)
 	{
 		this.kafkaZkConnectionString = kafkaZkConnectionString;
+	}
+
+	/**
+	 * @return the topicToHdfsRootDir
+	 */
+	public Map<String, String> getTopicToHdfsRoot()
+	{
+		return topicToHdfsRootDir;
+	}
+
+	/**
+	 * @return the hadoopUrlPath
+	 */
+	public Path getHadoopUrlPath()
+	{
+		return hadoopUrlPath;
+	}
+
+	/**
+	 * @return the topicToSupportedStatus
+	 */
+	public Map<String, Boolean> getTopicToSupportedStatus()
+	{
+		return topicToSupportedStatus;
+	}
+
+	/**
+	 * @return the curator
+	 */
+	public CuratorFramework getCurator()
+	{
+		return curator;
+	}
+
+	/**
+	 * @return the useTempOpenFileDirectory
+	 */
+	public Boolean getUseTempOpenFileDirectory()
+	{
+		return useTempOpenFileDirectory;
+	}
+
+	/**
+	 * @return the periodicHdfsFlushInterval
+	 */
+	public Long getPeriodicHdfsFlushInterval()
+	{
+		return periodicHdfsFlushInterval;
+	}
+
+	/**
+	 * @return the boomFilePerms
+	 */
+	public FsPermission getBoomFilePerms()
+	{
+		return boomFilePerms;
+	}
+
+	/**
+	 * @return the boomFileBufferSize
+	 */
+	public int getBoomFileBufferSize()
+	{
+		return boomFileBufferSize;
+	}
+
+	/**
+	 * @return the boomFileReplicas
+	 */
+	public short getBoomFileReplicas()
+	{
+		return boomFileReplicas;
+	}
+
+	/**
+	 * @return the boomFileBlocksize
+	 */
+	public long getBoomFileBlocksize()
+	{
+		return boomFileBlocksize;
+	}
+
+	/**
+	 * @return the boomFileTmpPrefix
+	 */
+	public String getBoomFileTmpPrefix()
+	{
+		return boomFileTmpPrefix;
+	}
+
+	/**
+	 * @return the topicToBoomWritesMeter
+	 */
+	public Map<String, Meter> getTopicToBoomWrites()
+	{
+		return topicToBoomWritesMeter;
+	}
+
+	/**
+	 * @return the totalBoomWritesMeter
+	 */
+	public Meter getTotalBoomWritesMeter()
+	{
+		return totalBoomWritesMeter;
+	}
+
+	/**
+	 * @return the topicToHdfsFlushTimer
+	 */
+	public Map<String, Timer> getTopicToHdfsFlushTimer()
+	{
+		return topicToHdfsFlushTimer;
+	}
+
+	/**
+	 * @return the totalHdfsFlushTimer
+	 */
+	public Timer getTotalHdfsFlushTimer()
+	{
+		return totalHdfsFlushTimer;
+	}
+
+	/**
+	 * @return the periodicFileCloseInterval
+	 */
+	public Long getPeriodicFileCloseInterval()
+	{
+		return periodicFileCloseInterval;
+	}
+
+	/**
+	 * @return the totalCompressionTimer
+	 */
+	public Timer getTotalCompressionTimer()
+	{
+		return totalCompressionTimer;
+	}
+
+	/**
+	 * @return the useNativeCompression
+	 */
+	public Boolean getUseNativeCompression()
+	{
+		return useNativeCompression;
+	}
+
+	/**
+	 * @return the loadBalancer
+	 */
+	public String getLoadBalancer()
+	{
+		return loadBalancer;
+	}
+
+	/**
+	 * @return the leaderSleepDurationMs
+	 */
+	public long getLeaderSleepDurationMs()
+	{
+		return leaderSleepDurationMs;
+	}
+
+	/**
+	 * @return the proxyUserToFileSystem
+	 */
+	public Map<String, FileSystem> getProxyUserToFileSystem()
+	{
+		return proxyUserToFileSystem;
+	}
+
+	/**
+	 * @return the topicToCompressionRatioHistogram
+	 */
+	public Map<String, Histogram> getTopicToCompressionRatioHistogram()
+	{
+		return topicToCompressionRatioHistogram;
+	}
+
+	/**
+	 * @return the topicToCompressionLevel
+	 */
+	public Map<String, Short> getTopicToCompressionLevel()
+	{
+		return topicToCompressionLevel;
+	}
+
+	/**
+	 * @return the defaultCompressionLevel
+	 */
+	public short getDefaultCompressionLevel()
+	{
+		return defaultCompressionLevel;
+	}
+
+	/**
+	 * @return the topicToCompressionTimer
+	 */
+	public Map<String, Timer> getTopicToCompressionTimer()
+	{
+		return topicToCompressionTimer;
+	}
+
+	/**
+	 * @return the totalCompressionRatioHistogram
+	 */
+	public Histogram getTotalCompressionRatioHistogram()
+	{
+		return totalCompressionRatioHistogram;
+	}
+
+	/**
+	 * @return the kafkaReadyFlagFilename
+	 */
+	public String getKafkaReadyFlagFilename()
+	{
+		return kafkaReadyFlagFilename;
 	}
 }

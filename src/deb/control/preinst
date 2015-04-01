@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Remove any libraries from previous versions
+
+if [[ "x$kaboom_uid" == "x" ]]
+then
+	getent group kaboom >/dev/null || groupadd -r kaboom 
+	getent passwd kaboom >/dev/null || useradd -r -g kaboom -m -s /bin/bash -c "User for kaboom." kaboom
+else
+	getent group kaboom >/dev/null || groupadd -g $kaboom_uid -r kaboom
+	getent passwd kaboom >/dev/null || useradd -u $kaboom_uid -r -g kaboom -m -s /bin/bash -c "User for kaboom." kaboom
+fi
+
+if [[ -e "/opt/kaboom/lib" ]]
+then
+	rm /opt/kaboom/lib/*
+	chown -R kaboom.kaboom /opt/kaboom/lib
+fi
+
+if [[ -e "/var/log/kaboom" ]]
+then
+	chown -R kaboom.kaboom /var/log/kaboom
+fi 
+
+if [[ -e "/opt/kaboom/config" ]]
+then
+	chown -R kaboom.kaboom /opt/kaboom/config
+fi

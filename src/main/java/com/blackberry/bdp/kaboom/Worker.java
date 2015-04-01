@@ -16,39 +16,39 @@
 
 package com.blackberry.bdp.kaboom;
 
-import java.io.IOException;
-import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.security.PrivilegedExceptionAction;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
-import java.util.TimeZone;
+import java.util.ArrayList;
 
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsAction;
-import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.blackberry.bdp.common.utils.conversion.Converter;
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import com.blackberry.bdp.krackle.consumer.Consumer;
+
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
-
-import com.blackberry.bdp.common.utils.conversion.Converter;
+import com.codahale.metrics.Meter;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class Worker implements Runnable
 {
 	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
-	private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
+
+	/**
+	 * @return the ZK_ROOT
+	 */
+	public static String getZK_ROOT()
+	{
+		return ZK_ROOT;
+	}
 
 	private String partitionId;
 
@@ -56,24 +56,11 @@ public class Worker implements Runnable
 	private long offset;
 	private long lowerOffsetsReceived = 0;
 	private long timestamp;
+	private long maxTimestamp = -1;
 	private boolean stopping = false;
 
-	private static final Object fsLock = new Object();
-	private FileSystem fs;
-
 	private String hostname;
-	private String template;
-	private String proxyUser;
 	private KaboomConfiguration config;
-
-	private long hour;
-	private OutputFile outputFile;
-	private Map<Long, OutputFile> outputFileMap = new HashMap<Long, OutputFile>();
-
-	private FsPermission permissions = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);
-	private int bufferSize = 16 * 1024;
-	private short replicas = 3;
-	private long blocksize = 256 * 1024 * 1024;
 
 	private CuratorFramework curator;
 	private static final String ZK_ROOT = "/kaboom";
@@ -85,18 +72,23 @@ public class Worker implements Runnable
 	private int partition;
 
 	private long startTime;
-	private long endTime;
 
 	private long lag = 0;
 	private int lag_sec = 0;
-	private long linesread = 0;
+	private long messagesWritten = 0;
 
 	private String lagGaugeName;
 	private String lagSecGaugeName;
 	private String msgWrittenGaugeName;
 	private String lowerOffsetsGaugeName;
+	
+	private Meter boomWritesMeter;
+	private Meter boomWritesMeterTopic;
+	private Meter boomWritesMeterTotal;
+	
+	private ArrayList<TimeBasedHdfsOutputPath> hdfsOutputPaths;
 
-	private static Set<Worker> workers = new HashSet<Worker>();
+	private static Set<Worker> workers = new HashSet<>();
 	private static final Object workersLock = new Object();
 
 	static 
@@ -275,26 +267,36 @@ public class Worker implements Runnable
 			 });
 	}
 
-	//Worker worker = new Worker(config, 	curator, topic, partition);
-	
 	public Worker(KaboomConfiguration config, CuratorFramework curator, String topic, int partition) throws Exception
 	{
 		this.config = config;
-		this.endTime = System.currentTimeMillis() + config.getFileRotateInterval();
 		this.curator = curator;
 		this.topic = topic;
 		this.partition = partition;
 		this.startTime = System.currentTimeMillis();
-		this.linesread = 0;
-		this.template = config.getTopicToHdfsPath().get(topic);
-		this.proxyUser = config.getTopicToProxyUser().get(topic);
-
+		this.messagesWritten = 0;
+		this.hdfsOutputPaths = config.getHdfsPathsForTopic(topic);
+		this.boomWritesMeterTopic = config.getTopicToBoomWrites().get(topic);
+		this.boomWritesMeterTotal = config.getTotalBoomWritesMeter();
+		
+		
 		partitionId = topic + "-" + partition;
+		
+		LOG.info("Worker instantiated for {} and configured for {} output paths", partitionId, hdfsOutputPaths.size());
+		
+		for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths)
+		{
+			outputPath.setPartition(partition);
+			outputPath.setPartitionId(partitionId);			
+			LOG.info("\t {} {} => {}", config.getKaboomId(), partitionId, outputPath);
+		}
+		
+		this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
 
 		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
 		lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
 		msgWrittenGaugeName = "kaboom:partitions:" + partitionId + ":messages written per second";
-		lowerOffsetsGaugeName = "kaboom:partitions:" + partitionId + ":early offsets received";		
+		lowerOffsetsGaugeName = "kaboom:partitions:" + partitionId + ":early offsets received";
 
 		String[] metrics_to_remove = {lagGaugeName, lagSecGaugeName, msgWrittenGaugeName, lowerOffsetsGaugeName};
 
@@ -342,7 +344,7 @@ public class Worker implements Runnable
 					  @Override
 					  public Long getValue()
 					  {
-						  return linesread / ((System.currentTimeMillis() - startTime) / 1000);
+						  return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
 					  }
 			 });
 
@@ -365,12 +367,25 @@ public class Worker implements Runnable
 		LOG.info("[{}] Created worker.", partitionId);
 	}
 
+	private static String dateString(Long ts)
+	{		
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");		
+		Date now = new Date();
+		String strDate = sdf.format(ts);
+		return strDate;		
+	}		
+	
 	@Override
 	public void run()
 	{
 		try
 		{
-			zkPath = ZK_ROOT + "/topics/" + topic + "/" + partition;
+			for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths)
+			{
+				outputPath.setKaboomWorker(this);
+			}			
+			
+			zkPath = getZK_ROOT() + "/topics/" + getTopic() + "/" + getPartition();
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
 			zkPath_offSetOverride = zkPath + "/offset_override";						
 
@@ -380,7 +395,7 @@ public class Worker implements Runnable
 			} 
 			catch (Exception e)
 			{
-				LOG.error("[{}] Error getting offset.", partitionId, e);
+				LOG.error("[{}] Error getting offset.", getPartitionId(), e);
 				return;
 			}
 
@@ -390,15 +405,15 @@ public class Worker implements Runnable
 			} 
 			catch (UnknownHostException e)
 			{
-				LOG.error("[{}] Can't determine local hostname", partitionId);
+				LOG.error("[{}] Can't determine local hostname", getPartitionId());
 				hostname = "unknown.host";
 			}
 
 			String clientId = "kaboom-" + hostname;
 
-			consumer = new Consumer(config.getConsumerConfiguration(), clientId, topic, partition,offset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
+			consumer = new Consumer(config.getConsumerConfiguration(), clientId, getTopic(), getPartition(),offset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
 
-			LOG.info("[{}] Created worker.  Starting at offset {}.", partitionId, offset);
+			LOG.info("[{}] Created worker.  Starting at offset {}.", getPartitionId(), offset);
 
 			byte[] bytes = new byte[1024 * 1024];
 			int length;
@@ -407,18 +422,12 @@ public class Worker implements Runnable
 			PriParser pri = new PriParser();
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();
-			long maxTimestamp = -1;
 			
-			while (System.currentTimeMillis() < endTime)
+			
+			while (stopping == false)
 			{
 				try
 				{
-					if (stopping)
-					{
-						LOG.info("[{}] Stopping Worker.", partitionId);
-						break;
-					}
-
 					length = consumer.getMessage(bytes, 0, bytes.length);
 
 					if (length == -1)
@@ -446,8 +455,7 @@ public class Worker implements Runnable
 								 * should just be patient until the offsets are from where we want.  
 								*/
 
-								LOG.debug("[{}] skipping last offset {} since it's lower than high watermark {}",
-									 partitionId, consumer.getLastOffset(), highWatermark);
+								LOG.debug("[{}] skipping last offset {} since it's lower than high watermark {}", getPartitionId(), consumer.getLastOffset(), highWatermark);
 								
 								lowerOffsetsReceived++;
 								continue;
@@ -462,20 +470,18 @@ public class Worker implements Runnable
 
 								if (config.getSinkToHighWatermark())
 								{
-									LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
-										 partitionId, offset, highWatermark, config.getSinkToHighWatermark());
+									LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.", getPartitionId(), offset, highWatermark, config.getSinkToHighWatermark());
 
 									consumer.setNextOffset(highWatermark);
 									offset = highWatermark;
 
-									LOG.info("[{}] Successfully set offset to the high watermark of {}", partitionId, highWatermark);
+									LOG.info("[{}] Successfully set offset to the high watermark of {}", getPartitionId(), highWatermark);
 
 									continue;
 								} 
 								else
 								{
-									LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
-										 partitionId, offset, highWatermark, config.getSinkToHighWatermark());
+									LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.", getPartitionId(), offset, highWatermark, config.getSinkToHighWatermark());
 
 									continue;
 								}		
@@ -490,8 +496,7 @@ public class Worker implements Runnable
 						} 
 						else
 						{
-							LOG.error("[{}] Offset anomaly! Expected:{}, Got {}, Consumer high watermark {}, latest {}, earliest {}", 
-								 partitionId, 
+							LOG.error("[{}] Offset anomaly! Expected:{}, Got {}, Consumer high watermark {}, latest {}, earliest {}", getPartitionId(), 
 								 offset, 
 								 consumer.getLastOffset(), 
 								 consumer.getHighWaterMark(), 
@@ -500,9 +505,14 @@ public class Worker implements Runnable
 						}
 					}
 
-					linesread++;
+					messagesWritten += hdfsOutputPaths.size();
 					offset = consumer.getNextOffset();
 					lag = consumer.getHighWaterMark() - offset;
+
+					
+					// (byte) 0xFE: -2
+					// (byte) 0x00: 0
+					// (byte) 0xFF: -1
 
 					// Check for version
 					if (bytes[0] == (byte) 0xFE)
@@ -516,7 +526,7 @@ public class Worker implements Runnable
 						}
 						else
 						{
-							LOG.warn("[{}] Unrecognized encoding version: {}", partitionId, version);
+							LOG.warn("[{}] Unrecognized encoding version: {}", getPartitionId(), version);
 							pos = 0;
 						}
 					} 
@@ -569,12 +579,12 @@ public class Worker implements Runnable
 					{
 						if (version == (byte) 0x00)
 						{
-							LOG.debug("[{}] Failed to parse timestamp.  Using stored timestamp", partitionId);
+							LOG.debug("[{}] Failed to parse timestamp.  Using stored timestamp", getPartitionId());
 							timestamp = Converter.longFromBytes(bytes, 2);
 						} 
 						else
 						{
-							LOG.error("[{}] Error parsing timestamp.", partitionId);
+							LOG.error("[{}] Error parsing timestamp.", getPartitionId());
 							timestamp = System.currentTimeMillis();
 						}
 					}
@@ -588,11 +598,17 @@ public class Worker implements Runnable
 
 					if ((length - pos) < 0)
 					{
-						LOG.info("[{}] Skipping offset as length - Offset is < 0: timestamp: {}, pos: {}, length: {}", partitionId, timestamp, pos, length);
+						LOG.info("[{}] Skipping offset as length - Offset is < 0: timestamp: {}, pos: {}, length: {}", getPartitionId(), timestamp, pos, length);
 						continue;
+					}					
+					
+					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
+					{
+						path.getBoomWriter(timestamp, partitionId + "-" + offset +".bm").writeLine(timestamp, bytes, pos, length - pos);
+						boomWritesMeter.mark();						
+						boomWritesMeterTopic.mark();
+						boomWritesMeterTotal.mark();
 					}
-
-					getBoomWriter(timestamp).writeLine(timestamp, bytes, pos, length - pos);
 
 					/*
 					 * Let's track the max timestamp and write that to ZK for the 
@@ -604,59 +620,52 @@ public class Worker implements Runnable
 					
 					if (timestamp > maxTimestamp || maxTimestamp == -1)
 					{
-						maxTimestamp = timestamp;
+						maxTimestamp = timestamp;						
 					}
 
 				} 
-				catch (Throwable t)
+				catch (Exception e)
 				{
-					LOG.error("[{}] Error processing message.", partitionId, t);
+					LOG.error("[{}] Error processing message: ", partitionId, e);
 					LOG.info("[{}] Deleting all tmp files", partitionId);
 					
-					for (Entry<Long, OutputFile> entry : outputFileMap.entrySet())
+					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
 					{
-						entry.getValue().abort();
-					}
+						path.abortAll();
+					}								
+					
 					return;
 				}
 			}
-
-			LOG.info("[{}] Closing all output files.", partitionId);
 			
-			for (Entry<Long, OutputFile> entry : outputFileMap.entrySet())
+			LOG.info("[{}] KaBoom client shutting down and closing all output files.", getPartitionId());
+			
+			for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
 			{
-				try
-				{
-					entry.getValue().getBoomWriter().close();
-					entry.getValue().close();
-				} 
-				catch (IOException e)
-				{
-					LOG.error("[{}] Error closing output file", partitionId, e);
-				}
-			}
-
+				path.closeAll();
+			}			
+			
 			try
 			{
-				storeOffset();
-				storeOffsetTimestamp(partitionId, maxTimestamp);
-			
 				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.", partitionId, offset, maxTimestamp);
+				
+				storeOffset();
+				storeOffsetTimestamp();
 			} 
 			catch (Exception e)
 			{
-				LOG.error("[{}] Error storing offset/timestamp in ZooKeeper", partitionId, e);
+				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper", partitionId, offset, maxTimestamp, e);
 			}
 
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagGaugeName);
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagSecGaugeName);
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(msgWrittenGaugeName);
 			
-			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})", partitionId, linesread, offset);
+			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})", getPartitionId(), messagesWritten, offset);
 		}
 		catch (Exception e) 
 		{
-			LOG.error("[{}] An exception occured while setting up this worker thread giving up and returing => error : {} ", partitionId, e);
+			LOG.error("[{}] An exception occured while setting up this worker thread giving up and returing => error : {} ", getPartitionId(), e);
 		}
 		finally
 		{
@@ -667,15 +676,19 @@ public class Worker implements Runnable
 		}
 	}
 
-	private void storeOffset() throws Exception
+	public void storeOffset() throws Exception
 	{
 		if (curator.checkExists().forPath(zkPath) == null)
 		{
 			curator.create().creatingParentsIfNeeded()
 				 .withMode(CreateMode.PERSISTENT).forPath(zkPath, Converter.getBytes(offset));
-		} else
+			
+			LOG.info("[{}] new ZK path created to write offset {} to {}", partitionId, offset, zkPath);
+		} 
+		else
 		{
 			curator.setData().forPath(zkPath, Converter.getBytes(offset));
+			LOG.info("[{}] wrote offset {} to existing path {}", partitionId, offset, zkPath);
 		}
 
 	}
@@ -688,47 +701,46 @@ public class Worker implements Runnable
 	{
 		if (curator.checkExists().forPath(zkPath) == null)
 		{
+			LOG.info("[{}] offset path {} does not exist, returning zero", partitionId, zkPath);
 			return 0L;
 		} 
 		else
 		{
-			long zkOffset = Converter.longFromBytes(curator.getData().forPath(zkPath), 0);
-
+			long zkOffset = Converter.longFromBytes(curator.getData().forPath(zkPath), 0);			
+			
+			LOG.info("[{}] offset {} found in path {}", partitionId, zkOffset, zkPath);
+			
 			if (curator.checkExists().forPath(zkPath_offSetOverride) != null)
 			{
 				long zkOffsetOverride = Converter.longFromBytes(curator.getData().forPath(zkPath_offSetOverride), 0);
 
 				if (config.getAllowOffsetOverrides())
 				{
-					LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}", 
-						 this.partitionId, zkOffset, zkOffsetOverride, config.getAllowOffsetOverrides());
+					LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}", this.getPartitionId(), zkOffset, zkOffsetOverride, config.getAllowOffsetOverrides());
 					
 					curator.delete().forPath(zkPath_offSetOverride);
 					
-					LOG.info("{} successfully deleted offset override ZK path: {}", this.partitionId, zkPath_offSetOverride);
+					LOG.info("{} successfully deleted offset override ZK path: {}", this.getPartitionId(), zkPath_offSetOverride);
 					
 					return zkOffsetOverride;
 				} 
 				else
 				{
-					LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}", 
-						 this.partitionId, zkOffset, zkOffsetOverride, config.getAllowOffsetOverrides());
+					LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}", this.getPartitionId(), zkOffset, zkOffsetOverride, config.getAllowOffsetOverrides());
 				}
 			}
 
 			return zkOffset;
 		}
 	}
-
+	
 	/**
-	 * Stores the partitions offset timestamp in ZK
 	 *
 	 * @throws Exception
 	 */
-	
-	private void storeOffsetTimestamp(String partitionId, long offsetTimestamp) throws Exception
+	public void storeOffsetTimestamp() throws Exception
 	{
-		if (offsetTimestamp == -1)
+		if (maxTimestamp == -1)
 		{
 			LOG.info("Partition {} has a -1 offsetTime and will not be written to ZK", partitionId);
 			return;
@@ -738,13 +750,17 @@ public class Worker implements Runnable
 		{
 			curator.create().creatingParentsIfNeeded()
 				 .withMode(CreateMode.PERSISTENT)
-				 .forPath(zkPath_offSetTimestamp, Converter.getBytes(offsetTimestamp));
+				 .forPath(zkPath_offSetTimestamp, Converter.getBytes(maxTimestamp));
 		} 
 		else
 		{
 			curator.setData().forPath(zkPath_offSetTimestamp,
-				 Converter.getBytes(offsetTimestamp));
+				 Converter.getBytes(maxTimestamp));
 		}
+		
+		LOG.info("[{}] stored offset timestamp in ZK {} ({})", partitionId, maxTimestamp, dateString(maxTimestamp));
+		
+		maxTimestamp = -1;
 	}
 
 	/**
@@ -766,176 +782,9 @@ public class Worker implements Runnable
 		}
 	}
 
-	private FastBoomWriter getBoomWriter(long timestamp) throws IOException
-	{
-		hour = timestamp - timestamp % (60 * 60 * 1000);
-		outputFile = outputFileMap.get(hour);
-		if (outputFile == null)
-		{
-			outputFile = new OutputFile(hour);
-			outputFileMap.put(hour, outputFile);
-		}
-
-		return outputFile.getBoomWriter();
-	}
-
-	private class OutputFile
-	{
-		private String dir;
-		private String tmpdir;
-		private String filename;
-
-		private Path finalPath;
-		private Path tmpPath;
-
-		private FastBoomWriter boomWriter;
-		private OutputStream out;
-
-		public OutputFile(long hour)
-		{
-			dir = Converter.timestampTemplateBuilder(hour, template);
-
-			/*
-			 * Related to IPGBD-1028 Output topic-partitionId-offset-incrementval.bm
-			 */
-			
-			filename = String.format("%s-%08d.bm", partitionId, offset);
-			tmpdir = String.format("%s/_tmp_%s-%08d.bm", dir, partitionId, offset);
-
-			finalPath = new Path(dir + "/" + filename);
-			tmpPath = new Path(tmpdir + "/" + filename);
-
-			try
-			{
-				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>()
-				 {
-					 @Override
-					 public Void run() throws Exception
-					 {
-						 synchronized (fsLock)
-						 {
-							 try
-							 {
-								 fs = tmpPath.getFileSystem(config.getHadoopConfiguration());
-							 } 
-							 catch (IOException e)
-							 {
-								 LOG.error("Error getting File System.", e);
-							 }
-						 }
-
-						 LOG.info("[{}] Opening {}.", partitionId, tmpPath);
-
-						 if (fs.exists(tmpPath))
-						 {
-							 fs.delete(tmpPath, false);
-							 LOG.info("[{}] Removing file from HDFS because it already exists: {}", partitionId, tmpPath.toString());
-						 }
-
-						 out = fs.create(tmpPath, permissions, false, bufferSize, replicas, blocksize, null);
-						 boomWriter = new FastBoomWriter(out);
-						 return null;
-					 }
-				 });
-			} 
-			catch (Exception e)
-			{
-				LOG.error("Error creating file.", e);
-			}
-		}
-
-		public void abort()
-		{
-			LOG.info("[{}] Aborting output file.", partitionId);
-			try
-			{
-				boomWriter.close();
-			} 
-			catch (IOException e)
-			{
-				LOG.error("[{}] Error closing boom writer.", partitionId, e);
-			}
-			
-			try
-			{
-				out.close();
-			} 
-			catch (IOException e)
-			{
-				LOG.error("[{}] Error closing boom writer output file.", partitionId, e);
-			}
-			
-			synchronized (fsLock)
-			{
-				try
-				{
-					fs = tmpPath.getFileSystem(config.getHadoopConfiguration());
-					fs.delete(new Path(tmpdir), true);
-				} 
-				catch (IOException e)
-				{
-					LOG.error("[{}] Error deleting temp files.", partitionId, e);
-				}
-			}
-		}
-
-		public FastBoomWriter getBoomWriter()
-		{
-			return boomWriter;
-		}
-
-		public void close() throws IOException
-		{
-			LOG.info("[{}] Closing {}.", partitionId, tmpPath);
-			boomWriter.close();
-			out.close();
-
-			try
-			{
-				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>()
-				 {
-					 @Override
-					 public Void run() throws Exception
-					 {
-						 synchronized (fsLock)
-						 {
-							 try
-							 {
-								 fs = tmpPath.getFileSystem(config.getHadoopConfiguration());
-							 } 
-							 catch (IOException e)
-							 {
-								 LOG.error("[{}] Error getting File System.", partitionId, e);
-							 }
-						 }
-						 try
-						 {
-							 LOG.info("[{}] Moving {} to {}.", partitionId, tmpPath,
-								  finalPath);
-							 fs.rename(tmpPath, finalPath);
-						 } 
-						 catch (Exception e)
-						 {
-							 LOG.error("[{}] Error renaming file.", partitionId, e);
-							 abort();
-						 }
-						 
-						 fs.delete(new Path(tmpdir), true);
-						 return null;
-					 }
-				 });
-			} 
-			catch (Exception e)
-			{
-				LOG.error("[{}] Error creating file.", partitionId, e);
-			}
-
-		}
-	}
-
 	public void stop()
 	{
-		LOG.info("Stop request received.");
+		LOG.info("[{}] Stop request received", partitionId);
 		stopping = true;
 	}
 
@@ -951,6 +800,46 @@ public class Worker implements Runnable
 
 	public long getMsgWrittenPerSec()
 	{
-		return linesread / ((System.currentTimeMillis() - startTime) / 1000);
+		return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
+	}
+
+	/**
+	 * @return the hdfsOutputPaths
+	 */
+	public ArrayList<TimeBasedHdfsOutputPath> getHdfsOutputPaths()
+	{
+		return hdfsOutputPaths;
+	}
+
+	/**
+	 * @return the partitionId
+	 */
+	public String getPartitionId()
+	{
+		return partitionId;
+	}
+
+	/**
+	 * @return the topic
+	 */
+	public String getTopic()
+	{
+		return topic;
+	}
+
+	/**
+	 * @return the partition
+	 */
+	public int getPartition()
+	{
+		return partition;
+	}
+
+	/**
+	 * @param partition the partition to set
+	 */
+	public void setPartition(int partition)
+	{
+		this.partition = partition;
 	}
 }

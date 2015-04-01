@@ -19,23 +19,20 @@ package com.blackberry.bdp.kaboom;
 import com.blackberry.bdp.common.utils.props.Parser;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
-
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.leader.LeaderSelector;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
-
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
+import org.apache.zookeeper.KeeperException.NoNodeException;
 
 public class KaBoom
 {
@@ -43,10 +40,14 @@ public class KaBoom
 	private static final Charset UTF8 = Charset.forName("UTF-8");	
 	boolean shutdown = false;	
 	private KaboomConfiguration config;
-
+	
 	public static void main(String[] args) throws Exception
 	{
-		new KaBoom().run();
+		LOG.info("*******************************************");
+		LOG.info("***         KABOOM SERVER START         ***");
+		LOG.info("*******************************************");
+		
+		new KaBoom().run();		
 	}
 	
 	public KaBoom() throws Exception
@@ -84,20 +85,6 @@ public class KaBoom
 			throw e;
 		}
 		
-		try
-		{
-			LOG.info("using kerberos authentication.");
-			LOG.info("kerberos principal = {}", config.getKerberosPrincipal());
-			LOG.info("kerberos keytab = {}", config.getKerberosKeytab());			
-			
-			Authenticator.getInstance().setKerbConfPrincipal(config.getKerberosPrincipal());
-			Authenticator.getInstance().setKerbKeytab(config.getKerberosKeytab());
-		}
-		catch (Exception e)
-		{
-			LOG.error("there was an error configuring kerberos configuration: ", e);
-		}
-
 		MetricRegistrySingleton.getInstance().enableJmx();
 		
 		/**
@@ -106,26 +93,27 @@ public class KaBoom
 		 * 
 		 */
 		
-		final CuratorFramework curator = config.getCuratorFramework();
-		
 		for (String path : new String[] {"/kaboom/leader", "/kaboom/clients", "/kaboom/assignments"})
 		{
-			if (curator.checkExists().forPath(path) == null)
+			if (config.getCurator().checkExists().forPath(path) == null)
 			{
 				try
 				{
 					LOG.warn("the path {} was not found in ZK and needs to be created", path);
-					curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT).forPath(path);
+					config.getCurator().create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT).forPath(path);
 					LOG.warn("path {} created in ZK", path);
 				} 
 				catch (Exception e)
 				{
 					LOG.error("Error creating ZooKeeper node {} ", path, e);
 				}
-			}			
+			}
+			else
+			{
+				LOG.info("required path {} already exists in zookeeper", path);
+			}
 		}
 		
-		// Register my existence
 		{
 			Yaml yaml = new Yaml();
 			ByteArrayOutputStream nodeOutputStream = new ByteArrayOutputStream();
@@ -144,7 +132,7 @@ public class KaBoom
 			{
 				try
 				{
-					curator.create().withMode(CreateMode.EPHEMERAL).forPath("/kaboom/clients/" + config.getKaboomId(), nodeContents);
+					config.getCurator().create().withMode(CreateMode.EPHEMERAL).forPath("/kaboom/clients/" + config.getKaboomId(), nodeContents);
 					break;
 				} 
 				catch (Exception e)
@@ -164,13 +152,23 @@ public class KaBoom
 		}
 
 		// Start leader election thread.  The leader assigns work to each instance
+		Leader loadBalancer  = null;
 		
-		LoadBalancer loadBalancer = new LoadBalancer(config);
-		final LeaderSelector leaderSelector = new LeaderSelector(curator, "/kaboom/leader", loadBalancer);
+		if (config.getLoadBalancer().equals("even"))
+		{
+			loadBalancer = new EvenLoadBalancer(config);
+		}
+		else if (config.getLoadBalancer().equals("local"))
+		{
+			loadBalancer = new LocalLoadBalancer(config);
+		}			 			 
+
+		final LeaderSelector leaderSelector = new LeaderSelector(config.getCurator(), "/kaboom/leader", loadBalancer);		
 		leaderSelector.autoRequeue();
 		leaderSelector.start();		
-		final List<Worker> workers = new ArrayList<Worker>();
-		final List<Thread> threads = new ArrayList<Thread>();
+		
+		final Map<String, Worker> partitionToWorkerMap = new HashMap<>();
+		final Map<String, Thread> partitionToThreadsMap = new HashMap<>();
 		
 		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable()
 		{
@@ -179,12 +177,16 @@ public class KaBoom
 			{
 				shutdown();
 				
-				for (Worker w : workers)
+				for (Map.Entry<String, Worker> entry : partitionToWorkerMap.entrySet())
 				{
+					Worker w = entry.getValue();
 					w.stop();
 				}
-				for (Thread t : threads)
+				
+				for (Map.Entry<String, Thread> entry : partitionToThreadsMap.entrySet())
 				{
+					Thread t = entry.getValue();
+					
 					try
 					{
 						t.join();
@@ -206,7 +208,7 @@ public class KaBoom
 				
 				try
 				{
-					curator.delete().forPath("/kaboom/clients/" + config.getKaboomId());
+					config.getCurator().delete().forPath("/kaboom/clients/" + config.getKaboomId());
 				} 
 				catch (Exception e)
 				{
@@ -214,7 +216,7 @@ public class KaBoom
 				}
 				
 				leaderSelector.close();
-				curator.close();
+				config.getCurator().close();
 			}
 		}));
 
@@ -222,62 +224,86 @@ public class KaBoom
 		
 		while (shutdown == false)
 		{
-			workers.clear();
-			threads.clear();
+			Map<String, Boolean> validWorkingPartitions = new HashMap<>();						
 			
-			for (String node : curator.getChildren().forPath("/kaboom/assignments"))
+			/**
+			 * Get all my assignments and create a worker if there's anything not already being worked
+			 */			
+			for (String partitionId : config.getCurator().getChildren().forPath("/kaboom/assignments"))
 			{
-				String assignee = new String(curator.getData().forPath("/kaboom/assignments/" + node), UTF8);
+				String assignee = null;
+				try
+				{
+					assignee = new String(config.getCurator().getData().forPath("/kaboom/assignments/" + partitionId), UTF8);
+				}				
+				catch (NoNodeException nne)
+				{
+					LOG.warn("The weird 'NoNodeException' has been raised, let's just continue and it'll retry (stack trace intentionally supressed)");
+				}
 				
 				if (assignee.equals(Integer.toString(config.getKaboomId())))
-				{
-					LOG.info("Running data pull for {}", node);
-					Matcher m = topicPartitionPattern.matcher(node);
-					
-					if (m.matches())
+				{					
+					if (partitionToWorkerMap.containsKey(partitionId))
 					{
-						String topic = m.group(1);
-						int partition = Integer.parseInt(m.group(2));						
-						String path = config.getTopicToHdfsPath().get(topic);
-						
-						if (path == null)
+						if (false == partitionToThreadsMap.get(partitionId).isAlive())
 						{
-							LOG.error("Topic has no configured output path: {}", topic);
-							continue;
+							LOG.error("[{}] *** worker thead found dead (removed thread/worker objects from mappings) ***", partitionId);
+							partitionToThreadsMap.remove(partitionId);
+							partitionToWorkerMap.remove(partitionId);
 						}
-						
-						String proxyUser = config.getTopicToProxyUser().get(topic);
-						if (proxyUser == null)
+						else
 						{
-							proxyUser = "";
-						}						
-						
-						Worker worker = new Worker(config, curator, topic, partition);
-						
-						workers.add(worker);
-						Thread t = new Thread(worker);
-						threads.add(t);
-						t.start();
-						
-					} 
+							LOG.debug("KaBoom clientId {} assigned to partitonId {} and worker is already working", config.getKaboomId(), partitionId);
+							validWorkingPartitions.put(partitionId, true);
+						}
+					}
 					else
 					{
-						LOG.error("Could not get topic and partition from node name. ({})", node);
+						LOG.info("KaBoom clientId {} assigned to partitonId {} and a worker doesn't exist", config.getKaboomId(), partitionId);
+					
+						Matcher m = topicPartitionPattern.matcher(partitionId);
+
+						if (m.matches())
+						{
+							String topic = m.group(1);
+							int partition = Integer.parseInt(m.group(2));						
+
+							Worker worker = new Worker(config, config.getCurator(), topic, partition);
+
+							partitionToWorkerMap.put(partitionId, worker);
+							partitionToThreadsMap.put(partitionId, new Thread(worker));
+							partitionToThreadsMap.get(partitionId).start();
+							
+							LOG.info("KaBoom clientId {} assigned to partitonId {} and a new worker has been started", config.getKaboomId(), partitionId);
+							
+							validWorkingPartitions.put(partitionId, true);
+						} 
+						else
+						{
+							LOG.error("Could not get topic and partition from node name. ({})", partitionId);
+						}
 					}
+				}
+				else
+				{
+					LOG.debug("{} is not interested in work assigned to {}", config.getKaboomId(), assignee);
 				}
 			}
 			
-			if (threads.size() > 0)
+			LOG.debug("There are {} entries in the partitons to workers mapping", partitionToWorkerMap.size());
+			
+			for (Map.Entry<String, Worker> entry : partitionToWorkerMap.entrySet())
 			{
-				for (Thread t : threads)
-				{
-					t.join();
+				Worker w = entry.getValue();
+
+				if (!validWorkingPartitions.containsKey(w.getPartitionId()))
+				{					
+					w.stop();
+					LOG.info("Worker currently assigned to {} is no longer valid has been instructed to stop working", w.getPartitionId());
 				}
-			}
-			else
-			{
-				Thread.sleep(10000);
-			}
+			}		
+			
+			Thread.sleep(10000);
 		}
 	}
 	

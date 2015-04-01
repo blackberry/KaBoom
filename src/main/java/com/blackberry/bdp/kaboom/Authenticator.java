@@ -39,15 +39,15 @@ public class Authenticator {
 	 * Singleton credential manager that manages static credentials for the entire
 	 * JVM
 	 */
-	private static final AtomicReference<KerberosUser> staticLogin = new AtomicReference<KerberosUser>();
+	private static final AtomicReference<KerberosUser> staticLogin = new AtomicReference<>();
 
-	private Map<String, UGIState> proxyUserMap;
-	private Object lock = new Object();
+	private final Map<String, UGIState> proxyUserMap;
+	private final Object lock = new Object();
 
-	private long reauthenticationRetryInterval = 10000;
+	private final long reauthenticationRetryInterval = 10000;
 
 	private Authenticator() {
-		proxyUserMap = new HashMap<String, UGIState>();
+		proxyUserMap = new HashMap<>();
 	}
 
 	private static class SingletonHolder {
@@ -145,6 +145,7 @@ public class Authenticator {
 			UserGroupInformation curUser = null;
 			if (prevUser != null && prevUser.equals(newUser)) {
 				try {
+					LOG.info("Attempting login as {} with cached credentials", prevUser.getPrincipal());
 					curUser = UserGroupInformation.getLoginUser();
 				} catch (IOException e) {
 					LOG.warn("User unexpectedly had no active login. Continuing with "
@@ -155,7 +156,8 @@ public class Authenticator {
 			if (curUser == null || !curUser.getUserName().equals(principal)) {
 				try {
 					// static login
-					kerberosLogin(this, principal, kerbKeytab);
+					curUser = kerberosLogin(this, principal, kerbKeytab);
+					LOG.info("Current user obtained from Kerberos login {}", curUser.getUserName());
 				} catch (IOException e) {
 					LOG.error("Authentication or file read error while attempting to "
 							+ "login as kerberos principal (" + principal + ") using "
@@ -167,9 +169,14 @@ public class Authenticator {
 			}
 
 			try {
-				if (UserGroupInformation.getLoginUser().isFromKeytab() == false) {
-					LOG.error("Not using a keytab for authentication.  Shutting down.");
-					System.exit(1);
+				if (UserGroupInformation.getLoginUser().isFromKeytab() == false) 					
+				{					
+					LOG.warn("Using a keytab for authentication is {}", UserGroupInformation.getLoginUser().isFromKeytab());
+					LOG.warn("curUser.isFromKeytab(): {}", curUser.isFromKeytab());
+					LOG.warn("UserGroupInformation.getCurrentUser().isLoginKeytabBased(): {}", UserGroupInformation.getCurrentUser().isLoginKeytabBased());
+					LOG.warn("UserGroupInformation.isLoginKeytabBased(): {}", UserGroupInformation.isLoginKeytabBased());
+					LOG.warn("curUser.getAuthenticationMethod(): {}", curUser.getAuthenticationMethod());
+					//System.exit(1);
 				}
 			} catch (IOException e) {
 				LOG.error("Failed to get login user.", e);

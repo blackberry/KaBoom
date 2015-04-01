@@ -26,6 +26,7 @@ import kafka.javaapi.PartitionMetadata;
 import kafka.javaapi.TopicMetadata;
 import kafka.javaapi.TopicMetadataRequest;
 import kafka.javaapi.consumer.SimpleConsumer;
+import org.apache.commons.lang.StringUtils;
 
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
@@ -36,14 +37,26 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
 
-public class StateUtils {
+public class StateUtils 
+{
 	private static final Logger LOG = LoggerFactory.getLogger(StateUtils.class);
 
-	public static void getTopicParitionMetaData(String kafkaZkConnectionString, 
-			String kafkaSeedBrokers, 	
-			Map<String, List<PartitionMetadata>> topicsWithPartitions) throws Exception {
+	public static void getTopicParitionMetaData(
+		 String kafkaZkConnectionString,  
+		 String kafkaSeedBrokers,  
+		 Map<String, List<PartitionMetadata>> topicsWithPartitions) throws Exception 
+	{
+		getTopicParitionMetaData(kafkaZkConnectionString, kafkaSeedBrokers, topicsWithPartitions, null);
+	}
+	
+	public static void getTopicParitionMetaData(
+		 String kafkaZkConnectionString,  
+		 String kafkaSeedBrokers,  
+		 Map<String, List<PartitionMetadata>> topicsWithPartitions,
+		 Map<String, Boolean> supportedTopics) throws Exception 
+	{	
 		List<String> topics = new ArrayList<String>();
-		StateUtils.readTopicsFromZooKeeper(kafkaZkConnectionString, topics);
+		StateUtils.readTopicsFromZooKeeper(kafkaZkConnectionString, topics, supportedTopics);
 		LOG.debug("Getting partition meta data for topics: {}", topics);
 		// Iterate through all the seed brokers		
 		for (String seed : kafkaSeedBrokers.split(",")) {
@@ -90,11 +103,17 @@ public class StateUtils {
 				consumer = new SimpleConsumer(seedHost, seedPort, 100000, 64 * 1024,
 						"leaderLookup");
 
+				LOG.info("Requesting metadata for a list of {} topics", topics.size());
+				
 				TopicMetadataRequest req = new TopicMetadataRequest(topics);
 				kafka.javaapi.TopicMetadataResponse resp = consumer.send(req);
 
 				List<TopicMetadata> metaData = resp.topicsMetadata();
+				
+				LOG.info("Received a response with metadata for {} topics", metaData.size());
 
+				ArrayList<String> skippedTopicNames = new ArrayList<>();
+				
 				for (TopicMetadata item : metaData) {
 					
 					if (item == null)
@@ -118,18 +137,21 @@ public class StateUtils {
 
 						List<String> parts = hostToPartition.get(host);
 						if (parts == null) {
-							parts = new ArrayList<String>();
+							parts = new ArrayList<>();
 							hostToPartition.put(host, parts);
 						}
 						parts.add(partition);
 					}
 				}
-			} catch (Exception e) {
+			} 
+			catch (Exception e) 
+			{
 				LOG.error("Error getting meta data", e);
 				continue;
-			} finally {
-				if (consumer != null)
-					consumer.close();
+			} 
+			finally 
+			{
+				if (consumer != null) consumer.close();
 			}
 
 			LOG.debug("Successfully got partition to host mappings");
@@ -138,16 +160,20 @@ public class StateUtils {
 	}
 
 	public static void getActiveClients(CuratorFramework curator,
-			Map<String, KaBoomNodeInfo> clients) throws Exception {
-		// Get a list of active clients from zookeeper
+			Map<String, KaBoomNodeInfo> clientIdToNodeInfo,
+			Map<String, String> hostnameToClientId) throws Exception {
+		// Get a list of active clientIdToNodeInfo from zookeeper
 
 		Yaml yaml = new Yaml(new Constructor(KaBoomNodeInfo.class));
-		for (String client : curator.getChildren().forPath("/kaboom/clients")) {
+		
+		for (String client : curator.getChildren().forPath("/kaboom/clients")) 
+		{
 			byte[] data = curator.getData().forPath("/kaboom/clients/" + client);
 			ByteArrayInputStream bais = new ByteArrayInputStream(data);
 			KaBoomNodeInfo nodeInfo = (KaBoomNodeInfo) yaml.load(bais);
 			LOG.debug("Found active client {} ({})", client, nodeInfo);
-			clients.put(client, nodeInfo);
+			clientIdToNodeInfo.put(client, nodeInfo);
+			hostnameToClientId.put(nodeInfo.getHostname(), client);
 		}
 	}
 
@@ -176,20 +202,40 @@ public class StateUtils {
 		}
 	}
 
-	public static List<String> readTopicsFromZooKeeper(
-			String kafkaZkConnectionString, List<String> topics) throws Exception {
+	public static List<String> readTopicsFromZooKeeper(String kafkaZkConnectionString, List<String> topics) throws Exception {
+		return readTopicsFromZooKeeper(kafkaZkConnectionString, topics, null);
+	}
+	
+	
+	public static List<String> readTopicsFromZooKeeper(String kafkaZkConnectionString, List<String> topics, Map<String, Boolean> supportedTopics) throws Exception 
+	{
 		RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
-		CuratorFramework curator = CuratorFrameworkFactory.newClient(
-				kafkaZkConnectionString, retryPolicy);
-		try {
+		CuratorFramework curator = CuratorFrameworkFactory.newClient(kafkaZkConnectionString, retryPolicy);		
+		List<String> skippedTopicNames = new ArrayList<>();
+		
+		try 
+		{
 			curator.start();
 
-			for (String node : curator.getChildren().forPath("/brokers/topics")) {
+			for (String node : curator.getChildren().forPath("/brokers/topics")) 
+			{
+				if (supportedTopics != null &&  (
+						false == supportedTopics.containsKey(node) ||
+						false == supportedTopics.get(node)
+					))
+				{
+					skippedTopicNames.add(node);
+					continue;
+				}				
+				
 				LOG.debug("Got topic: {}", node);
 				topics.add(node);
 			}
-
-		} finally {
+			
+			LOG.debug("Reading topics from ZooKeeper skipped the following unsupported topics:  {}", StringUtils.join(skippedTopicNames, ", "));				
+		} 
+		finally 
+		{
 			curator.close();
 		}
 

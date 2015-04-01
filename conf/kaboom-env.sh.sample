@@ -1,6 +1,6 @@
 #!/bin/bash
 
-JAVA='which java'
+JAVA=`which java`
 BASEDIR=/opt/kaboom
 BINDIR="$BASEDIR/bin"
 LIBDIR="$BASEDIR/lib"
@@ -30,5 +30,7 @@ JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.port=$JMXPORT"
 JAVA_OPTS="$JAVA_OPTS -Dlog4j.configuration=file:$LOG4JPROPERTIES"
 
 JAVA_OPTS="$JAVA_OPTS -Dkaboom.logs.dir=$LOGDIR"
+JAVA_OPTS="$JAVA_OPTS -Djava.library.path=$LIBDIR"
+
 
 CLASSPATH=$CONFIGDIR:/etc/hadoop/conf:$LIBDIR/*
