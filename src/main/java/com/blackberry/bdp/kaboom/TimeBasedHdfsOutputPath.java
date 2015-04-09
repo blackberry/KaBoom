@@ -290,8 +290,16 @@ public class TimeBasedHdfsOutputPath
 			
 			try
 			{
-				fileSystem.delete(new Path(openFileDirectory), true);
-				LOG.info("Deleted open file: {}", openFilePath);
+				if (useTempOpenFileDir)
+				{
+					fileSystem.delete(new Path(openFileDirectory), true);
+					LOG.info("Deleted temp open file directory: {}", openFileDirectory);					
+				}
+				else
+				{
+					fileSystem.delete(openFilePath, true);
+					LOG.info("Deleted open file: {}", openFilePath);
+				}
 			} 
 			catch (IOException e)
 			{
