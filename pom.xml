@@ -19,7 +19,7 @@ limitations under the License.
 
 	<groupId>com.blackberry.bdp.kaboom</groupId>
 	<artifactId>kaboom</artifactId>
-	<version>0.7.12-HF1</version>
+	<version>0.7.12.1</version>
 	<packaging>jar</packaging>
 
 	<name>kaboom</name>
