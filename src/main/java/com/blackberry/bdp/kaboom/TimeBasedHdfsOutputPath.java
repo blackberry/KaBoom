@@ -6,7 +6,6 @@
 package com.blackberry.bdp.kaboom;
 
 import com.blackberry.bdp.common.conversion.Converter;
-import com.codahale.metrics.Timer;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -35,8 +34,6 @@ public class TimeBasedHdfsOutputPath
 	private String partitionId = "unknown-partitionId";
 	private final String dirTemplate;
 	private final Integer durationSeconds;	
-	private final Timer topicFlushTimer;
-	private final Timer totalFlushTimer;
 	private long lastPeriodicClosePollTime  = System.currentTimeMillis();
 
 	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();
@@ -57,8 +54,6 @@ public class TimeBasedHdfsOutputPath
 		this.config = kaboomConfig;
 		this.durationSeconds = durationSeconds;
 		this.dirTemplate = pathTemplate;
-		this.totalFlushTimer = config.getTotalHdfsFlushTimer();		
-		this.topicFlushTimer = config.getTopicToHdfsFlushTimer().get(this.topic);
 	}
 	
 	private static String dateString(Long ts)
@@ -290,8 +285,16 @@ public class TimeBasedHdfsOutputPath
 			
 			try
 			{
-				fileSystem.delete(new Path(openFileDirectory), true);
-				LOG.info("Deleted open file: {}", openFilePath);
+				if (useTempOpenFileDir)
+				{
+					fileSystem.delete(new Path(openFileDirectory), true);
+					LOG.info("Deleted temp open file directory: {}", openFileDirectory);					
+				}
+				else
+				{
+					fileSystem.delete(openFilePath, true);
+					LOG.info("Deleted open file: {}", openFilePath);
+				}
 			} 
 			catch (IOException e)
 			{

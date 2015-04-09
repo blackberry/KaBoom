@@ -17,7 +17,6 @@
 package com.blackberry.bdp.kaboom;
 
 import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
-import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 
 import java.net.InetAddress;
 import java.security.PrivilegedExceptionAction;
@@ -49,10 +48,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
-
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.Timer;
 
 /**
  *
@@ -87,15 +82,10 @@ public class KaboomConfiguration
 	private final Boolean useTempOpenFileDirectory;
 	private final Long periodicHdfsFlushInterval;
 	private final Long periodicFileCloseInterval;
-	private final Map<String, Meter> topicToBoomWritesMeter = new HashMap<>();
-	private final Map<String, Timer> topicToHdfsFlushTimer = new HashMap<>();
-	private final Map<String, Timer> topicToCompressionTimer = new HashMap<>();
-	private final Map<String, Histogram> topicToCompressionRatioHistogram = new HashMap<>();
 	private final Map<String, Short> topicToCompressionLevel = new HashMap<>();
-	private final Meter totalBoomWritesMeter;
-	private final Timer totalHdfsFlushTimer;
-	private final Timer totalCompressionTimer;
-	private final Histogram totalCompressionRatioHistogram;
+	
+	//private final Histogram totalCompressionRatioHistogram;
+	
 	private final Boolean useNativeCompression;
 	private final String loadBalancer;
 	private long leaderSleepDurationMs = 10 * 60 * 1000;
@@ -162,33 +152,39 @@ public class KaboomConfiguration
 	{
 		propsParser = new Parser(props);
 		
-		this.props = props;		
+		this.props = props;
+		
+		/**
+		 * Static configuration items: read once and remain fixed until Kaboom is restarted
+		 */
+		
+		kaboomId = propsParser.parseInteger("kaboom.id");
+		
+		hadoopConfiguration = buildHadoopConfiguration();
+		curator = buildCuratorFramework();
 		
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));		
-		totalBoomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
-		totalHdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:hdfs flush timer");
-		totalCompressionTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:compression timer");
-		totalCompressionRatioHistogram = MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:total:compression ratio");
-		
-		consumerConfiguration = new ConsumerConfiguration(props);
-		kaboomId = propsParser.parseInteger("kaboom.id");
-		fileRotateInterval = propsParser.parseLong("fileRotateInterval", 60L * 3L * 1000L);
-		weight = propsParser.parseInteger("kaboom.weighting", Runtime.getRuntime().availableProcessors());
-		allowOffsetOverrides = propsParser.parseBoolean("kaboom.allowOffsetOverrides", false);
-		sinkToHighWatermark = propsParser.parseBoolean("kaboom.sinkToHighWatermark", false);
+		weight = propsParser.parseInteger("kaboom.weighting", Runtime.getRuntime().availableProcessors());		
 		kerberosKeytab = propsParser.parseString("kerberos.keytab");
 		kerberosPrincipal = propsParser.parseString("kerberos.principal");
 		hostname = propsParser.parseString("kaboom.hostname", InetAddress.getLocalHost().getHostName());
 		kaboomZkConnectionString = propsParser.parseString("zookeeper.connection.string");
 		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
-		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
-		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);
-		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);				
-		useNativeCompression = propsParser.parseBoolean("kaboom.use.native.compression", false);
+		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");		
 		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
-		leaderSleepDurationMs = propsParser.parseLong("leader.sleep.duration.ms", leaderSleepDurationMs);
-		defaultCompressionLevel = propsParser.parseShort("kaboom.deflate.compression.level", defaultCompressionLevel);
 		
+		/**
+		 * Dynamic configuration properties
+		 */
+		
+		allowOffsetOverrides = propsParser.parseBoolean("kaboom.allowOffsetOverrides", false);
+		sinkToHighWatermark = propsParser.parseBoolean("kaboom.sinkToHighWatermark", false);
+		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);
+		consumerConfiguration = new ConsumerConfiguration(props);				
+		useNativeCompression = propsParser.parseBoolean("kaboom.use.native.compression", false);
+		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);		
+		leaderSleepDurationMs = propsParser.parseLong("leader.sleep.duration.ms", leaderSleepDurationMs);
+		defaultCompressionLevel = propsParser.parseShort("kaboom.deflate.compression.level", defaultCompressionLevel);		
 		boomFileBufferSize = propsParser.parseInteger("boom.file.buffer.size", boomFileBufferSize);
 		boomFileReplicas = propsParser.parseShort("boom.file.replicas", boomFileReplicas);
 		boomFileBlocksize = propsParser.parseLong("boom.file.block.size", boomFileBlocksize);
@@ -197,8 +193,6 @@ public class KaboomConfiguration
 		periodicFileCloseInterval = propsParser.parseLong("boom.file.close.expired.interval", 60 * 1000l);
 		
 		mapTopicsToSupportedStatus();
-		curator = buildCuratorFramework();		
-		hadoopConfiguration = buildHadoopConfiguration();		
 		mapTopicToProxyUser(props);
 		mapProxyUserToHadoopFileSystem();
 	}
@@ -224,26 +218,6 @@ public class KaboomConfiguration
 				if (!topicToHdfsRootDir.containsKey(topic))
 				{					
 					topicToHdfsRootDir.put(topic, hdfsRootDir);
-				}
-				
-				if (!topicToBoomWritesMeter.containsKey(topic))
-				{
-					topicToBoomWritesMeter.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes"));
-				}
-
-				if (!topicToHdfsFlushTimer.containsKey(topic))
-				{
-					topicToHdfsFlushTimer.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":hdfs flush timer"));
-				}
-				
-				if (!topicToCompressionTimer.containsKey(topic))
-				{
-					topicToCompressionTimer.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":compression timer"));
-				}
-				
-				if (!topicToCompressionRatioHistogram.containsKey(topic))
-				{
-					topicToCompressionRatioHistogram.put(topic, MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:topic:" + topic + ":compresssion ratio"));
 				}
 				
 				String topicCompressionPropName = String.format("topic.%s.deflate.compression.level", topic);
@@ -313,7 +287,7 @@ public class KaboomConfiguration
 					 topic,
 					 this,
 					 directory, 
-					 duration);				
+					 duration);
 				
 				paths.add(path);
 				
@@ -822,51 +796,11 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the topicToBoomWritesMeter
-	 */
-	public Map<String, Meter> getTopicToBoomWrites()
-	{
-		return topicToBoomWritesMeter;
-	}
-
-	/**
-	 * @return the totalBoomWritesMeter
-	 */
-	public Meter getTotalBoomWritesMeter()
-	{
-		return totalBoomWritesMeter;
-	}
-
-	/**
-	 * @return the topicToHdfsFlushTimer
-	 */
-	public Map<String, Timer> getTopicToHdfsFlushTimer()
-	{
-		return topicToHdfsFlushTimer;
-	}
-
-	/**
-	 * @return the totalHdfsFlushTimer
-	 */
-	public Timer getTotalHdfsFlushTimer()
-	{
-		return totalHdfsFlushTimer;
-	}
-
-	/**
 	 * @return the periodicFileCloseInterval
 	 */
 	public Long getPeriodicFileCloseInterval()
 	{
 		return periodicFileCloseInterval;
-	}
-
-	/**
-	 * @return the totalCompressionTimer
-	 */
-	public Timer getTotalCompressionTimer()
-	{
-		return totalCompressionTimer;
 	}
 
 	/**
@@ -902,14 +836,6 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the topicToCompressionRatioHistogram
-	 */
-	public Map<String, Histogram> getTopicToCompressionRatioHistogram()
-	{
-		return topicToCompressionRatioHistogram;
-	}
-
-	/**
 	 * @return the topicToCompressionLevel
 	 */
 	public Map<String, Short> getTopicToCompressionLevel()
@@ -925,19 +851,4 @@ public class KaboomConfiguration
 		return defaultCompressionLevel;
 	}
 
-	/**
-	 * @return the topicToCompressionTimer
-	 */
-	public Map<String, Timer> getTopicToCompressionTimer()
-	{
-		return topicToCompressionTimer;
-	}
-
-	/**
-	 * @return the totalCompressionRatioHistogram
-	 */
-	public Histogram getTotalCompressionRatioHistogram()
-	{
-		return totalCompressionRatioHistogram;
-	}
 }

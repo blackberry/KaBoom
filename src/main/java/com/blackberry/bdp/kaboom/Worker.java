@@ -278,8 +278,8 @@ public class Worker implements Runnable
 		this.startTime = System.currentTimeMillis();
 		this.messagesWritten = 0;
 		this.hdfsOutputPaths = config.getHdfsPathsForTopic(topic);
-		this.boomWritesMeterTopic = config.getTopicToBoomWrites().get(topic);
-		this.boomWritesMeterTotal = config.getTotalBoomWritesMeter();
+		this.boomWritesMeterTopic =  MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
+		this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 		
 		
 		partitionId = topic + "-" + partition;

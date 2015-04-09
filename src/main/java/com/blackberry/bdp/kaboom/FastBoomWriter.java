@@ -126,14 +126,15 @@ public class FastBoomWriter
 		this.topic = topic;		
 		this.partitionId = topic + "-" + partition;
 		this.config = config;		
-		this.hdfsFlushTimerTopic = config.getTopicToHdfsFlushTimer().get(topic);
-		this.hdfsFlushTimerTotal = config.getTotalHdfsFlushTimer();		
-		this.compressionTimerTotal = config.getTotalCompressionTimer();
-		this.compressionTimerTopic = config.getTopicToCompressionTimer().get(topic);
-		this.compressionRatioHistogramTopic = config.getTopicToCompressionRatioHistogram().get(topic);		
-		this.compressionRatioHistogramTotal = config.getTotalCompressionRatioHistogram();
-		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");		
 		this.deflater = new Deflater(config.getTopicToCompressionLevel().get(topic), true);		
+		
+		this.hdfsFlushTimerTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":hdfs flush timer");
+		this.hdfsFlushTimerTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:hdfs flush timer");
+		this.compressionTimerTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:compression timer");
+		this.compressionTimerTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":compression timer");
+		this.compressionRatioHistogramTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:topic:" + topic + ":compresssion ratio");
+		this.compressionRatioHistogramTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:total:compression ratio");
+		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");		
 		
 		LOG.info("[{}] FastBoomWriter instantiated with compression level {}", partitionId, config.getTopicToCompressionLevel().get(topic));
 		
