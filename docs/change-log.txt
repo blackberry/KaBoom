@@ -1,7 +1,8 @@
-Changes in 0,8.0:
+Changes in 0.8.0:
 
-- Supports bdp-common 0,0,6 which provides all logging and monitoring deps
+- Supports bdp-common 0,0.6 which provides all logging and monitoring deps
 - Instruments log4j2 with io.dropwizard.metrics
+- Adds a new API 
 
 Changes in 0.7.9:
 
