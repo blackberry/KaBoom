@@ -30,7 +30,7 @@ public class FastBoomWriter
 	private long numAvroBlocksWritten = 0l;
 	private long numHdfsFlushedAVroBlocks = 0l;
 	private String topic = null;
-	private KaboomStartupConfiguration config = null;
+	private StartupConfig config = null;
 	private final String partitionId;
 	private Long periodicHdfsFlushInterval = null;	
 	private final Timer hdfsFlushTimerTopic;
@@ -121,7 +121,7 @@ public class FastBoomWriter
 
 	private final FSDataOutputStream  fsDataOut;
 
-	public FastBoomWriter(FSDataOutputStream out,  String topic, int partition, KaboomStartupConfiguration config) throws IOException
+	public FastBoomWriter(FSDataOutputStream out,  String topic, int partition, StartupConfig config) throws IOException
 	{
 		this.fsDataOut = out;		
 		this.topic = topic;		

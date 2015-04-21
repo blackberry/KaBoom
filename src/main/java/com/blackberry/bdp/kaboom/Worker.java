@@ -62,7 +62,7 @@ public class Worker implements Runnable
 	private boolean stopping = false;
 
 	private String hostname;
-	private KaboomStartupConfiguration config;
+	private StartupConfig config;
 
 	private CuratorFramework curator;
 	private static final String ZK_ROOT = "/kaboom";
@@ -269,7 +269,7 @@ public class Worker implements Runnable
 			 });
 	}
 
-	public Worker(KaboomStartupConfiguration config, CuratorFramework curator, String topic, int partition) throws Exception
+	public Worker(StartupConfig config, CuratorFramework curator, String topic, int partition) throws Exception
 	{
 		this.config = config;
 		this.curator = curator;

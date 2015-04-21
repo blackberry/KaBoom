@@ -17,7 +17,8 @@ package com.blackberry.bdp.kaboom.api;
 
 import com.blackberry.bdp.common.annotations.VersionedAttribute;
 import com.blackberry.bdp.common.annotations.VersionedComparable;
-import com.blackberry.bdp.kaboom.KaboomStartupConfiguration;
+import com.blackberry.bdp.common.annotations.MissingConfigurationException;
+import com.blackberry.bdp.kaboom.StartupConfig;
 import org.apache.zookeeper.data.Stat;
 import org.codehaus.jackson.map.ObjectMapper;
 
@@ -25,15 +26,12 @@ import org.apache.curator.framework.CuratorFramework;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class KaBoomRunningConfiguration extends VersionedComparable{
+public class RunningConfig extends VersionedComparable{
 
-	private static final Logger LOG = LoggerFactory.getLogger(KaBoomRunningConfiguration.class);
+	private static final Logger LOG = LoggerFactory.getLogger(RunningConfig.class);
 	
-	private final CuratorFramework curator;
-	private final String runningConfigZkPath;
-	private final ObjectMapper mapper = new ObjectMapper();
+	private final static ObjectMapper mapper = new ObjectMapper();
 	
-	@VersionedAttribute private int version = 0;
 	@VersionedAttribute private Boolean allowOffsetOverrides = false;
 	@VersionedAttribute private Boolean sinkToHighWatermark = false;
 	@VersionedAttribute private Boolean useTempOpenFileDirectory = true;		
@@ -48,31 +46,49 @@ public class KaBoomRunningConfiguration extends VersionedComparable{
 	@VersionedAttribute private Long periodicHdfsFlushInterval = 30 * 1000l;
 	@VersionedAttribute private Long periodicFileCloseInterval = 60 * 1000l;
 
-	public KaBoomRunningConfiguration(KaboomStartupConfiguration startupConfig) 
-		 throws Exception {
-		this.curator = startupConfig.getCurator();
-		this.runningConfigZkPath = startupConfig.getRunningConfigZkPath();
+	/**
+	 * Returns a default RunningConfig without any ZK interaction
+	 */
+	public RunningConfig() {
+		
+	}
+	
+	/**
+	 * Returns a VersionedComparable RunningConfig from a KaBoom StartupConfig
+	 * @param startupConfig
+	 * @throws Exception
+	 */
+	public RunningConfig(StartupConfig startupConfig) throws Exception {
+		this(startupConfig.getCurator(), startupConfig.getRunningConfigZkPath());		
+	}
+
+	/**
+	 * Returns a VersionedComparable RunningConfig from a specific ZK curator/path
+	 * @param curator
+	 * @param zkPath
+	 * @throws Exception
+	 */
+	public RunningConfig(CuratorFramework curator, String zkPath) throws Exception {
+		super(curator, zkPath);
 		reload();
 	}
 
 	/**
-	 * Fetches the new configuration from ZK
+	 * Static provider of a VersionedComparable RunningConfig from a specific ZK curator/path
+	 * @param curator
+	 * @param zkPath
+	 * @return
 	 * @throws Exception
 	 */
-	public final void reload() throws Exception {
-		Stat newZkStat = curator.checkExists().forPath(runningConfigZkPath);
-		
-		if (newZkStat == null) {
-			throw new Exception("Configuration doesn't exist in ZK at " + runningConfigZkPath);				 
-		}		
-		
-		KaBoomRunningConfiguration newRunningConfig = mapper.readValue(
-			 curator.getData().forPath(runningConfigZkPath), KaBoomRunningConfiguration.class);
-		
-		newRunningConfig.version = newZkStat.getVersion();
-		
-		reload(newRunningConfig);
-	}
+	public static RunningConfig get(CuratorFramework curator, String zkPath) throws Exception {
+		Stat stat = curator.checkExists().forPath(zkPath);		
+		if (stat == null) {
+			throw new MissingConfigurationException("Configuration doesn't exist in ZK at " + zkPath);
+		}				
+		RunningConfig  newRunningConfig = mapper.readValue(curator.getData().forPath(zkPath), RunningConfig.class);
+		newRunningConfig.version = stat.getVersion();
+		return newRunningConfig;		
+	}	
 	
 	@Override
 	public int getVersion() {

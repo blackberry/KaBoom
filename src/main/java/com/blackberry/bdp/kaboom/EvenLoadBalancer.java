@@ -33,7 +33,7 @@ public class EvenLoadBalancer extends Leader
 {	
 	private static final Logger LOG = LoggerFactory.getLogger(EvenLoadBalancer.class);
 
-	public EvenLoadBalancer(KaboomStartupConfiguration config)
+	public EvenLoadBalancer(StartupConfig config)
 	{		
 		super(config);
 		LOG.info("The even load balancer has been instantiated");

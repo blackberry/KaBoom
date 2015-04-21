@@ -41,7 +41,7 @@ import org.apache.curator.framework.CuratorFramework;
 
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import com.blackberry.bdp.common.props.Parser;
-import com.blackberry.bdp.kaboom.api.KaBoomRunningConfiguration;
+import com.blackberry.bdp.kaboom.api.RunningConfig;
 import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 
@@ -54,16 +54,16 @@ import org.apache.hadoop.fs.permission.FsPermission;
  *
  * @author dariens
  */
-public class KaboomStartupConfiguration
+public class StartupConfig
 {
-	private static final Logger LOG = LoggerFactory.getLogger(KaboomStartupConfiguration.class);
+	private static final Logger LOG = LoggerFactory.getLogger(StartupConfig.class);
 	
 	private static final String defaultProperyFile = "kaboom.properties";
 	private final Properties props;
 	private final Parser propsParser;
 	private final Object fsLock = new Object();
 	
-	private ConsumerConfiguration consumerConfiguration;
+	private final ConsumerConfiguration consumerConfiguration;
 	private Configuration hadoopConfiguration;
 	private String kafkaSeedBrokers;
 	private final Path hadoopUrlPath;
@@ -76,13 +76,13 @@ public class KaboomStartupConfiguration
 	private String kaboomZkConnectionString;
 	private String kafkaZkConnectionString;
 	private final String loadBalancer;
-	private final KaBoomRunningConfiguration runningConfig;
+	private final RunningConfig runningConfig;
 	private final String runningConfigZkPath;
 	
-	//private final Map<String, String> topicToProxyUser = new HashMap<>();
-	//private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
-	//private final Map<String, String> topicToHdfsRootDir = new HashMap<>();
-	//private final Map<String, Boolean> topicToSupportedStatus = new HashMap<>();	
+	private final Map<String, String> topicToProxyUser = new HashMap<>();
+	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
+	private final Map<String, String> topicToHdfsRootDir = new HashMap<>();
+	private final Map<String, Boolean> topicToSupportedStatus = new HashMap<>();	
 	
 	/**
 	 * POSIX style
@@ -102,7 +102,6 @@ public class KaboomStartupConfiguration
 	{
 		LOG.info(" *** start dumping configuration *** ");
 		LOG.info("kaboomId: {}", getKaboomId());
-		LOG.info("fileRotateInterval: {}", getFileRotateInterval());
 		LOG.info("weight: {}", getWeight());
 		LOG.info("kerberosPrincipal: {}", getKerberosKeytab());
 		LOG.info("kerberosKeytab: {}", getKerberosKeytab());
@@ -128,7 +127,7 @@ public class KaboomStartupConfiguration
 		LOG.info(" *** end dumping configuration *** ");
 	}
 	
-	public KaboomStartupConfiguration (Properties props) throws Exception
+	public StartupConfig (Properties props) throws Exception
 	{
 		propsParser = new Parser(props);
 		
@@ -138,10 +137,11 @@ public class KaboomStartupConfiguration
 		 * Static configuration items: read once and remain fixed until Kaboom is restarted
 		 */
 		
-		consumerConfiguration = new ConsumerConfiguration(props);
-		kaboomId = propsParser.parseInteger("kaboom.id");
 		hadoopConfiguration = buildHadoopConfiguration();
 		curator = buildCuratorFramework();
+
+		consumerConfiguration = new ConsumerConfiguration(props);
+		kaboomId = propsParser.parseInteger("kaboom.id");
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));
 		weight = propsParser.parseInteger("kaboom.weighting", Runtime.getRuntime().availableProcessors());
 		kerberosKeytab = propsParser.parseString("kerberos.keytab");
@@ -153,13 +153,15 @@ public class KaboomStartupConfiguration
 		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
 		runningConfigZkPath = propsParser.parseString("kaboom.runningConfig.zkPath", "/kaboom/config");
 		
+		runningConfig = new RunningConfig(this);
+		
 		/**
 		 * Build the maps we need to associate configuration
 		 */
 		
-		mapTopicsToSupportedStatus();
-		mapTopicToProxyUser(props);
-		mapProxyUserToHadoopFileSystem();
+		//mapTopicsToSupportedStatus();
+		//mapTopicToProxyUser(props);
+		//mapProxyUserToHadoopFileSystem();
 	}
 	
 	private void mapTopicsToSupportedStatus()
@@ -180,10 +182,10 @@ public class KaboomStartupConfiguration
 
 				String hdfsRootDir = hadoopUrlPath + props.getProperty(String.format("topic.%s.hdfsRootDir", topic));				
 				
-				if (!topicToHdfsRootDir.containsKey(topic))
-				{					
-					topicToHdfsRootDir.put(topic, hdfsRootDir);
-				}
+				//if (!topicToHdfsRootDir.containsKey(topic))
+				//{					
+				//	topicToHdfsRootDir.put(topic, hdfsRootDir);
+				//}
 			}
 		}
 	}	
@@ -439,22 +441,6 @@ public class KaboomStartupConfiguration
 	}
 
 	/**
-	 * @return the fileRotateInterval
-	 */
-	public long getFileRotateInterval()
-	{
-		return fileRotateInterval;
-	}
-
-	/**
-	 * @param fileRotateInterval the fileRotateInterval to set
-	 */
-	public void setFileRotateInterval(long fileRotateInterval)
-	{
-		this.fileRotateInterval = fileRotateInterval;
-	}
-
-	/**
 	 * @return the weight
 	 */
 	public int getWeight()
@@ -656,7 +642,7 @@ public class KaboomStartupConfiguration
 	/**
 	 * @return the runningConfig
 	 */
-	public KaBoomRunningConfiguration getRunningConfig() {
+	public RunningConfig getRunningConfig() {
 		return runningConfig;
 	}
 

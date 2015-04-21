@@ -26,7 +26,7 @@ public class TimeBasedHdfsOutputPath
 {
 	private static final Logger LOG = LoggerFactory.getLogger(TimeBasedHdfsOutputPath.class);
 
-	private final KaboomStartupConfiguration config;
+	private final StartupConfig config;
 	private Worker kaboomWorker;
 	private final String topic;
 	private int partition;
@@ -47,7 +47,7 @@ public class TimeBasedHdfsOutputPath
 	private long reusableRequestedStartTime;
 	private OutputFile reusableRequestedOutputFile;
 	
-	public TimeBasedHdfsOutputPath(FileSystem fileSystem, String topic, KaboomStartupConfiguration kaboomConfig, String pathTemplate, Integer durationSeconds)
+	public TimeBasedHdfsOutputPath(FileSystem fileSystem, String topic, StartupConfig kaboomConfig, String pathTemplate, Integer durationSeconds)
 	{
 		this.fileSystem = fileSystem;
 		this.topic = topic;

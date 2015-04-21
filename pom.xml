@@ -80,7 +80,7 @@ limitations under the License.
 		<dependency>
 			<groupId>com.blackberry.bdp.common</groupId>
 			<artifactId>bdp-common-dev</artifactId>
-			<version>0.0.8</version>
+			<version>0.0.9</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.kafka</groupId>
@@ -91,7 +91,7 @@ limitations under the License.
 			<groupId>org.codehaus.jackson</groupId>
 			<artifactId>jackson-mapper-asl</artifactId>
 			<version>1.9.13</version>
-		</dependency>		
+		</dependency>
 
 		<!-- Test dependencies -->
 		<dependency>

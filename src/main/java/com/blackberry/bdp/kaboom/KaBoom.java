@@ -40,7 +40,7 @@ public class KaBoom
 	private static final Logger LOG = LoggerFactory.getLogger(KaBoom.class);
 	private static final Charset UTF8 = Charset.forName("UTF-8");	
 	boolean shutdown = false;	
-	private KaboomStartupConfiguration config;
+	private StartupConfig config;
 	
 	public static void main(String[] args) throws Exception
 	{
@@ -67,7 +67,7 @@ public class KaBoom
 		
 		try
 		{
-			Properties props = KaboomStartupConfiguration.getProperties();
+			Properties props = StartupConfig.getProperties();
 			Parser propsParser = new Parser(props);
 			
 			if (propsParser.parseBoolean("configuration.authority.zk", false))
@@ -77,7 +77,7 @@ public class KaBoom
 			else
 			{				
 				LOG.info("Configuration authority is file based");						
-				config = new KaboomStartupConfiguration(props);
+				config = new StartupConfig(props);
 			}			
 			
 			config.logConfiguraton();
