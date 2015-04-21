@@ -26,7 +26,7 @@ public class TimeBasedHdfsOutputPath
 {
 	private static final Logger LOG = LoggerFactory.getLogger(TimeBasedHdfsOutputPath.class);
 
-	private final KaboomConfiguration config;
+	private final KaboomStartupConfiguration config;
 	private Worker kaboomWorker;
 	private final String topic;
 	private int partition;
@@ -47,7 +47,7 @@ public class TimeBasedHdfsOutputPath
 	private long reusableRequestedStartTime;
 	private OutputFile reusableRequestedOutputFile;
 	
-	public TimeBasedHdfsOutputPath(FileSystem fileSystem, String topic, KaboomConfiguration kaboomConfig, String pathTemplate, Integer durationSeconds)
+	public TimeBasedHdfsOutputPath(FileSystem fileSystem, String topic, KaboomStartupConfiguration kaboomConfig, String pathTemplate, Integer durationSeconds)
 	{
 		this.fileSystem = fileSystem;
 		this.topic = topic;
@@ -77,7 +77,7 @@ public class TimeBasedHdfsOutputPath
 				 filename, 
 				 reusableRequestedStartTime, 
 				 System.currentTimeMillis() + durationSeconds * 1000, 
-				 config.getUseTempOpenFileDirectory());
+				 config.getRunningConfig().getUseTempOpenFileDirectory());
 			
 			outputFileMap.put(reusableRequestedStartTime, reusableRequestedOutputFile);
 		}
@@ -103,7 +103,7 @@ public class TimeBasedHdfsOutputPath
 	
 	public void periodicCloseExpiredPoll()
 	{
-		if (lastPeriodicClosePollTime > System.currentTimeMillis() - config.getPeriodicFileCloseInterval())
+		if (lastPeriodicClosePollTime > System.currentTimeMillis() - config.getRunningConfig().getPeriodicFileCloseInterval())
 		{
 			return;
 		}
@@ -204,7 +204,7 @@ public class TimeBasedHdfsOutputPath
 			
 			if (useTempOpenFileDir)
 			{
-				openFileDirectory = String.format("%s/%s%s", dir, config.getBoomFileTmpPrefix(), this.filename);
+				openFileDirectory = String.format("%s/%s%s", dir, config.getRunningConfig().getBoomFileTmpPrefix(), this.filename);
 				openFilePath = new Path(openFileDirectory + "/" + filename);
 			}
 			
@@ -220,9 +220,9 @@ public class TimeBasedHdfsOutputPath
 					  openFilePath, 
 					  config.getBoomFilePerms(), 
 					  false, 
-					  config.getBoomFileBufferSize(), 
-					  config.getBoomFileReplicas(),
-					  config.getBoomFileBlocksize(), 
+					  config.getRunningConfig().getBoomFileBufferSize(), 
+					  config.getRunningConfig().getBoomFileReplicas(),
+					  config.getRunningConfig().getBoomFileBlocksize(), 
 					  null);
 				 
 				 boomWriter = new FastBoomWriter(
@@ -231,10 +231,10 @@ public class TimeBasedHdfsOutputPath
 					  partition,
 					  config);
 				 
-				 boomWriter.setPeriodicHdfsFlushInterval(config.getPeriodicHdfsFlushInterval());				 
-				 boomWriter.setUseNativeCompression(config.getUseNativeCompression());
+				 boomWriter.setPeriodicHdfsFlushInterval(config.getRunningConfig().getPeriodicHdfsFlushInterval());				 
+				 boomWriter.setUseNativeCompression(config.getRunningConfig().getUseNativeCompression());
 				 
-				 if (config.getUseNativeCompression())
+				 if (config.getRunningConfig().getUseNativeCompression())
 				 {
 					 boomWriter.loadNativeDeflateLib();
 				 }

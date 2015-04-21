@@ -16,8 +16,6 @@
 
 package com.blackberry.bdp.kaboom;
 
-import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
-
 import java.net.InetAddress;
 import java.security.PrivilegedExceptionAction;
 
@@ -43,6 +41,8 @@ import org.apache.curator.framework.CuratorFramework;
 
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import com.blackberry.bdp.common.props.Parser;
+import com.blackberry.bdp.kaboom.api.KaBoomRunningConfiguration;
+import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -54,58 +54,50 @@ import org.apache.hadoop.fs.permission.FsPermission;
  *
  * @author dariens
  */
-public class KaboomConfiguration
+public class KaboomStartupConfiguration
 {
+	private static final Logger LOG = LoggerFactory.getLogger(KaboomStartupConfiguration.class);
+	
 	private static final String defaultProperyFile = "kaboom.properties";
 	private final Properties props;
 	private final Parser propsParser;
 	private final Object fsLock = new Object();
+	
+	private ConsumerConfiguration consumerConfiguration;
+	private Configuration hadoopConfiguration;
+	private String kafkaSeedBrokers;
 	private final Path hadoopUrlPath;
 	private int kaboomId;
-	private long fileRotateInterval;
 	private int weight;
 	private final CuratorFramework curator;	
-	private final Map<String, String> topicToProxyUser = new HashMap<>();
-	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
-	private final Map<String, String> topicToHdfsRootDir = new HashMap<>();
-	private final Map<String, Boolean> topicToSupportedStatus = new HashMap<>();
 	private String kerberosPrincipal;
 	private String kerberosKeytab;
 	private String hostname;
 	private String kaboomZkConnectionString;
 	private String kafkaZkConnectionString;
-	private Boolean allowOffsetOverrides;
-	private Boolean sinkToHighWatermark;
-	private ConsumerConfiguration consumerConfiguration;
-	private Configuration hadoopConfiguration;
-	private String kafkaSeedBrokers;
-	private Integer readyFlagPrevHoursCheck;
-	private final Boolean useTempOpenFileDirectory;
-	private final Long periodicHdfsFlushInterval;
-	private final Long periodicFileCloseInterval;
-	private final Map<String, Short> topicToCompressionLevel = new HashMap<>();
-	
-	//private final Histogram totalCompressionRatioHistogram;
-	
-	private final Boolean useNativeCompression;
 	private final String loadBalancer;
-	private long leaderSleepDurationMs = 10 * 60 * 1000;
-	private short defaultCompressionLevel = 6;
+	private final KaBoomRunningConfiguration runningConfig;
+	private final String runningConfigZkPath;
+	
+	//private final Map<String, String> topicToProxyUser = new HashMap<>();
+	//private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
+	//private final Map<String, String> topicToHdfsRootDir = new HashMap<>();
+	//private final Map<String, Boolean> topicToSupportedStatus = new HashMap<>();	
 	
 	/**
-	 * These are required for boom files
+	 * POSIX style
+	 * NONE("---"),
+	 * EXECUTE("--x"),
+	 * WRITE("-w-"),
+	 * WRITE_EXECUTE("-wx"),
+	 * READ("r--"),
+	 * READ_EXECUTE("r-x"),
+	 * READ_WRITE("rw-"),
+	 * ALL("rwx");
 	 */
 	
 	private final FsPermission boomFilePerms = new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE);
-	
-	private int boomFileBufferSize = 16 * 1024;
-	private short boomFileReplicas = 3;
-	private long boomFileBlocksize = 256 * 1024 * 1024;		
-	private String boomFileTmpPrefix = "_tmp_";	
 
-	
-	private static final Logger LOG = LoggerFactory.getLogger(KaboomConfiguration.class);
-	
 	public void logConfiguraton()
 	{
 		LOG.info(" *** start dumping configuration *** ");
@@ -117,20 +109,7 @@ public class KaboomConfiguration
 		LOG.info("hostname: {}", getHostname());
 		LOG.info("kaboomZkConnectionString: {}", getKaboomZkConnectionString());
 		LOG.info("kafkaZkConnectionString: {}", getKafkaSeedBrokers());
-		LOG.info("allowOffsetOverrides: {}", getAllowOffsetOverrides());
-		LOG.info("sinkToHighWatermark: {}", getSinkToHighWatermark());
-		LOG.info("kafkaSeedBrokers: {}", getKafkaSeedBrokers());
-		LOG.info("readyFlagPrevHoursCheck: {}", getReadyFlagPrevHoursCheck());
-		LOG.info("useTempOpenFileDirectory: {}", getUseTempOpenFileDirectory());
-		LOG.info("periodicHdfsFlushInterval: {}", getPeriodicHdfsFlushInterval());		
-		LOG.info("periodicFileCloseInterval: {}", getPeriodicFileCloseInterval());
-		LOG.info("leaderSleepDurationMs: {}", getLeaderSleepDurationMs());
-		LOG.info("defaultCompressionLevel: {}", getDefaultCompressionLevel());
-		
-		LOG.info("boomFileBufferSize: {}", getBoomFileBufferSize());
-		LOG.info("boomFileReplicas: {}", getBoomFileReplicas());
-		LOG.info("boomFileBlocksize: {}", getBoomFileBlocksize());
-		LOG.info("useNativeCompression: {}", getUseNativeCompression());
+		LOG.info("kafkaSeedBrokers: {}", getKafkaSeedBrokers());		
 		LOG.info("loadBalancer: {}", getLoadBalancer());
 		LOG.info("Using kerberos uthentication.");
 		LOG.info("Kerberos principal = {}", getKerberosPrincipal());
@@ -149,7 +128,7 @@ public class KaboomConfiguration
 		LOG.info(" *** end dumping configuration *** ");
 	}
 	
-	public KaboomConfiguration (Properties props) throws Exception
+	public KaboomStartupConfiguration (Properties props) throws Exception
 	{
 		propsParser = new Parser(props);
 		
@@ -159,39 +138,24 @@ public class KaboomConfiguration
 		 * Static configuration items: read once and remain fixed until Kaboom is restarted
 		 */
 		
+		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
-		
 		hadoopConfiguration = buildHadoopConfiguration();
 		curator = buildCuratorFramework();
-		
-		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));		
-		weight = propsParser.parseInteger("kaboom.weighting", Runtime.getRuntime().availableProcessors());		
+		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));
+		weight = propsParser.parseInteger("kaboom.weighting", Runtime.getRuntime().availableProcessors());
 		kerberosKeytab = propsParser.parseString("kerberos.keytab");
 		kerberosPrincipal = propsParser.parseString("kerberos.principal");
 		hostname = propsParser.parseString("kaboom.hostname", InetAddress.getLocalHost().getHostName());
 		kaboomZkConnectionString = propsParser.parseString("zookeeper.connection.string");
 		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
-		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");		
+		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
+		runningConfigZkPath = propsParser.parseString("kaboom.runningConfig.zkPath", "/kaboom/config");
 		
 		/**
-		 * Dynamic configuration properties
+		 * Build the maps we need to associate configuration
 		 */
-		
-		allowOffsetOverrides = propsParser.parseBoolean("kaboom.allowOffsetOverrides", false);
-		sinkToHighWatermark = propsParser.parseBoolean("kaboom.sinkToHighWatermark", false);
-		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);
-		consumerConfiguration = new ConsumerConfiguration(props);				
-		useNativeCompression = propsParser.parseBoolean("kaboom.use.native.compression", false);
-		readyFlagPrevHoursCheck = propsParser.parseInteger("kaboom.readyflag.prevhours", 24);		
-		leaderSleepDurationMs = propsParser.parseLong("leader.sleep.duration.ms", leaderSleepDurationMs);
-		defaultCompressionLevel = propsParser.parseShort("kaboom.deflate.compression.level", defaultCompressionLevel);		
-		boomFileBufferSize = propsParser.parseInteger("boom.file.buffer.size", boomFileBufferSize);
-		boomFileReplicas = propsParser.parseShort("boom.file.replicas", boomFileReplicas);
-		boomFileBlocksize = propsParser.parseLong("boom.file.block.size", boomFileBlocksize);
-		boomFileTmpPrefix = propsParser.parseString("boom.file.temp.prefix", boomFileTmpPrefix);
-		periodicHdfsFlushInterval = propsParser.parseLong("boom.file.flush.interval", 30 * 1000l);
-		periodicFileCloseInterval = propsParser.parseLong("boom.file.close.expired.interval", 60 * 1000l);
 		
 		mapTopicsToSupportedStatus();
 		mapTopicToProxyUser(props);
@@ -220,24 +184,6 @@ public class KaboomConfiguration
 				{					
 					topicToHdfsRootDir.put(topic, hdfsRootDir);
 				}
-				
-				String topicCompressionPropName = String.format("topic.%s.deflate.compression.level", topic);
-				
-				try
-				{
-					short topicCompressionLevel = defaultCompressionLevel;
-					if (props.containsKey(topicCompressionPropName))
-					{
-						topicCompressionLevel = propsParser.parseShort(topicCompressionPropName);
-						LOG.info("Topic {} configured with a non-default compression level: {} ({} is the default)", topic, topicCompressionLevel, defaultCompressionLevel);
-					}
-					topicToCompressionLevel.put(topic, topicCompressionLevel);
-				}
-				catch (Exception ex)
-				{
-					LOG.error("Failed to set the topic specific compression level for topic {}", topic, e);
-				}
-				
 			}
 		}
 	}	
@@ -597,54 +543,6 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the allowOffsetOverrides
-	 */
-	public Boolean getAllowOffsetOverrides()
-	{
-		return allowOffsetOverrides;
-	}
-
-	/**
-	 * @param allowOffsetOverrides the allowOffsetOverrides to set
-	 */
-	public void setAllowOffsetOverrides(Boolean allowOffsetOverrides)
-	{
-		this.allowOffsetOverrides = allowOffsetOverrides;
-	}
-
-	/**
-	 * @return the sinkToHighWatermark
-	 */
-	public Boolean getSinkToHighWatermark()
-	{
-		return sinkToHighWatermark;
-	}
-
-	/**
-	 * @param sinkToHighWatermark the sinkToHighWatermark to set
-	 */
-	public void setSinkToHighWatermark(Boolean sinkToHighWatermark)
-	{
-		this.sinkToHighWatermark = sinkToHighWatermark;
-	}
-
-	/**
-	 * @return the consumerConfiguration
-	 */
-	public ConsumerConfiguration getConsumerConfiguration()
-	{
-		return consumerConfiguration;
-	}
-
-	/**
-	 * @param consumerConfiguration the consumerConfiguration to set
-	 */
-	public void setConsumerConfiguration(ConsumerConfiguration consumerConfiguration)
-	{
-		this.consumerConfiguration = consumerConfiguration;
-	}
-
-	/**
 	 * @return the hadoopConfiguration
 	 */
 	public Configuration getHadoopConfiguration()
@@ -674,22 +572,6 @@ public class KaboomConfiguration
 	public void setKafkaSeedBrokers(String kafkaSeedBrokers)
 	{
 		this.kafkaSeedBrokers = kafkaSeedBrokers;
-	}
-
-	/**
-	 * @return the readyFlagPrevHoursCheck
-	 */
-	public Integer getReadyFlagPrevHoursCheck()
-	{
-		return readyFlagPrevHoursCheck;
-	}
-
-	/**
-	 * @param readyFlagPrevHoursCheck the readyFlagPrevHoursCheck to set
-	 */
-	public void setReadyFlagPrevHoursCheck(Integer readyFlagPrevHoursCheck)
-	{
-		this.readyFlagPrevHoursCheck = readyFlagPrevHoursCheck;
 	}
 
 	/**
@@ -741,75 +623,11 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the useTempOpenFileDirectory
-	 */
-	public Boolean getUseTempOpenFileDirectory()
-	{
-		return useTempOpenFileDirectory;
-	}
-
-	/**
-	 * @return the periodicHdfsFlushInterval
-	 */
-	public Long getPeriodicHdfsFlushInterval()
-	{
-		return periodicHdfsFlushInterval;
-	}
-
-	/**
 	 * @return the boomFilePerms
 	 */
 	public FsPermission getBoomFilePerms()
 	{
 		return boomFilePerms;
-	}
-
-	/**
-	 * @return the boomFileBufferSize
-	 */
-	public int getBoomFileBufferSize()
-	{
-		return boomFileBufferSize;
-	}
-
-	/**
-	 * @return the boomFileReplicas
-	 */
-	public short getBoomFileReplicas()
-	{
-		return boomFileReplicas;
-	}
-
-	/**
-	 * @return the boomFileBlocksize
-	 */
-	public long getBoomFileBlocksize()
-	{
-		return boomFileBlocksize;
-	}
-
-	/**
-	 * @return the boomFileTmpPrefix
-	 */
-	public String getBoomFileTmpPrefix()
-	{
-		return boomFileTmpPrefix;
-	}
-
-	/**
-	 * @return the periodicFileCloseInterval
-	 */
-	public Long getPeriodicFileCloseInterval()
-	{
-		return periodicFileCloseInterval;
-	}
-
-	/**
-	 * @return the useNativeCompression
-	 */
-	public Boolean getUseNativeCompression()
-	{
-		return useNativeCompression;
 	}
 
 	/**
@@ -821,14 +639,6 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the leaderSleepDurationMs
-	 */
-	public long getLeaderSleepDurationMs()
-	{
-		return leaderSleepDurationMs;
-	}
-
-	/**
 	 * @return the proxyUserToFileSystem
 	 */
 	public Map<String, FileSystem> getProxyUserToFileSystem()
@@ -837,19 +647,24 @@ public class KaboomConfiguration
 	}
 
 	/**
-	 * @return the topicToCompressionLevel
+	 * @return the consumerConfiguration
 	 */
-	public Map<String, Short> getTopicToCompressionLevel()
-	{
-		return topicToCompressionLevel;
+	public ConsumerConfiguration getConsumerConfiguration() {
+		return consumerConfiguration;
 	}
 
 	/**
-	 * @return the defaultCompressionLevel
+	 * @return the runningConfig
 	 */
-	public short getDefaultCompressionLevel()
-	{
-		return defaultCompressionLevel;
+	public KaBoomRunningConfiguration getRunningConfig() {
+		return runningConfig;
+	}
+
+	/**
+	 * @return the runningConfigZkPath
+	 */
+	public String getRunningConfigZkPath() {
+		return runningConfigZkPath;
 	}
 
 }

@@ -43,7 +43,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 
 	private ReadyFlagWriter readyFlagWriter;
 	private Thread readyFlagThread;
-	final protected KaboomConfiguration config;
+	final protected KaboomStartupConfiguration config;
 	CuratorFramework curator;
 	
 	Map<String, String> partitionToHost = new HashMap<>();
@@ -54,7 +54,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	Map<String, String> partitionToClient = new HashMap<>();			
 	List<String> topics = new ArrayList<>();	
 	
-	public Leader(KaboomConfiguration config)
+	public Leader(KaboomStartupConfiguration config)
 	{
 		this.config = config;
 	}
@@ -200,7 +200,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				LOG.info("[ready flag writer] thread created and started");
 			}
 
-			Thread.sleep(config.getLeaderSleepDurationMs());
+			Thread.sleep(config.getRunningConfig().getLeaderSleepDurationMs());
 		}
 	}
 

@@ -30,7 +30,7 @@ public class FastBoomWriter
 	private long numAvroBlocksWritten = 0l;
 	private long numHdfsFlushedAVroBlocks = 0l;
 	private String topic = null;
-	private KaboomConfiguration config = null;
+	private KaboomStartupConfiguration config = null;
 	private final String partitionId;
 	private Long periodicHdfsFlushInterval = null;	
 	private final Timer hdfsFlushTimerTopic;
@@ -39,6 +39,7 @@ public class FastBoomWriter
 	private final Timer compressionTimerTotal;
 	private final Timer compressionTimerTopic;
 	private boolean useNativeCompression = false;
+	private short compressionLevel;
 	private final Histogram compressionRatioHistogramTopic;
 	private final Histogram compressionRatioHistogramTotal;
 	
@@ -120,13 +121,14 @@ public class FastBoomWriter
 
 	private final FSDataOutputStream  fsDataOut;
 
-	public FastBoomWriter(FSDataOutputStream out,  String topic, int partition, KaboomConfiguration config) throws IOException
+	public FastBoomWriter(FSDataOutputStream out,  String topic, int partition, KaboomStartupConfiguration config) throws IOException
 	{
 		this.fsDataOut = out;		
 		this.topic = topic;		
 		this.partitionId = topic + "-" + partition;
 		this.config = config;		
-		this.deflater = new Deflater(config.getTopicToCompressionLevel().get(topic), true);		
+		this.compressionLevel = config.getRunningConfig().getCompressionLevel();
+		this.deflater = new Deflater(compressionLevel, true);		
 		
 		this.hdfsFlushTimerTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":hdfs flush timer");
 		this.hdfsFlushTimerTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:hdfs flush timer");
@@ -136,7 +138,7 @@ public class FastBoomWriter
 		this.compressionRatioHistogramTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:total:compression ratio");
 		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");		
 		
-		LOG.info("[{}] FastBoomWriter instantiated with compression level {}", partitionId, config.getTopicToCompressionLevel().get(topic));
+		LOG.info("[{}] FastBoomWriter instantiated with compression level {}", partitionId, compressionLevel);
 		
 		Random rand = new Random();
 		syncMarker = new byte[16];
@@ -421,7 +423,7 @@ public class FastBoomWriter
 			if (useNativeCompression)
 			{
 				compressedBlockBytes = new byte[256 * 1024];
-				compressedBlockBytes = compress(avroBlockBytes, avroBlockBuffer.position(), config.getTopicToCompressionLevel().get(topic));
+				compressedBlockBytes = compress(avroBlockBytes, avroBlockBuffer.position(), compressionLevel);
 				compressedSize = compressedBlockBytes.length;	
 								
 				LOG.debug("[{}] Natively compressed {} bytes to {} bytes ({}% reduction), compression level {}", 
@@ -429,7 +431,7 @@ public class FastBoomWriter
 					 avroBlockBuffer.position(), 
 					 compressedSize, 
 					 Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())),
-					 config.getTopicToCompressionLevel().get(topic));
+					 compressionLevel);
 			}
 			else
 			{
@@ -461,7 +463,7 @@ public class FastBoomWriter
 				 Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())),
 				 System.currentTimeMillis() - start,
 				 useNativeCompression,
-				 config.getTopicToCompressionLevel().get(topic));			
+				 compressionLevel);			
 			
 			compressionRatioHistogramTopic.update(Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));
 			compressionRatioHistogramTotal.update(Math.round(100 - (100.0 * compressedSize / avroBlockBuffer.position())));

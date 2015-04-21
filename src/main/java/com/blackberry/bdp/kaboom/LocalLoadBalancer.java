@@ -27,7 +27,7 @@ public class LocalLoadBalancer extends Leader
 	
 	private static final Logger LOG = LoggerFactory.getLogger(EvenLoadBalancer.class);
 
-	public LocalLoadBalancer(KaboomConfiguration config)
+	public LocalLoadBalancer(KaboomStartupConfiguration config)
 	{
 		super(config);
 		LOG.info("The local load balancer has been instantiated");

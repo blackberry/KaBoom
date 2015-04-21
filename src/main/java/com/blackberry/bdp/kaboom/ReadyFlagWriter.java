@@ -43,7 +43,7 @@ public class ReadyFlagWriter extends NotifyingThread
 
 	private FileSystem fs;
 	private final CuratorFramework curator;
-	private final KaboomConfiguration config;
+	private final KaboomStartupConfiguration config;
 
 	private static final String ZK_ROOT = "/kaboom";
 	public static final String MERGE_READY_FLAG = "_READY";
@@ -52,7 +52,7 @@ public class ReadyFlagWriter extends NotifyingThread
 	public static final String WORKING_DIR = "working";
 	public static final String LOG_TAG = "[ready flag writer] ";
 
-	public ReadyFlagWriter(KaboomConfiguration config) throws Exception
+	public ReadyFlagWriter(KaboomStartupConfiguration config) throws Exception
 	{
 		this.config = config;
 		this.curator = config.getCurator();
@@ -171,7 +171,7 @@ public class ReadyFlagWriter extends NotifyingThread
 					TimeUnit.MILLISECONDS.toMinutes(oldestTimestampMillisAgo),
 					TimeUnit.MILLISECONDS.toSeconds(oldestTimestampMillisAgo) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(oldestTimestampMillisAgo))));			
 							
-			for (Integer hourNum = 1; hourNum <= config.getReadyFlagPrevHoursCheck(); hourNum++)
+			for (Integer hourNum = 1; hourNum <= config.getRunningConfig().getReadyFlagPrevHoursCheck(); hourNum++)
 			{
 				/**
 				 * We know what the current timestamp was when we started, so start subtracting 

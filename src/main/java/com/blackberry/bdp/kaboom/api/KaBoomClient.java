@@ -25,11 +25,32 @@ import org.yaml.snakeyaml.Yaml;
 public class KaBoomClient {
 
 	private final int id;
-	private final KaBoomNodeInfo nodeInfo;
+	private String hostname;
+	private int weight;
+	private int load;
+	private double targetLoad;
+	
+	//private final KaBoomNodeInfo nodeInfo;
 
-	public KaBoomClient(int id, KaBoomNodeInfo nodeInfo) {
+	public KaBoomClient(int id, KaBoomNodeInfo nodeInfo) {		
+		this(id,			 
+			 nodeInfo.getHostname(),
+			 nodeInfo.getWeight(),
+			 nodeInfo.getLoad(),
+			 nodeInfo.getTargetLoad());
+	}
+
+	public KaBoomClient(int id, 
+		 String hostname,
+		 int weight,
+		 int load,
+		 double targetLoad) {
+		
 		this.id = id;
-		this.nodeInfo = nodeInfo;
+		this.hostname = hostname;
+		this.weight = weight;
+		this.load = load;
+		this.targetLoad = targetLoad;
 	}
 
 	public static List<KaBoomClient> getAll(CuratorFramework curator, String zkPath) throws Exception {
@@ -57,9 +78,58 @@ public class KaBoomClient {
 	}
 
 	/**
-	 * @return the nodeInfo
+	 * @return the hostname
 	 */
-	public KaBoomNodeInfo getNodeInfo() {
-		return nodeInfo;
+	public String getHostname() {
+		return hostname;
+	}
+
+	/**
+	 * @param hostname the hostname to set
+	 */
+	public void setHostname(String hostname) {
+		this.hostname = hostname;
+	}
+
+	/**
+	 * @return the weight
+	 */
+	public int getWeight() {
+		return weight;
+	}
+
+	/**
+	 * @param weight the weight to set
+	 */
+	public void setWeight(int weight) {
+		this.weight = weight;
+	}
+
+	/**
+	 * @return the load
+	 */
+	public int getLoad() {
+		return load;
+	}
+
+	/**
+	 * @param load the load to set
+	 */
+	public void setLoad(int load) {
+		this.load = load;
+	}
+
+	/**
+	 * @return the targetLoad
+	 */
+	public double getTargetLoad() {
+		return targetLoad;
+	}
+
+	/**
+	 * @param targetLoad the targetLoad to set
+	 */
+	public void setTargetLoad(double targetLoad) {
+		this.targetLoad = targetLoad;
 	}
 }

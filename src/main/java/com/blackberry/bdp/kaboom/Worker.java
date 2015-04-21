@@ -62,7 +62,7 @@ public class Worker implements Runnable
 	private boolean stopping = false;
 
 	private String hostname;
-	private KaboomConfiguration config;
+	private KaboomStartupConfiguration config;
 
 	private CuratorFramework curator;
 	private static final String ZK_ROOT = "/kaboom";
@@ -269,7 +269,7 @@ public class Worker implements Runnable
 			 });
 	}
 
-	public Worker(KaboomConfiguration config, CuratorFramework curator, String topic, int partition) throws Exception
+	public Worker(KaboomStartupConfiguration config, CuratorFramework curator, String topic, int partition) throws Exception
 	{
 		this.config = config;
 		this.curator = curator;
@@ -470,9 +470,10 @@ public class Worker implements Runnable
 								 *	lower offset because it was behind when it took over... Maybe?  
 								 */
 
-								if (config.getSinkToHighWatermark())
+								if (config.getRunningConfig().getSinkToHighWatermark())
 								{
-									LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.", getPartitionId(), offset, highWatermark, config.getSinkToHighWatermark());
+									LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.", 
+										 getPartitionId(), offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
 
 									consumer.setNextOffset(highWatermark);
 									offset = highWatermark;
@@ -483,7 +484,8 @@ public class Worker implements Runnable
 								} 
 								else
 								{
-									LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.", getPartitionId(), offset, highWatermark, config.getSinkToHighWatermark());
+									LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.", 
+										 getPartitionId(), offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
 
 									continue;
 								}		
@@ -716,9 +718,10 @@ public class Worker implements Runnable
 			{
 				long zkOffsetOverride = Converter.longFromBytes(curator.getData().forPath(zkPath_offSetOverride), 0);
 
-				if (config.getAllowOffsetOverrides())
+				if (config.getRunningConfig().getAllowOffsetOverrides())
 				{
-					LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}", this.getPartitionId(), zkOffset, zkOffsetOverride, config.getAllowOffsetOverrides());
+					LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}", 
+						 this.getPartitionId(), zkOffset, zkOffsetOverride, config.getRunningConfig().getAllowOffsetOverrides());
 					
 					curator.delete().forPath(zkPath_offSetOverride);
 					
@@ -728,7 +731,8 @@ public class Worker implements Runnable
 				} 
 				else
 				{
-					LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}", this.getPartitionId(), zkOffset, zkOffsetOverride, config.getAllowOffsetOverrides());
+					LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}", 
+						 this.getPartitionId(), zkOffset, zkOffsetOverride, config.getRunningConfig().getAllowOffsetOverrides());
 				}
 			}
 
