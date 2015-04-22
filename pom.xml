@@ -92,6 +92,11 @@ limitations under the License.
 			<artifactId>jackson-mapper-asl</artifactId>
 			<version>1.9.13</version>
 		</dependency>
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<version>1.16.2</version>
+		</dependency>		
 
 		<!-- Test dependencies -->
 		<dependency>
