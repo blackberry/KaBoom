@@ -193,6 +193,8 @@ public class ReadyFlagWriter extends NotifyingThread
 						 String.format("%d minutes and  %d seconds", 
 							TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour),
 							TimeUnit.MILLISECONDS.toSeconds(kaboomBehindMillisForHour) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour))));
+					
+					continue;
 				}
 
 				try
