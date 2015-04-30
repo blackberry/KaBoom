@@ -32,8 +32,8 @@ import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.blackberry.bdp.common.utils.threads.NotifyingThread;
-import com.blackberry.bdp.common.utils.conversion.Converter;
+import com.blackberry.bdp.common.threads.NotifyingThread;
+import com.blackberry.bdp.common.conversion.Converter;
 import java.util.concurrent.TimeUnit;
 
 public class ReadyFlagWriter extends NotifyingThread

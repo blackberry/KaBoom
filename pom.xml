@@ -19,10 +19,10 @@ limitations under the License.
 
 	<groupId>com.blackberry.bdp.kaboom</groupId>
 	<artifactId>kaboom</artifactId>
-	<version>0.7.12.2</version>
+	<version>0.7.12.3</version>
 	<packaging>jar</packaging>
 
-	<name>kaboom</name>
+	<name>kaboom-HF3</name>
 	<url>http://blackberry.com</url>
 
 	<properties>
@@ -94,9 +94,9 @@ limitations under the License.
 			<version>0.7.10</version>
 		</dependency>
 		<dependency>
-			<groupId>com.blackberry.bdp.common.utils</groupId>
-			<artifactId>common-utils-dev</artifactId>
-			<version>0.0.5</version>
+			<groupId>com.blackberry.bdp.common</groupId>
+			<artifactId>bdp-common-dev</artifactId>
+			<version>0.0.9</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.kafka</groupId>
@@ -108,6 +108,11 @@ limitations under the License.
 			<artifactId>metrics-core</artifactId>
 			<version>3.0.2</version>
 		</dependency>
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<version>1.16.2</version>
+		</dependency>		
 
 		<!-- Test dependencies -->
 		<dependency>

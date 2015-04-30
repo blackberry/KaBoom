@@ -27,7 +27,7 @@ import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.blackberry.bdp.common.utils.conversion.Converter;
+import com.blackberry.bdp.common.conversion.Converter;
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import com.blackberry.bdp.krackle.consumer.Consumer;
 
@@ -90,6 +90,10 @@ public class Worker implements Runnable
 
 	private static Set<Worker> workers = new HashSet<>();
 	private static final Object workersLock = new Object();
+	
+	private Boolean pinged;
+	private Boolean pong;
+	private Boolean killed = false;
 
 	static 
 	{
@@ -428,6 +432,14 @@ public class Worker implements Runnable
 			{
 				try
 				{
+					if (pinged) {
+						pong = true;
+					}
+					
+					if (killed || Thread.interrupted()) {
+						throw new Exception("A kill request/interrupt has been received");
+					}
+					
 					length = consumer.getMessage(bytes, 0, bytes.length);
 
 					if (length == -1)
@@ -788,6 +800,18 @@ public class Worker implements Runnable
 		stopping = true;
 	}
 
+	public void kill()
+	{
+		LOG.info("[{}] Kill request received", partitionId);
+		killed = true;
+	}
+
+	public void ping()
+	{
+		this.pinged = true;
+		this.pong = false;
+	}
+
 	public long getLag()
 	{
 		return lag;
@@ -841,5 +865,19 @@ public class Worker implements Runnable
 	public void setPartition(int partition)
 	{
 		this.partition = partition;
+	}
+
+	/**
+	 * @return the pinged
+	 */
+	public Boolean pinged() {
+		return pinged;
+	}
+
+	/**
+	 * @return the pong
+	 */
+	public Boolean getPong() {
+		return pong;
 	}
 }

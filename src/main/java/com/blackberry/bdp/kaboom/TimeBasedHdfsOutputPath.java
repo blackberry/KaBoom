@@ -5,7 +5,7 @@
  */
 package com.blackberry.bdp.kaboom;
 
-import com.blackberry.bdp.common.utils.conversion.Converter;
+import com.blackberry.bdp.common.conversion.Converter;
 import com.codahale.metrics.Timer;
 import java.io.IOException;
 import java.text.SimpleDateFormat;

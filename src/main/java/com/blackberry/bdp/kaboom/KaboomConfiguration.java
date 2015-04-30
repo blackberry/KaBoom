@@ -34,7 +34,7 @@ import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
-import com.blackberry.bdp.common.utils.props.Parser;
+import com.blackberry.bdp.common.props.Parser;
 import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
@@ -94,6 +94,7 @@ public class KaboomConfiguration
 	private long leaderSleepDurationMs = 10 * 60 * 1000;
 	private short defaultCompressionLevel = 6;
 	private String kafkaReadyFlagFilename = "_KAFKA_READY";
+	private long kaboomServerSleepDurationMs = 10000l;
 	
 	/**
 	 * These are required for boom files
@@ -128,6 +129,7 @@ public class KaboomConfiguration
 		LOG.info("periodicHdfsFlushInterval: {}", getPeriodicHdfsFlushInterval());		
 		LOG.info("periodicFileCloseInterval: {}", getPeriodicFileCloseInterval());
 		LOG.info("leaderSleepDurationMs: {}", getLeaderSleepDurationMs());
+		LOG.info("kaboomServerSleepDurationMs: {}", getKaboomServerSleepDurationMs());		
 		LOG.info("defaultCompressionLevel: {}", getDefaultCompressionLevel());
 		
 		LOG.info("boomFileBufferSize: {}", getBoomFileBufferSize());
@@ -181,7 +183,9 @@ public class KaboomConfiguration
 		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);				
 		useNativeCompression = propsParser.parseBoolean("kaboom.use.native.compression", false);
 		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
+		kaboomServerSleepDurationMs = propsParser.parseLong("kaboom.server..sleep.duration.ms", kaboomServerSleepDurationMs);
 		leaderSleepDurationMs = propsParser.parseLong("leader.sleep.duration.ms", leaderSleepDurationMs);
+		
 		defaultCompressionLevel = propsParser.parseShort("kaboom.deflate.compression.level", defaultCompressionLevel);
 		kafkaReadyFlagFilename = propsParser.parseString("kaboom.kafkaReady.flag.filename", kafkaReadyFlagFilename);
 		
@@ -943,5 +947,12 @@ public class KaboomConfiguration
 	public String getKafkaReadyFlagFilename()
 	{
 		return kafkaReadyFlagFilename;
+	}
+
+	/**
+	 * @return the kaboomServerSleepDurationMs
+	 */
+	public long getKaboomServerSleepDurationMs() {
+		return kaboomServerSleepDurationMs;
 	}
 }

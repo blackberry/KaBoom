@@ -16,7 +16,7 @@
 
 package com.blackberry.bdp.kaboom;
 
-import com.blackberry.bdp.common.utils.props.Parser;
+import com.blackberry.bdp.common.props.Parser;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 import com.blackberry.bdp.krackle.MetricRegistrySingleton;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import org.apache.zookeeper.KeeperException.NoNodeException;
@@ -239,6 +240,7 @@ public class KaBoom
 				catch (NoNodeException nne)
 				{
 					LOG.warn("The weird 'NoNodeException' has been raised, let's just continue and it'll retry (stack trace intentionally supressed)");
+					continue;
 				}
 				
 				if (assignee.equals(Integer.toString(config.getKaboomId())))
@@ -292,18 +294,35 @@ public class KaBoom
 			
 			LOG.debug("There are {} entries in the partitons to workers mapping", partitionToWorkerMap.size());
 			
-			for (Map.Entry<String, Worker> entry : partitionToWorkerMap.entrySet())
-			{
-				Worker w = entry.getValue();
-
-				if (!validWorkingPartitions.containsKey(w.getPartitionId()))
-				{					
-					w.stop();
-					LOG.info("Worker currently assigned to {} is no longer valid has been instructed to stop working", w.getPartitionId());
-				}
-			}		
+			Iterator<Map. Entry<String,Worker>> iter = partitionToWorkerMap.entrySet().iterator();
 			
-			Thread.sleep(10000);
+			while (iter.hasNext()) {
+				Map.Entry<String,Worker> entry = iter.next();
+				Worker worker = entry.getValue();				
+				if (!validWorkingPartitions.containsKey(worker.getPartitionId())) {					
+					worker.stop();
+					LOG.info("Worker currently assigned to {} is no longer valid has been instructed to stop working", worker.getPartitionId());
+				} 
+				else {					
+					if (worker.pinged()) {
+						if (!worker.getPong()) {
+							LOG.error("[{}] has been responded from being  pinged, interupting thread and sending kill request to  the worker",
+								 worker.getPartitionId());						
+							partitionToThreadsMap.get(worker.getPartitionId()).interrupt();
+							worker.kill();
+							iter.remove();
+						} 
+						else {
+							LOG.info("[{}] provided pong and being pinged again");
+							worker.ping();
+						}
+					}
+					LOG.info("[{}] inital ping");
+					worker.ping();
+				}
+			}
+
+			Thread.sleep(config.getKaboomServerSleepDurationMs());
 		}
 	}
 	
