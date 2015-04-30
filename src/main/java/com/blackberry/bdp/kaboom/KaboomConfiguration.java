@@ -97,7 +97,7 @@ public class KaboomConfiguration
 	private long leaderSleepDurationMs = 10 * 60 * 1000;
 	private short defaultCompressionLevel = 6;
 	private String kafkaReadyFlagFilename = "_KAFKA_READY";
-	private long kaboomServerSleepDurationMs = 10000l;
+	private long kaboomServerSleepDurationMs = 10 * 1000;
 	
 	/**
 	 * These are required for boom files
@@ -189,7 +189,7 @@ public class KaboomConfiguration
 		useTempOpenFileDirectory = propsParser.parseBoolean("kaboom.useTempOpenFileDirectory", true);				
 		useNativeCompression = propsParser.parseBoolean("kaboom.use.native.compression", false);
 		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
-		kaboomServerSleepDurationMs = propsParser.parseLong("kaboom.server..sleep.duration.ms", kaboomServerSleepDurationMs);
+		kaboomServerSleepDurationMs = propsParser.parseLong("kaboom.server.sleep.duration.ms", kaboomServerSleepDurationMs);
 		leaderSleepDurationMs = propsParser.parseLong("leader.sleep.duration.ms", leaderSleepDurationMs);
 		
 		defaultCompressionLevel = propsParser.parseShort("kaboom.deflate.compression.level", defaultCompressionLevel);

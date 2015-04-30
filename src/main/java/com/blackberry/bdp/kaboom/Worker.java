@@ -444,7 +444,7 @@ public class Worker implements Runnable
 					if (length == -1) {
 						
 						/**
-						 * Ensure that very quit partitions are updating their offset timestamp in ZK 
+						 * Ensure that very quiet partitions are updating their offset timestamp in ZK 
 						 * even when they are not receiving any messages.  If the last received 
 						 * message was during the previous hour and it's been more than 
 						 * getForcedZkOffsetTsUpdateMs() milliseconds then write the start of the
@@ -457,7 +457,8 @@ public class Worker implements Runnable
 						
 						if (lastMessageReceivedTimestamp < startOfCurrentHour
 							 && now - lastMessageReceivedTimestamp > config.getForcedZkOffsetTsUpdateMs()
-							 && lastForcedZkOffsetTimestampStore != startOfCurrentHour) {							
+							 && lastForcedZkOffsetTimestampStore != startOfCurrentHour
+							 && lastMessageReceivedTimestamp != -1) {							
 							storeOffsetTimestamp(startOfCurrentHour);
 							lastForcedZkOffsetTimestampStore = startOfCurrentHour;							
 						}						
