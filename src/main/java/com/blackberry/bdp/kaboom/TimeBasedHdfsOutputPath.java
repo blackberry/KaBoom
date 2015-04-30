@@ -119,7 +119,7 @@ public class TimeBasedHdfsOutputPath
 		{
 			Map.Entry<Long, OutputFile> entry = iter.next();
 
-			if (entry.getValue().closeTime < System.currentTimeMillis() - 30 * 1000)
+			if (entry.getValue().closeTime < (System.currentTimeMillis() - config.getFileCloseGraceTimeAfterExpiredMs()))
 			{
 				try
 				{
@@ -128,9 +128,7 @@ public class TimeBasedHdfsOutputPath
 					entry.getValue().close();
 					iter.remove();
 					LOG.info("[{}] expired open file has been closed: {}  ({} files still open): {}", partitionId, entry.getValue().openFilePath, outputFileMap.size());					
-				}
-				catch (Exception e)
-				{
+				} catch (Exception e) {
 					LOG.error("Error closing output path {}", this, e);
 				}
 			}

@@ -317,8 +317,10 @@ public class KaBoom
 							worker.ping();
 						}
 					}
-					LOG.info("[{}] inital ping");
-					worker.ping();
+					else {
+						LOG.info("[{}] inital ping");
+						worker.ping();						
+					}
 				}
 			}
 

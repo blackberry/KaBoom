@@ -80,6 +80,9 @@ public class KaboomConfiguration
 	private final Boolean useTempOpenFileDirectory;
 	private final Long periodicHdfsFlushInterval;
 	private final Long periodicFileCloseInterval;
+	private long fileCloseGraceTimeAfterExpiredMs = 30 * 1000;
+	private long forcedZkOffsetTsUpdateMs = 10 * 60 * 1000;
+
 	private final Map<String, Meter> topicToBoomWritesMeter = new HashMap<>();
 	private final Map<String, Timer> topicToHdfsFlushTimer = new HashMap<>();
 	private final Map<String, Timer> topicToCompressionTimer = new HashMap<>();
@@ -128,9 +131,12 @@ public class KaboomConfiguration
 		LOG.info("useTempOpenFileDirectory: {}", getUseTempOpenFileDirectory());
 		LOG.info("periodicHdfsFlushInterval: {}", getPeriodicHdfsFlushInterval());		
 		LOG.info("periodicFileCloseInterval: {}", getPeriodicFileCloseInterval());
+		LOG.info("fileCloseGraceTimeAfterExpiredMs: {}", getFileCloseGraceTimeAfterExpiredMs());		
 		LOG.info("leaderSleepDurationMs: {}", getLeaderSleepDurationMs());
 		LOG.info("kaboomServerSleepDurationMs: {}", getKaboomServerSleepDurationMs());		
 		LOG.info("defaultCompressionLevel: {}", getDefaultCompressionLevel());
+		LOG.info("forcedZkOffsetTsUpdateMs: {}", getForcedZkOffsetTsUpdateMs());
+		
 		
 		LOG.info("boomFileBufferSize: {}", getBoomFileBufferSize());
 		LOG.info("boomFileReplicas: {}", getBoomFileReplicas());
@@ -195,6 +201,9 @@ public class KaboomConfiguration
 		boomFileTmpPrefix = propsParser.parseString("boom.file.temp.prefix", boomFileTmpPrefix);
 		periodicHdfsFlushInterval = propsParser.parseLong("boom.file.flush.interval", 30 * 1000l);
 		periodicFileCloseInterval = propsParser.parseLong("boom.file.close.expired.interval", 60 * 1000l);
+		fileCloseGraceTimeAfterExpiredMs = propsParser.parseLong("boom.file.expired.grace.time.ms", fileCloseGraceTimeAfterExpiredMs);
+		forcedZkOffsetTsUpdateMs = propsParser.parseLong("forced.zk.offsetTimestamp.update.time.ms", forcedZkOffsetTsUpdateMs);
+		
 		
 		mapTopicsToSupportedStatus();
 		curator = buildCuratorFramework();		
@@ -954,5 +963,19 @@ public class KaboomConfiguration
 	 */
 	public long getKaboomServerSleepDurationMs() {
 		return kaboomServerSleepDurationMs;
+	}
+
+	/**
+	 * @return the fileCloseGraceTimeAfterExpiredMs
+	 */
+	public long getFileCloseGraceTimeAfterExpiredMs() {
+		return fileCloseGraceTimeAfterExpiredMs;
+	}
+
+	/**
+	 * @return the forcedZkOffsetTsUpdateMs
+	 */
+	public long getForcedZkOffsetTsUpdateMs() {
+		return forcedZkOffsetTsUpdateMs;
 	}
 }
