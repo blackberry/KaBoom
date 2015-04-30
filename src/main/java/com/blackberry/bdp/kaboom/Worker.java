@@ -434,8 +434,7 @@ public class Worker implements Runnable
 				try {
 					if (pinged) {
 						pong = true;
-					}
-					
+					}					
 					if (killed || Thread.interrupted()) {
 						throw new Exception("A kill request/interrupt has been received");
 					}
@@ -454,7 +453,7 @@ public class Worker implements Runnable
 						 */
 						
 						long now = System.currentTimeMillis();						
-						long startOfCurrentHour = now - now % (60 * 610 * 1000);						
+						long startOfCurrentHour = now - now % (60 * 60 * 1000);						
 						
 						if (lastMessageReceivedTimestamp < startOfCurrentHour
 							 && now - lastMessageReceivedTimestamp > config.getForcedZkOffsetTsUpdateMs()
