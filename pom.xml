@@ -22,7 +22,7 @@ limitations under the License.
 	<version>0.7.12.3</version>
 	<packaging>jar</packaging>
 
-	<name>kaboom-HF3</name>
+	<name>kaboom</name>
 	<url>http://blackberry.com</url>
 
 	<properties>
