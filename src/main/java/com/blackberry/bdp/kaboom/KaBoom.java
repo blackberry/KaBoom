@@ -313,7 +313,6 @@ public class KaBoom
 							iter.remove();
 						} 
 						else {
-							LOG.info("[{}] provided pong and being pinged again");
 							worker.ping();
 						}
 					}
