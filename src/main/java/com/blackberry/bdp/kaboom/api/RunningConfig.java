@@ -24,12 +24,12 @@ import lombok.Setter;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.zookeeper.data.Stat;
-import org.codehaus.jackson.annotate.JsonIgnoreProperties;
+//import org.codehaus.jackson.annotate.JsonIgnoreProperties;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@JsonIgnoreProperties({"zkPath", "curator"})
+//@JsonIgnoreProperties({"zkPath", "curator"})
 public class RunningConfig extends ZkVersioned{
 
 	private static final Logger LOG = LoggerFactory.getLogger(RunningConfig.class);		
@@ -45,8 +45,11 @@ public class RunningConfig extends ZkVersioned{
 	@Getter @Setter @VersionedAttribute public short boomFileReplicas = 3;
 	@Getter @Setter @VersionedAttribute public long boomFileBlocksize = 256 * 1024 * 1024;
 	@Getter @Setter @VersionedAttribute public String boomFileTmpPrefix = "_tmp_";
-	@Getter @Setter @VersionedAttribute public Long periodicHdfsFlushInterval = 30 * 1000l;
-	@Getter @Setter @VersionedAttribute public Long periodicFileCloseInterval = 60 * 1000l;
+	@Getter @Setter @VersionedAttribute public long periodicHdfsFlushInterval = 30 * 1000l;
+	@Getter @Setter @VersionedAttribute public long periodicFileCloseInterval = 60 * 1000l;	
+	@Getter @Setter @VersionedAttribute public long kaboomServerSleepDurationMs = 10 * 1000;
+	@Getter @Setter @VersionedAttribute public long fileCloseGraceTimeAfterExpiredMs = 30 * 1000;
+	@Getter @Setter @VersionedAttribute public long forcedZkOffsetTsUpdateMs = 10 * 60 * 1000;
 
 	/**
 	 * Instantiates a default RunningConfig without any ZK interaction
