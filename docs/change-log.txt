@@ -1,5 +1,9 @@
 Changes in 0.7.12. HF3
 
+- ReadFlagWriter now doesn't check for the existence of the data directory when it's writing flags
+
+Changes in 0.7.12. HF3
+
 - New configuration option boom.file.expired.grace.time.ms (default: 30 * 1000, thirty seconds): The time after a TimeBasedHdfsOutputPath output file expires before it's closed via the periodic file close interval triggered upon each message consumed from Kafka.  This option is introduced to make the previously hard coded value configurable and uses the same default value as the previous hard coded value.
 - New configuration option forced.zk.offsetTimestamp.update.time.ms (default: 10 * 60 * 1000, ten minutes): Ensure that very quiet partitions are updating their offset timestamp in ZK even when they are not receiving any messages.  If the last received message was during the previous hour and it's been more than this amount of  milliseconds then write the start of the hour's timestamp into ZK for the partition (providing it hasn't already been stored for the current hour already).
 - New configuration option kaboom.server.sleep.duration.ms (default: 10 000, ten seconds): Exposes a configuration option for a previously hard coded property value with the same default value.  This is the time waited after a worker processes it's work assignments before it fetches another update from ZK and processes again.
