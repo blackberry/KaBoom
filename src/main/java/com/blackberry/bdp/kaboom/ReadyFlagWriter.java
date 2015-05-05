@@ -219,8 +219,8 @@ public class ReadyFlagWriter extends NotifyingThread
 					
 					if (!fs.exists(dataDirectory))
 					{
-						LOG.trace(LOG_TAG + "skipping {} since data directory {} doesn't exist", topicName, dataDirectory.toString());
-						continue;
+						//LOG.trace(LOG_TAG + "skipping {} since data directory {} doesn't exist", topicName, dataDirectory.toString());
+						//continue;
 					}
 					
 					if (fs.exists(workingDirectory))
