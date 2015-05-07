@@ -1,4 +1,13 @@
-Changes in 0.7.12. HF3
+Changes in 0.7.13
+
+- Added kafkaOffset argument to FastBoomWriter.writeLine()
+- Added a lastKafkaOffset to FastBoomWriter
+- FastBoomWriter now keeps track of lastKafkaOffset and lastMessageTimestamp
+- Changed the periodicCloseExpiredPoll in TimeBasedHdfsOutputPath to store the expired boom file's lastKafakaOffset and lastMessageTimestamp instead of the worker's current values
+- Added a new global configuration property max.open.boom.files.per.partition (default: 5)  to limit the number of open boom files per partition
+- Modified TimeBasedHdfsOutputPath to close off the oldest FastBoomWriter when the number of open boom files is greater than max.open.boom.files.per.partition, and update zookeeper with lastKafakaOffset and lastMessageTimestamp
+
+Changes in 0.7.12 HF4
 
 - ReadFlagWriter now doesn't check for the existence of the data directory when it's writing flags
 

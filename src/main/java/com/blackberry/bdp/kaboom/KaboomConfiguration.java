@@ -82,6 +82,7 @@ public class KaboomConfiguration
 	private final Long periodicFileCloseInterval;
 	private long fileCloseGraceTimeAfterExpiredMs = 30 * 1000;
 	private long forcedZkOffsetTsUpdateMs = 10 * 60 * 1000;
+	private final int maxOpenBoomFilesPerPartition = 5;
 
 	private final Map<String, Meter> topicToBoomWritesMeter = new HashMap<>();
 	private final Map<String, Timer> topicToHdfsFlushTimer = new HashMap<>();
@@ -136,7 +137,7 @@ public class KaboomConfiguration
 		LOG.info("kaboomServerSleepDurationMs: {}", getKaboomServerSleepDurationMs());		
 		LOG.info("defaultCompressionLevel: {}", getDefaultCompressionLevel());
 		LOG.info("forcedZkOffsetTsUpdateMs: {}", getForcedZkOffsetTsUpdateMs());
-		
+		LOG.info("maxOpenBoomFilesPerPartition: {}", getMaxOpenBoomFilesPerPartition());
 		
 		LOG.info("boomFileBufferSize: {}", getBoomFileBufferSize());
 		LOG.info("boomFileReplicas: {}", getBoomFileReplicas());
@@ -203,7 +204,7 @@ public class KaboomConfiguration
 		periodicFileCloseInterval = propsParser.parseLong("boom.file.close.expired.interval", 60 * 1000l);
 		fileCloseGraceTimeAfterExpiredMs = propsParser.parseLong("boom.file.expired.grace.time.ms", fileCloseGraceTimeAfterExpiredMs);
 		forcedZkOffsetTsUpdateMs = propsParser.parseLong("forced.zk.offsetTimestamp.update.time.ms", forcedZkOffsetTsUpdateMs);
-		
+		forcedZkOffsetTsUpdateMs = propsParser.parseInteger("max.open.boom.files.per.partition", maxOpenBoomFilesPerPartition);
 		
 		mapTopicsToSupportedStatus();
 		curator = buildCuratorFramework();		
@@ -977,5 +978,12 @@ public class KaboomConfiguration
 	 */
 	public long getForcedZkOffsetTsUpdateMs() {
 		return forcedZkOffsetTsUpdateMs;
+	}
+
+	/**
+	 * @return the maxOpenBoomFilesPerPartition
+	 */
+	public int getMaxOpenBoomFilesPerPartition() {
+		return maxOpenBoomFilesPerPartition;
 	}
 }

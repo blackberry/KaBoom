@@ -635,7 +635,7 @@ public class Worker implements Runnable
 					
 					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
 					{
-						path.getBoomWriter(timestamp, partitionId + "-" + offset +".bm").writeLine(timestamp, bytes, pos, length - pos);
+						path.getBoomWriter(timestamp, partitionId + "-" + offset +".bm").writeLine(timestamp, bytes, pos, length - pos, offset);
 						boomWritesMeter.mark();						
 						boomWritesMeterTopic.mark();
 						boomWritesMeterTotal.mark();
@@ -709,21 +709,19 @@ public class Worker implements Runnable
 		}
 	}
 
-	public void storeOffset() throws Exception
-	{
-		if (curator.checkExists().forPath(zkPath) == null)
-		{
+	public void storeOffset() throws Exception {
+		storeOffset(offset);
+	}
+	
+	public void storeOffset(long valueToStore) throws Exception {
+		if (curator.checkExists().forPath(zkPath) == null) {
 			curator.create().creatingParentsIfNeeded()
-				 .withMode(CreateMode.PERSISTENT).forPath(zkPath, Converter.getBytes(offset));
-			
-			LOG.info("[{}] new ZK path created to write offset {} to {}", partitionId, offset, zkPath);
-		} 
-		else
-		{
-			curator.setData().forPath(zkPath, Converter.getBytes(offset));
-			LOG.info("[{}] wrote offset {} to existing path {}", partitionId, offset, zkPath);
+				 .withMode(CreateMode.PERSISTENT).forPath(zkPath, Converter.getBytes(valueToStore));			
+			LOG.info("[{}] new ZK path created to write offset {} to {}", partitionId, valueToStore, zkPath);
+		} else {
+			curator.setData().forPath(zkPath, Converter.getBytes(valueToStore));
+			LOG.info("[{}] wrote offset {} to existing path {}", partitionId, valueToStore, zkPath);
 		}
-
 	}
 
 	/*
