@@ -87,10 +87,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			
 			clientIdToNodeInfo = new HashMap<>();
 			hostnameToClientId = new HashMap<>();
-			StateUtils.getActiveClients(curator, clientIdToNodeInfo, hostnameToClientId);
-			
-			clientToPartitions = new HashMap<>();
-			StateUtils.calculateLoad(partitionToHost, clientIdToNodeInfo, clientToPartitions);
+			StateUtils.getActiveClients(curator, clientIdToNodeInfo, hostnameToClientId);			
 			
 			LOG.info("Found a total of {} supported topics in ZooKeeper", topics.size());
 			
@@ -139,6 +136,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			// deleting any assignments for clientIdToNodeInfo that are not connected
 			
 			partitionToClient = new HashMap<>();			
+			clientToPartitions = new HashMap<>();			
 			
 			for (String partition : partitionToHost.keySet())
 			{
@@ -170,7 +168,8 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				}
 			}
 			
-			// Call the load balancer's implementation of run_balancer()
+			// Calculate our existing load
+			StateUtils.calculateLoad(partitionToHost, clientIdToNodeInfo, clientToPartitions);
 			
 			try
 			{
@@ -198,6 +197,10 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				readyFlagThread = new Thread(readyFlagWriter);
 				readyFlagThread.start();
 				LOG.info("[ready flag writer] thread created and started");
+			}
+			else
+			{
+				LOG.warn("[ready flag writer] is either not null or is still alive (could it be hung?)");
 			}
 
 			Thread.sleep(config.getRunningConfig().getLeaderSleepDurationMs());

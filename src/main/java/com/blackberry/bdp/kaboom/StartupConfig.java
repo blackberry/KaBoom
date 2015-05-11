@@ -41,6 +41,7 @@ import org.apache.curator.framework.CuratorFramework;
 
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import com.blackberry.bdp.common.props.Parser;
+
 import com.blackberry.bdp.kaboom.api.RunningConfig;
 import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -83,6 +84,7 @@ public class StartupConfig
 	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
 	private final Map<String, String> topicToHdfsRootDir = new HashMap<>();
 	private final Map<String, Boolean> topicToSupportedStatus = new HashMap<>();	
+
 	
 	/**
 	 * POSIX style
@@ -111,8 +113,8 @@ public class StartupConfig
 		LOG.info("kafkaSeedBrokers: {}", getKafkaSeedBrokers());		
 		LOG.info("loadBalancer: {}", getLoadBalancer());
 		LOG.info("Using kerberos uthentication.");
-		LOG.info("Kerberos principal = {}", getKerberosPrincipal());
-		LOG.info("Kerberos keytab = {}", getKerberosKeytab());
+		LOG.info("Kerberos principal: {}", getKerberosPrincipal());
+		LOG.info("Kerberos keytab: {}", getKerberosKeytab());
 		
 		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet())
 		{
@@ -150,15 +152,15 @@ public class StartupConfig
 		kaboomZkConnectionString = propsParser.parseString("zookeeper.connection.string");
 		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
-		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
-		runningConfigZkPath = propsParser.parseString("kaboom.runningConfig.zkPath", "/kaboom/config");
+		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");		
+		runningConfigZkPath = propsParser.parseString("kaboom.runningConfig.zkPath", "/kaboom/config");		
 		
 		runningConfig = new RunningConfig(this);
 		
 		/**
 		 * Build the maps we need to associate configuration
 		 */
-		
+
 		//mapTopicsToSupportedStatus();
 		//mapTopicToProxyUser(props);
 		//mapProxyUserToHadoopFileSystem();

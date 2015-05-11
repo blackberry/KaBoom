@@ -37,7 +37,7 @@ public class KaBoomTopic {
 	 * @return
 	 * @throws java.lang.Exception
 	 */
-	public static List<KaBoomTopic> getAll(CuratorFramework curator, 
+	public static List<KaBoomTopic> getAll(CuratorFramework curator,
 		 String zkPathTopics,
 		 String zkPathAssignments) throws Exception {
 		
@@ -65,7 +65,7 @@ public class KaBoomTopic {
 				
 				topic.partitionDetails.add(new PartitionDetails(partitionId, offset, offsetTimestamp, assignedKaBoomClientId));
 			}
-		}		
+		}
 		return topics;
 	}
 

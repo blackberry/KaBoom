@@ -44,28 +44,40 @@ public class EvenLoadBalancer extends Leader
 	{
 		// For every client, determine if it's doing too much work and remove assignments (remote ones first)
 
+		LOG.info("The even load balancer is now going to balance the load for {} clients", clientIdToNodeInfo.entrySet().size());
+		LOG.info("There are {} entries in the clientToPartitions HashMap", clientToPartitions.size());
+		
 		for (Map.Entry<String, KaBoomNodeInfo> e : clientIdToNodeInfo.entrySet())
 		{
 			String client = e.getKey();
 			KaBoomNodeInfo info = e.getValue();
+			
+			List<String> localPartitions = new ArrayList<>();
+			List<String> remotePartitions = new ArrayList<>();
+
+			if (!clientToPartitions.containsKey(client))
+			{
+				LOG.info("Skipping checking client {} for being overloaded because it has no work assigned", client);
+				continue;
+			}			
+			
+			for (String partition : clientToPartitions.get(client))
+			{
+				if (partitionToHost.get(partition).equals(info.getHostname()))
+				{
+					localPartitions.add(partition);
+				} 
+				else
+				{
+					remotePartitions.add(partition);
+				}
+			}
+			
+			LOG.info("Client {} has {} local partitions and {} remote partitions assigned, load={} and target load={}",
+				 client, localPartitions.size(), remotePartitions.size(), info.getLoad(), info.getTargetLoad());
 
 			if (info.getLoad() >= info.getTargetLoad() + 1)
 			{
-				List<String> localPartitions = new ArrayList<>();
-				List<String> remotePartitions = new ArrayList<>();
-
-				for (String partition : clientToPartitions.get(client))
-				{
-					if (partitionToHost.get(partition).equals(info.getHostname()))
-					{
-						localPartitions.add(partition);
-					} 
-					else
-					{
-						remotePartitions.add(partition);
-					}
-				}
-
 				while (info.getLoad() > info.getTargetLoad())
 				{
 					String partitionToDelete;

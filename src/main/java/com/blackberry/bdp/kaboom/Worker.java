@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.blackberry.bdp.common.conversion.Converter;
+
 import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 import com.blackberry.bdp.krackle.consumer.Consumer;
 
@@ -59,6 +60,8 @@ public class Worker implements Runnable
 	private long lowerOffsetsReceived = 0;
 	private long timestamp;
 	private long maxTimestamp = -1;
+	private long lastMessageReceivedTimestamp = -1;
+	private long lastForcedZkOffsetTimestampStore = -1;
 	private boolean stopping = false;
 
 	private String hostname;
@@ -92,6 +95,10 @@ public class Worker implements Runnable
 
 	private static Set<Worker> workers = new HashSet<>();
 	private static final Object workersLock = new Object();
+	
+	private Boolean pinged = false; 
+	private Boolean pong = false;
+	private Boolean killed = false;
 
 	static 
 	{
@@ -385,7 +392,7 @@ public class Worker implements Runnable
 			for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths)
 			{
 				outputPath.setKaboomWorker(this);
-			}			
+			}
 			
 			zkPath = getZK_ROOT() + "/topics/" + getTopic() + "/" + getPartition();
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
@@ -426,14 +433,39 @@ public class Worker implements Runnable
 			TimestampParser tsp = new TimestampParser();
 			
 			
-			while (stopping == false)
-			{
-				try
-				{
+			while (stopping == false) {
+				try {
+					if (pinged) {
+						pong = true;
+					}					
+					if (killed || Thread.interrupted()) {
+						throw new Exception("A kill request/interrupt has been received");
+					}
+					
 					length = consumer.getMessage(bytes, 0, bytes.length);
 
-					if (length == -1)
-					{
+					if (length == -1) {
+						
+						/**
+						 * Ensure that very quiet partitions are updating their offset timestamp in ZK 
+						 * even when they are not receiving any messages.  If the last received 
+						 * message was during the previous hour and it's been more than 
+						 * getForcedZkOffsetTsUpdateMs() milliseconds then write the start of the
+						 * hour's timestamp into ZK for the partition providing we haven't already
+						 * stored for the current hour already.
+						 */
+						
+						long now = System.currentTimeMillis();						
+						long startOfCurrentHour = now - now % (60 * 60 * 1000);						
+						
+						if (lastMessageReceivedTimestamp < startOfCurrentHour
+							 && now - lastMessageReceivedTimestamp > config.getRunningConfig().getForcedZkOffsetTsUpdateMs()
+							 && lastForcedZkOffsetTimestampStore != startOfCurrentHour
+							 && lastMessageReceivedTimestamp != -1) {							
+							storeOffsetTimestamp(startOfCurrentHour);
+							lastForcedZkOffsetTimestampStore = startOfCurrentHour;							
+						}						
+						
 						continue;
 					}
 
@@ -608,11 +640,13 @@ public class Worker implements Runnable
 					
 					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
 					{
-						path.getBoomWriter(timestamp, partitionId + "-" + offset +".bm").writeLine(timestamp, bytes, pos, length - pos);
+						path.getBoomWriter(timestamp, partitionId + "-" + offset +".bm").writeLine(timestamp, bytes, pos, length - pos, offset);
 						boomWritesMeter.mark();						
 						boomWritesMeterTopic.mark();
 						boomWritesMeterTotal.mark();
 					}
+					
+					lastMessageReceivedTimestamp = System.currentTimeMillis();
 
 					/*
 					 * Let's track the max timestamp and write that to ZK for the 
@@ -680,21 +714,19 @@ public class Worker implements Runnable
 		}
 	}
 
-	public void storeOffset() throws Exception
-	{
-		if (curator.checkExists().forPath(zkPath) == null)
-		{
+	public void storeOffset() throws Exception {
+		storeOffset(offset);
+	}
+	
+	public void storeOffset(long valueToStore) throws Exception {
+		if (curator.checkExists().forPath(zkPath) == null) {
 			curator.create().creatingParentsIfNeeded()
-				 .withMode(CreateMode.PERSISTENT).forPath(zkPath, Converter.getBytes(offset));
-			
-			LOG.info("[{}] new ZK path created to write offset {} to {}", partitionId, offset, zkPath);
-		} 
-		else
-		{
-			curator.setData().forPath(zkPath, Converter.getBytes(offset));
-			LOG.info("[{}] wrote offset {} to existing path {}", partitionId, offset, zkPath);
+				 .withMode(CreateMode.PERSISTENT).forPath(zkPath, Converter.getBytes(valueToStore));			
+			LOG.info("[{}] new ZK path created to write offset {} to {}", partitionId, valueToStore, zkPath);
+		} else {
+			curator.setData().forPath(zkPath, Converter.getBytes(valueToStore));
+			LOG.info("[{}] wrote offset {} to existing path {}", partitionId, valueToStore, zkPath);
 		}
-
 	}
 
 	/*
@@ -741,32 +773,36 @@ public class Worker implements Runnable
 	}
 	
 	/**
-	 *
+	 * Stores to ZK and resets the maximum timestamp the worker has parsed
 	 * @throws Exception
 	 */
-	public void storeOffsetTimestamp() throws Exception
-	{
-		if (maxTimestamp == -1)
-		{
+	public void storeOffsetTimestamp() throws Exception {
+		storeOffsetTimestamp(maxTimestamp);
+		maxTimestamp = -1;
+	}
+	
+	/**
+	 * Stores a specific timestamp to ZK and doesn't reset 
+	 * @param timestampToStore
+	 * @throws Exception
+	 */
+	public void storeOffsetTimestamp(long timestampToStore) throws Exception {
+		if (timestampToStore == -1) 		{
 			LOG.info("Partition {} has a -1 offsetTime and will not be written to ZK", partitionId);
 			return;
 		}
 
-		if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null)
-		{
+		if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
 			curator.create().creatingParentsIfNeeded()
 				 .withMode(CreateMode.PERSISTENT)
-				 .forPath(zkPath_offSetTimestamp, Converter.getBytes(maxTimestamp));
+				 .forPath(zkPath_offSetTimestamp, Converter.getBytes(timestampToStore));
 		} 
-		else
-		{
+		else {
 			curator.setData().forPath(zkPath_offSetTimestamp,
-				 Converter.getBytes(maxTimestamp));
+				 Converter.getBytes(timestampToStore));
 		}
 		
-		LOG.info("[{}] stored offset timestamp in ZK {} ({})", partitionId, maxTimestamp, dateString(maxTimestamp));
-		
-		maxTimestamp = -1;
+		LOG.info("[{}] stored offset timestamp in ZK {} ({})", partitionId, maxTimestamp, dateString(maxTimestamp));				
 	}
 
 	/**
@@ -792,6 +828,18 @@ public class Worker implements Runnable
 	{
 		LOG.info("[{}] Stop request received", partitionId);
 		stopping = true;
+	}
+
+	public void kill()
+	{
+		LOG.info("[{}] Kill request received", partitionId);
+		killed = true;
+	}
+
+	public void ping()
+	{
+		this.pinged = true;
+		this.pong = false;
 	}
 
 	public long getLag()
@@ -847,5 +895,19 @@ public class Worker implements Runnable
 	public void setPartition(int partition)
 	{
 		this.partition = partition;
+	}
+
+	/**
+	 * @return the pinged
+	 */
+	public Boolean pinged() {
+		return pinged;
+	}
+
+	/**
+	 * @return the pong
+	 */
+	public Boolean getPong() {
+		return pong;
 	}
 }

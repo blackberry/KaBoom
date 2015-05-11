@@ -9,6 +9,7 @@
  */
 package com.blackberry.bdp.kaboom.api;
 
+
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,7 +32,6 @@ import kafka.common.TopicAndPartition;
 public class KafkaTopic {
 
 	private static final Logger LOG = LoggerFactory.getLogger(KafkaTopic.class);
-	
 
 	private final String name;
 	private final List<KafkaPartition> partitions = new ArrayList<>();

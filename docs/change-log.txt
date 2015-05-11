@@ -1,8 +1,44 @@
+<<<<<<< HEAD
 Changes in 0.8.0:
 
 - Supports bdp-common 0,0.6 which provides all logging and monitoring deps
 - Instruments log4j2 with io.dropwizard.metrics
 - Adds a new API 
+=======
+Changes in 0.7.13
+
+- Added kafkaOffset argument to FastBoomWriter.writeLine()
+- Added a lastKafkaOffset to FastBoomWriter
+- FastBoomWriter now keeps track of lastKafkaOffset and lastMessageTimestamp
+- Changed the periodicCloseExpiredPoll in TimeBasedHdfsOutputPath to store the expired boom file's lastKafakaOffset and lastMessageTimestamp instead of the worker's current values
+- Added a new global configuration property max.open.boom.files.per.partition (default: 5)  to limit the number of open boom files per partition
+- Modified TimeBasedHdfsOutputPath to close off the oldest FastBoomWriter when the number of open boom files is greater than max.open.boom.files.per.partition, and update zookeeper with lastKafakaOffset and lastMessageTimestamp
+
+Changes in 0.7.12 HF4
+
+- ReadFlagWriter now doesn't check for the existence of the data directory when it's writing flags
+
+Changes in 0.7.12. HF3
+
+- New configuration option boom.file.expired.grace.time.ms (default: 30 * 1000, thirty seconds): The time after a TimeBasedHdfsOutputPath output file expires before it's closed via the periodic file close interval triggered upon each message consumed from Kafka.  This option is introduced to make the previously hard coded value configurable and uses the same default value as the previous hard coded value.
+- New configuration option forced.zk.offsetTimestamp.update.time.ms (default: 10 * 60 * 1000, ten minutes): Ensure that very quiet partitions are updating their offset timestamp in ZK even when they are not receiving any messages.  If the last received message was during the previous hour and it's been more than this amount of  milliseconds then write the start of the hour's timestamp into ZK for the partition (providing it hasn't already been stored for the current hour already).
+- New configuration option kaboom.server.sleep.duration.ms (default: 10 000, ten seconds): Exposes a configuration option for a previously hard coded property value with the same default value.  This is the time waited after a worker processes it's work assignments before it fetches another update from ZK and processes again.
+- Fixes the NullPointerException caused by improper handling of the NoNodeException that very rarely occurs when a worker fetches it's assignments.  The null assignee is now logged and ignored and skipped until the next round of worker assignments is reviewed (after the newly introduced: kaboom.server.sleep.duration.ms).
+- Fixes the "hung KaBoom workers" by sending a basic ping() health check to each KaBoom worker.  The worker has until kaboom.server.sleep.duration.ms to respond with a pong before the KaBoom server will send it a kill request and send an interrupt to the worker's thread.  The worker (if it comes back to acknowledge it's been killed) will throw an exception that will get caught and trigger the abort sequence (delete files, and stop).
+
+Changes in 0.7.12:
+
+- Fixes bug that threw an NPE when there was no work assigned to a client and the load balancer tries to check if it's over worked
+
+Changes in 0.7.11:
+
+- Adds an additional kafka ready flag in the topic root
+- Logs a warning if the load balancer is still running after leader.sleep.duration.ms
+
+Changes in 0.7.10:
+
+- Adds a new optional configuration option (String) kaboom.kafkaReady.flag.filename, default=_KAFKA_READY
+>>>>>>> origin/kaboom-0.7.13
 
 Changes in 0.7.9:
 

@@ -12,6 +12,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -80,6 +82,43 @@ public class TimeBasedHdfsOutputPath
 				 config.getRunningConfig().getUseTempOpenFileDirectory());
 			
 			outputFileMap.put(reusableRequestedStartTime, reusableRequestedOutputFile);
+			
+			// if over the maxOpenBoomFilesPerPartition and close the oldest open file
+			
+			if (outputFileMap.size() > config.getRunningConfig().getMaxOpenBoomFilesPerPartition()) {
+				SortedSet<Long> timestampKeys = new TreeSet<>(outputFileMap.keySet());
+				OutputFile oldestOutputFile = outputFileMap.get(timestampKeys.first());
+				FastBoomWriter oldestboomWriter = oldestOutputFile.getBoomWriter();
+				/*
+				 * It's possible that the new boom writer we're creating might be
+				 * for an old message received out of order and we can't close it
+				 * off and hand it back.  Just do nothing if that's the case eventually
+				 * a new boom writer will be created that isn't the oldest.				
+				 */
+				if (timestampKeys.first() != reusableRequestedStartTime) {
+					try
+					{
+						oldestOutputFile.close();
+						kaboomWorker.storeOffset(oldestboomWriter.getLastKafkaOffset());
+						kaboomWorker.storeOffsetTimestamp(oldestboomWriter.getLastMessageTimestamp());
+						outputFileMap.remove(timestampKeys.first());
+						LOG.info("[{}]  over max open boom file limit ({}/{}) oldest boom file closed: {}",
+							 partitionId,
+							 outputFileMap.size(),
+							 config.getRunningConfig().getMaxOpenBoomFilesPerPartition(),
+							 outputFileMap.get(timestampKeys.first()).openFilePath);
+
+						
+					} catch (Exception e) {
+						LOG.error("[{}] Failed to close off oldest boom writer: ", partitionId, e);
+					}
+				} else {
+					LOG.warn("[{}] over max open boom file limit ({}/{}) and can't close oldest because it's the one being created", 
+						 partitionId,
+						 outputFileMap.size(),
+						 config.getRunningConfig().getMaxOpenBoomFilesPerPartition());
+				}
+			}
 		}
 		
 		return reusableRequestedOutputFile.getBoomWriter();
@@ -114,18 +153,16 @@ public class TimeBasedHdfsOutputPath
 		{
 			Map.Entry<Long, OutputFile> entry = iter.next();
 
-			if (entry.getValue().closeTime < System.currentTimeMillis() - 30 * 1000)
+			if (entry.getValue().closeTime < (System.currentTimeMillis() - config.getRunningConfig().getFileCloseGraceTimeAfterExpiredMs()))
 			{
 				try
-				{
-					kaboomWorker.storeOffset();
-					kaboomWorker.storeOffsetTimestamp();
+				{					
 					entry.getValue().close();
-					iter.remove();
+					kaboomWorker.storeOffset(entry.getValue().getBoomWriter().getLastKafkaOffset());
+					kaboomWorker.storeOffsetTimestamp(entry.getValue().getBoomWriter().getLastMessageTimestamp());
 					LOG.info("[{}] expired open file has been closed: {}  ({} files still open): {}", partitionId, entry.getValue().openFilePath, outputFileMap.size());					
-				}
-				catch (Exception e)
-				{
+					iter.remove();
+				} catch (Exception e) {
 					LOG.error("Error closing output path {}", this, e);
 				}
 			}

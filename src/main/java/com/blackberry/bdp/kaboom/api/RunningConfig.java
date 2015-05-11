@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
 //@JsonIgnoreProperties({"zkPath", "curator"})
 public class RunningConfig extends ZkVersioned{
 
-	private static final Logger LOG = LoggerFactory.getLogger(RunningConfig.class);		
+	private static final Logger LOG = LoggerFactory.getLogger(RunningConfig.class);
 	
 	@Getter @Setter @VersionedAttribute public Boolean allowOffsetOverrides = false;
 	@Getter @Setter @VersionedAttribute public Boolean sinkToHighWatermark = false;
@@ -50,6 +50,8 @@ public class RunningConfig extends ZkVersioned{
 	@Getter @Setter @VersionedAttribute public long kaboomServerSleepDurationMs = 10 * 1000;
 	@Getter @Setter @VersionedAttribute public long fileCloseGraceTimeAfterExpiredMs = 30 * 1000;
 	@Getter @Setter @VersionedAttribute public long forcedZkOffsetTsUpdateMs = 10 * 60 * 1000;
+	@Getter @Setter @VersionedAttribute public String kafkaReadyFlagFilename = "_KAFKA_READY";
+	@Getter @Setter @VersionedAttribute public int maxOpenBoomFilesPerPartition = 5;
 
 	/**
 	 * Instantiates a default RunningConfig without any ZK interaction
@@ -79,7 +81,7 @@ public class RunningConfig extends ZkVersioned{
 	 * Static provider of a ZkVersioned RunningConfig from a specific ZK curator/path
 	 * 
 	 * TODO: This is here and not within the interface because I can't find a way to have
-	 * Jacskon create an instantiation of the implemented class within the interface.
+	 * Jacskon create an instantiation of the implemented class within abstract class.
 	 * 
 	 * @param curator
 	 * @param zkPath

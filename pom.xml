@@ -18,11 +18,10 @@ limitations under the License.
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>com.blackberry.bdp.kaboom</groupId>
+	<name>kaboom-0.8.0</name>
 	<artifactId>kaboom-0.8.0</artifactId>
 	<version>0.8.0</version>
-	<packaging>jar</packaging>
-
-	<name>kaboom-0.8.0</name>
+	<packaging>jar</packaging>	
 	<url>http://blackberry.com</url>
 
 	<properties>
@@ -81,6 +80,22 @@ limitations under the License.
 			<groupId>com.blackberry.bdp.common</groupId>
 			<artifactId>bdp-common-dev</artifactId>
 			<version>0.0.9</version>
+			<!--
+			<exclusions>
+				<exclusion>
+					<groupId>org.apache.logging.log4j</groupId>
+					<artifactId>log4j-core</artifactId>					
+				</exclusion>
+				<exclusion>
+					<groupId>org.apache.logging.log4j</groupId>
+					<artifactId>log4j-api</artifactId>		
+				</exclusion>
+				<exclusion>
+					<groupId>org.apache.logging.log4j</groupId>
+					<artifactId>log4j-slf4j-impl</artifactId>
+				</exclusion>
+			</exclusions>			
+			-->
 		</dependency>
 		<dependency>
 			<groupId>org.apache.kafka</groupId>
@@ -96,7 +111,7 @@ limitations under the License.
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
 			<version>1.16.2</version>
-		</dependency>		
+		</dependency>
 
 		<!-- Test dependencies -->
 		<dependency>
@@ -515,3 +530,5 @@ limitations under the License.
 	</build>
 
 </project>
+
+
