@@ -371,7 +371,7 @@ public class TimeBasedHdfsOutputPath
 				try
 				{
 					fileSystem.delete(new Path(openFileDirectory), true);
-					LOG.info("Deleted temp open file directory: {}", openFilePath);
+					LOG.info("Deleted temp open file directory: {}", openFileDirectory);
 				} 
 				catch (IllegalArgumentException | IOException e)
 				{

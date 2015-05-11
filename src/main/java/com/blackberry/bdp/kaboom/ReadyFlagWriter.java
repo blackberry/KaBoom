@@ -217,12 +217,6 @@ public class ReadyFlagWriter extends NotifyingThread
 						LOG.trace(LOG_TAG + "HDFS path for kafka ready flag #{} is: {}", i + 1, kafkaReadyFlags[i].toString());																						
 					}
 					
-					if (!fs.exists(dataDirectory))
-					{
-						//LOG.trace(LOG_TAG + "skipping {} since data directory {} doesn't exist", topicName, dataDirectory.toString());
-						//continue;
-					}
-					
 					if (fs.exists(workingDirectory))
 					{
 						LOG.trace(LOG_TAG + "skipping {} since working directory {} exists", topicName, workingDirectory.toString());
