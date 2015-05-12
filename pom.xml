@@ -73,12 +73,12 @@ limitations under the License.
 		</dependency>
 		<dependency>
 			<groupId>com.blackberry.bdp.krackle</groupId>
-			<artifactId>krackle-0.8.0</artifactId>
+			<artifactId>krackle</artifactId>
 			<version>0.8.0</version>
 		</dependency>
 		<dependency>
 			<groupId>com.blackberry.bdp.common</groupId>
-			<artifactId>bdp-common-dev</artifactId>
+			<artifactId>bdp-common</artifactId>
 			<version>0.0.9</version>
 			<!--
 			<exclusions>
@@ -297,7 +297,7 @@ limitations under the License.
 									</mapper>
 								</data>
 								
-								<!--  Copy the lib for NativeDeflate -->
+								<!--  Copy the lib for NativeDeflate 
 								<data>
 									<type>directory</type>
 									<src>NativeDeflate/lib</src>
@@ -309,7 +309,7 @@ limitations under the License.
 										<user>kaboom</user>
 										<group>kaboom</group>
 									</mapper>
-								</data>
+								</data>-->
 								
 								<!-- Copy the config sample(s) -->
 								<data>
@@ -397,7 +397,7 @@ limitations under the License.
 							</sources>
 						</mapping>
 
-						<!--  Copy the lib for NativeDeflate -->
+						<!--  Copy the lib for NativeDeflate 
 						<mapping>
 							<directory>/opt/kaboom/lib</directory>
 							<filemode>644</filemode>
@@ -409,7 +409,7 @@ limitations under the License.
 									</includes>
 								</source>
 							</sources>
-						</mapping>							
+						</mapping>-->					
 								
 						<!-- Executables -->
 						<mapping>

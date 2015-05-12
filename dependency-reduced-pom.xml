@@ -193,18 +193,6 @@
                   </mapper>
                 </data>
                 <data>
-                  <type>directory</type>
-                  <src>NativeDeflate/lib</src>
-                  <includes>*.so</includes>
-                  <mapper>
-                    <type>perm</type>
-                    <prefix>/opt/kaboom/lib</prefix>
-                    <filemode>644</filemode>
-                    <user>kaboom</user>
-                    <group>kaboom</group>
-                  </mapper>
-                </data>
-                <data>
                   <type>files</type>
                   <paths>
                     <path>${project.basedir}/conf/kaboom.properties.sample</path>
@@ -267,18 +255,6 @@
                   <location>${project.basedir}/conf</location>
                   <includes>
                     <include>*</include>
-                  </includes>
-                </source>
-              </sources>
-            </mapping>
-            <mapping>
-              <directory>/opt/kaboom/lib</directory>
-              <filemode>644</filemode>
-              <sources>
-                <source>
-                  <location>${project.basedir}/NativeDeflate/lib/</location>
-                  <includes>
-                    <include>*.so</include>
                   </includes>
                 </source>
               </sources>
