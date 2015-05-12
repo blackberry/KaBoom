@@ -15,9 +15,12 @@ import com.codahale.metrics.Timer;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.util.EnumSet;
 import java.util.Random;
 import java.util.zip.Deflater;
-import org.apache.hadoop.fs.FSDataOutputStream;
+//import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.hdfs.client.HdfsDataOutputStream;
+import org.apache.hadoop.hdfs.client.HdfsDataOutputStream.SyncFlag;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,11 +125,11 @@ public class FastBoomWriter
 
 	private final byte[] syncMarker;
 
-	private final FSDataOutputStream  fsDataOut;
+	private final HdfsDataOutputStream  hdfsDataOut;
 
-	public FastBoomWriter(FSDataOutputStream out,  String topic, int partition, StartupConfig config) throws IOException
+	public FastBoomWriter(HdfsDataOutputStream out,  String topic, int partition, StartupConfig config) throws IOException
 	{
-		this.fsDataOut = out;		
+		this.hdfsDataOut = out;		
 		this.topic = topic;		
 		this.partitionId = topic + "-" + partition;
 		this.config = config;		
@@ -205,9 +208,9 @@ public class FastBoomWriter
 				LOG.trace("Skipping forced HDFS flush as there haven't been any new avro blocks written");
 				return;
 			}		
-
-			fsDataOut.hflush();			
-			LOG.trace("Flushed putput file for {}", partitionId);
+			
+			hdfsDataOut.hsync(EnumSet.of(SyncFlag.UPDATE_LENGTH));
+			LOG.info("Flushed output file for {}", partitionId);
 			numHdfsFlushedAVroBlocks = numAvroBlocksWritten;
 			lastHdfsFlushTimestamp = System.currentTimeMillis();
 		}
@@ -221,11 +224,11 @@ public class FastBoomWriter
 
 	private void writeHeader() throws IOException
 	{
-		fsDataOut.write(MAGIC_NUMBER);
+		hdfsDataOut.write(MAGIC_NUMBER);
 
 		// 2 entries in the metadata
 		encodeLong(2L);
-		fsDataOut.write(longBytes, 0, longBuffer.position());
+		hdfsDataOut.write(longBytes, 0, longBuffer.position());
 
 		// Write schema
 		writeBytes("avro.schema".getBytes(UTF8));
@@ -237,16 +240,16 @@ public class FastBoomWriter
 
 		// End the map
 		encodeLong(0L);
-		fsDataOut.write(longBytes, 0, longBuffer.position());
+		hdfsDataOut.write(longBytes, 0, longBuffer.position());
 
-		fsDataOut.write(syncMarker);
+		hdfsDataOut.write(syncMarker);
 	}
 
 	private void writeBytes(byte[] bytes) throws IOException
 	{
 		encodeLong(bytes.length);
-		fsDataOut.write(longBytes, 0, longBuffer.position());
-		fsDataOut.write(bytes);
+		hdfsDataOut.write(longBytes, 0, longBuffer.position());
+		hdfsDataOut.write(bytes);
 	}
 
 	private void encodeLong(long n)
@@ -421,7 +424,7 @@ public class FastBoomWriter
 		{
 			LOG.debug("[{}] Writing Avro Block ({} bytes)", partitionId, avroBlockBuffer.position());
 			encodeLong(avroBlockRecordCount);
-			fsDataOut.write(longBytes, 0, longBuffer.position());
+			hdfsDataOut.write(longBytes, 0, longBuffer.position());
 			
 			long start = System.currentTimeMillis();			
 				 
@@ -475,9 +478,9 @@ public class FastBoomWriter
 			
 			encodeLong(compressedSize);
 
-			fsDataOut.write(longBytes, 0, longBuffer.position());
-			fsDataOut.write(compressedBlockBytes, 0, compressedSize);
-			fsDataOut.write(syncMarker);						
+			hdfsDataOut.write(longBytes, 0, longBuffer.position());
+			hdfsDataOut.write(compressedBlockBytes, 0, compressedSize);
+			hdfsDataOut.write(syncMarker);						
 		}
 		catch (Exception e)
 		{
@@ -505,7 +508,7 @@ public class FastBoomWriter
 		{
 			writeAvroBlock();
 		}
-		fsDataOut.close();		
+		hdfsDataOut.close();		
 	}
 
 	/**

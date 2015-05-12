@@ -50,7 +50,7 @@ public class RunningConfig extends ZkVersioned{
 	@Getter @Setter @VersionedAttribute public long kaboomServerSleepDurationMs = 10 * 1000;
 	@Getter @Setter @VersionedAttribute public long fileCloseGraceTimeAfterExpiredMs = 30 * 1000;
 	@Getter @Setter @VersionedAttribute public long forcedZkOffsetTsUpdateMs = 10 * 60 * 1000;
-	@Getter @Setter @VersionedAttribute public String kafkaReadyFlagFilename = "_KAFKA_READY";
+	@Getter @Setter @VersionedAttribute public String kafkaReadyFlagFilename = "_READY";
 	@Getter @Setter @VersionedAttribute public int maxOpenBoomFilesPerPartition = 5;
 
 	/**

@@ -14,9 +14,10 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import org.apache.hadoop.fs.FSDataOutputStream;
+//import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.client.HdfsDataOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -221,7 +222,7 @@ public class TimeBasedHdfsOutputPath
 		private Path finalPath;
 		private Path openFilePath;
 		private FastBoomWriter boomWriter;
-		private FSDataOutputStream fsDataOut;
+		private HdfsDataOutputStream hdfsDataOut;
 		private Long startTime;
 		private Long closeTime;
 		private Boolean useTempOpenFileDir;
@@ -253,7 +254,7 @@ public class TimeBasedHdfsOutputPath
 					 LOG.info("Removing file from HDFS because it already exists: {}", openFilePath);
 				 }
 
-				 fsDataOut = fileSystem.create(
+				 hdfsDataOut = (HdfsDataOutputStream) fileSystem.create(
 					  openFilePath, 
 					  config.getBoomFilePerms(), 
 					  false, 
@@ -263,7 +264,7 @@ public class TimeBasedHdfsOutputPath
 					  null);
 				 
 				 boomWriter = new FastBoomWriter(
-					  fsDataOut, 
+					  hdfsDataOut, 
 					  topic, 
 					  partition,
 					  config);
@@ -313,7 +314,7 @@ public class TimeBasedHdfsOutputPath
 			
 			try
 			{
-				fsDataOut.close();
+				hdfsDataOut.close();
 			} 
 			catch (IOException e)
 			{
@@ -347,7 +348,7 @@ public class TimeBasedHdfsOutputPath
 			{
 				boomWriter.close();
 				LOG.info("Boom writer closed for {}", openFilePath);
-				fsDataOut.close();	
+				hdfsDataOut.close();	
 				LOG.info("Output stream closed for {}", openFilePath);
 			}
 			catch (IOException ioe)

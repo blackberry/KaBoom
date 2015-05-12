@@ -321,7 +321,7 @@ public class KaBoom
 						}
 					}
 					else {
-						LOG.info("[{}] inital ping");
+						LOG.info("[{}] inital ping", worker.getPartitionId());
 						worker.ping();						
 					}
 				}
