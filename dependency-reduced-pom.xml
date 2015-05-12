@@ -2,8 +2,8 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.blackberry.bdp.kaboom</groupId>
-  <artifactId>kaboom-0.8.0</artifactId>
-  <name>kaboom-0.8.0</name>
+  <artifactId>kaboom</artifactId>
+  <name>kaboom</name>
   <version>0.8.0</version>
   <url>http://blackberry.com</url>
   <scm>
