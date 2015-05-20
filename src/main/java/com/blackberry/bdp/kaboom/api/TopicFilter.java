@@ -26,6 +26,7 @@ public class TopicFilter {
 	private static final Logger LOG = LoggerFactory.getLogger(TopicFilter.class);
 	public enum FilterType {STRING_MATCH, REGEX};
 	
+	@Getter @Setter @VersionedAttribute public int number = 0;
 	@Getter @Setter @VersionedAttribute public String name = "<FILTER NAME>";
 	@Getter @Setter @VersionedAttribute public FilterType type = FilterType.STRING_MATCH;
 	@Getter @Setter @VersionedAttribute public boolean filterIntentionIsToMatch = true;

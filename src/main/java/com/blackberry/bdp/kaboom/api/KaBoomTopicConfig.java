@@ -80,20 +80,23 @@ public class KaBoomTopicConfig extends ZkVersioned{
 		ArrayList<KaBoomTopicConfig> topicConfigs = new ArrayList<>();
 		
 		for (String topicName : Util.childrenInZkPath(curator, zkPathTopicRoot)) {
-			String configPath = String.format("%s/%s/%s", zkPathTopicRoot, topicName, "config");			
-			if (curator.checkExists().forPath(configPath) != null) {
-				Stat configStat = curator.checkExists().forPath(configPath);
-				byte[] jsonBytes = curator.getData().forPath(configPath);	
+			String configPath = String.format("%s/%s", zkPathTopicRoot, topicName);
+			Stat configStat = curator.checkExists().forPath(configPath);
+			byte[] jsonBytes = curator.getData().forPath(configPath);				
+			if (jsonBytes.length != 0) {
 				LOG.info("Attempt to retrieve {} with {}", KaBoomTopicConfig.class, new String(jsonBytes));		
 				KaBoomTopicConfig config = mapper.readValue(jsonBytes, KaBoomTopicConfig.class);
 				config.setVersion(configStat.getVersion());
 				config.id = topicName;
 				topicConfigs.add(config);
 			} else {
+				// We don't have any bytes in the value of the znode, this is how versions
+				// earlier than v0.8.0 stored partition data in children and there wasn't any 
+				// actual value stored in the znode
 				KaBoomTopicConfig config = new KaBoomTopicConfig();
 				config.id = topicName;
-				topicConfigs.add(config);
-			}
+				topicConfigs.add(config);					
+			}				
 		}		
 		return topicConfigs;
 	}	
