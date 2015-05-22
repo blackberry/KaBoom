@@ -53,7 +53,7 @@ public class KaBoomTopicConfig extends ZkVersioned{
 	 * Static provider of a ZkVersioned KaBoomTopicConfig from a specific ZK curator/path
 	 * 
 	 * TODO: This is here and not within the interface because I can't find a way to have
-	 * Jacskon create an instantiation of the implemented class within abstract class.
+	 * Jacskon create an instantiation of the implemented class within the abstract class.
 	 * 
 	 * @param curator
 	 * @param zkPath
@@ -65,8 +65,8 @@ public class KaBoomTopicConfig extends ZkVersioned{
 		if (stat == null) {
 			throw new MissingConfigurationException("Configuration doesn't exist in ZK at " + zkPath);
 		}
-		byte[] jsonBytes = curator.getData().forPath(zkPath);		
-		LOG.info("Attempt to retrieve {} with {}", RunningConfig.class, new String(jsonBytes));		
+		byte[] jsonBytes = curator.getData().forPath(zkPath);
+		LOG.info("Attempt to retrieve {} with {}", RunningConfig.class, new String(jsonBytes));
 		KaBoomTopicConfig obj = mapper.readValue(jsonBytes, KaBoomTopicConfig.class);
 		obj.setVersion(stat.getVersion());
 		return obj;
@@ -92,7 +92,7 @@ public class KaBoomTopicConfig extends ZkVersioned{
 			} else {
 				// We don't have any bytes in the value of the znode, this is how versions
 				// earlier than v0.8.0 stored partition data in children and there wasn't any 
-				// actual value stored in the znode
+				// actual value stored in the znode, so just return a default configuration
 				KaBoomTopicConfig config = new KaBoomTopicConfig();
 				config.id = topicName;
 				topicConfigs.add(config);					

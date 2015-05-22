@@ -1,19 +1,12 @@
 /**
  * Copyright 2014 BlackBerry, Limited.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
  */
-
 package com.blackberry.bdp.kaboom;
 
 import java.text.SimpleDateFormat;
@@ -41,15 +34,14 @@ import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.Meter;
 
-public class Worker implements Runnable
-{
+public class Worker implements Runnable {
+
 	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
 
 	/**
 	 * @return the ZK_ROOT
 	 */
-	public static String getZK_ROOT()
-	{
+	public static String getZK_ROOT() {
 		return ZK_ROOT;
 	}
 
@@ -86,198 +78,165 @@ public class Worker implements Runnable
 	private String lagSecGaugeName;
 	private String msgWrittenGaugeName;
 	private String lowerOffsetsGaugeName;
-	
+
 	private Meter boomWritesMeter;
 	private Meter boomWritesMeterTopic;
 	private Meter boomWritesMeterTotal;
-	
+
 	private ArrayList<TimeBasedHdfsOutputPath> hdfsOutputPaths;
 
 	private static Set<Worker> workers = new HashSet<>();
 	private static final Object workersLock = new Object();
-	
-	private Boolean pinged = false; 
+
+	private Boolean pinged = false;
 	private Boolean pong = false;
 	private Boolean killed = false;
 
-	static 
-	{
+	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			.register("kaboom:total:max message lag sec", new Gauge<Integer>()
-				  {
-					  @Override
-					  public Integer getValue()
-					  {
-						  int maxLagSec = 0;
-						  synchronized (workersLock)
-						  {
-							  for (Worker w : workers)
-							  {
-								  maxLagSec = Math.max(maxLagSec, w.getLagSec());
-							  }
-						  }
-						  return maxLagSec;
-					  }
+			 .register("kaboom:total:max message lag sec", new Gauge<Integer>() {
+				 @Override
+				 public Integer getValue() {
+					 int maxLagSec = 0;
+					 synchronized (workersLock) {
+						 for (Worker w : workers) {
+							 maxLagSec = Math.max(maxLagSec, w.getLagSec());
+						 }
+					 }
+					 return maxLagSec;
+				 }
+
 			 });
 	}
 
-	static
-	{
+	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			.register("kaboom:total:sum message lag sec", new Gauge<Long>()
-				  {
-					  @Override
-					  public Long getValue()
-					  {
-						  long sumLag = 0;
-						  synchronized (workersLock)
-						  {
-							  for (Worker w : workers)
-							  {
-								  sumLag += w.getLagSec();
-							  }
-						  }
-						  return sumLag;
-					  }
+			 .register("kaboom:total:sum message lag sec", new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 long sumLag = 0;
+					 synchronized (workersLock) {
+						 for (Worker w : workers) {
+							 sumLag += w.getLagSec();
+						 }
+					 }
+					 return sumLag;
+				 }
+
 			 });
 	}
 
-	static
-	{
+	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register("kaboom:total:avg message lag sec", new Gauge<Long>()
-				  {
-					  @Override
-					  public Long getValue()
-					  {
-						  long sumLag = 0;
-						  int count = 0;
-						  synchronized (workersLock)
-						  {
-							  for (Worker w : workers)
-							  {
-								  count++;
-								  sumLag += w.getLagSec();
-							  }
-						  }
-						  long avgLag = sumLag / count;
-						  return avgLag;
-					  }
+			 .register("kaboom:total:avg message lag sec", new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 long sumLag = 0;
+					 int count = 0;
+					 synchronized (workersLock) {
+						 for (Worker w : workers) {
+							 count++;
+							 sumLag += w.getLagSec();
+						 }
+					 }
+					 long avgLag = sumLag / count;
+					 return avgLag;
+				 }
+
 			 });
 	}
 
-	static
-	{
+	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register("kaboom:total:max message lag", new Gauge<Long>()
-				  {
-					  @Override
-					  public Long getValue()
-					  {
-						  long maxLag = 0;
-						  synchronized (workersLock)
-						  {
-							  for (Worker w : workers)
-							  {
-								  maxLag = Math.max(maxLag, w.getLag());
-							  }
-						  }
-						  return maxLag;
-					  }
+			 .register("kaboom:total:max message lag", new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 long maxLag = 0;
+					 synchronized (workersLock) {
+						 for (Worker w : workers) {
+							 maxLag = Math.max(maxLag, w.getLag());
+						 }
+					 }
+					 return maxLag;
+				 }
+
 			 });
 	}
 
-	static
-	{
+	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register("kaboom:total:sum message lag", new Gauge<Long>()
-				  {
-					  @Override
-					  public Long getValue()
-					  {
-						  long sumLag = 0;
-						  synchronized (workersLock)
-						  {
-							  for (Worker w : workers)
-							  {
-								  sumLag += w.getLag();
-							  }
-						  }
-						  return sumLag;
-					  }
+			 .register("kaboom:total:sum message lag", new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 long sumLag = 0;
+					 synchronized (workersLock) {
+						 for (Worker w : workers) {
+							 sumLag += w.getLag();
+						 }
+					 }
+					 return sumLag;
+				 }
+
 			 });
 	}
 
-	static
-	{
+	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register("kaboom:total:avg message lag", new Gauge<Long>()
-				  {
-					  @Override
-					  public Long getValue()
-					  {
-						  long sumLag = 0;
-						  int count = 0;
-						  synchronized (workersLock)
-						  {
-							  for (Worker w : workers)
-							  {
-								  count++;
-								  sumLag += w.getLag();
-							  }
-						  }
-						  long avgLag = sumLag / count;
-						  return avgLag;
-					  }
+			 .register("kaboom:total:avg message lag", new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 long sumLag = 0;
+					 int count = 0;
+					 synchronized (workersLock) {
+						 for (Worker w : workers) {
+							 count++;
+							 sumLag += w.getLag();
+						 }
+					 }
+					 long avgLag = sumLag / count;
+					 return avgLag;
+				 }
+
 			 });
 	}
 
-	static
-	{
+	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register("kaboom:total:avg messages written per sec", new Gauge<Long>()
-				  {
-					  @Override
-					  public Long getValue()
-					  {
-						  long sumMsgWritten = 0;
-						  int count = 0;
-						  synchronized (workersLock)
-						  {
-							  for (Worker w : workers)
-							  {
-								  count++;
-								  sumMsgWritten += w.getMsgWrittenPerSec();
-							  }
-						  }
-						  return sumMsgWritten / count;
-					  }
+			 .register("kaboom:total:avg messages written per sec", new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 long sumMsgWritten = 0;
+					 int count = 0;
+					 synchronized (workersLock) {
+						 for (Worker w : workers) {
+							 count++;
+							 sumMsgWritten += w.getMsgWrittenPerSec();
+						 }
+					 }
+					 return sumMsgWritten / count;
+				 }
+
 			 });
 	}
 
-	static
-	{
+	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register("kaboom:total:total messages written per sec", new Gauge<Long>()
-				  {
-					  @Override
-					  public Long getValue()
-					  {
-						  long sumMsgWritten = 0;
-						  synchronized (workersLock)
-						  {
-							  for (Worker w : workers)
-							  {
-								  sumMsgWritten += w.getMsgWrittenPerSec();
-							  }
-						  }
-						  return sumMsgWritten;
-					  }
+			 .register("kaboom:total:total messages written per sec", new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 long sumMsgWritten = 0;
+					 synchronized (workersLock) {
+						 for (Worker w : workers) {
+							 sumMsgWritten += w.getMsgWrittenPerSec();
+						 }
+					 }
+					 return sumMsgWritten;
+				 }
+
 			 });
 	}
 
-	public Worker(StartupConfig config, CuratorFramework curator, String topic, int partition) throws Exception
-	{
+	public Worker(StartupConfig config, CuratorFramework curator, String topic, int partition) throws Exception {
 		this.config = config;
 		this.curator = curator;
 		this.topic = topic;
@@ -285,21 +244,19 @@ public class Worker implements Runnable
 		this.startTime = System.currentTimeMillis();
 		this.messagesWritten = 0;
 		this.hdfsOutputPaths = config.getHdfsPathsForTopic(topic);
-		this.boomWritesMeterTopic =  MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
+		this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
 		this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
-		
-		
+
 		partitionId = topic + "-" + partition;
-		
+
 		LOG.info("Worker instantiated for {} and configured for {} output paths", partitionId, hdfsOutputPaths.size());
-		
-		for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths)
-		{
+
+		for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths) {
 			outputPath.setPartition(partition);
-			outputPath.setPartitionId(partitionId);			
+			outputPath.setPartitionId(partitionId);
 			LOG.info("\t {} {} => {}", config.getKaboomId(), partitionId, outputPath);
 		}
-		
+
 		this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
 
 		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
@@ -309,18 +266,15 @@ public class Worker implements Runnable
 
 		String[] metrics_to_remove = {lagGaugeName, lagSecGaugeName, msgWrittenGaugeName, lowerOffsetsGaugeName};
 
-		for (final String metric_name : metrics_to_remove)
-		{
+		for (final String metric_name : metrics_to_remove) {
 			if (MetricRegistrySingleton.getInstance().getMetricsRegistry()
-				 .getGauges(new MetricFilter()
-					  {
-						  @Override
-						  public boolean matches(String s, Metric m)
-						  {
-							  return s.equals(metric_name);
-						  }
-				 }).size() > 0)
-			{
+				 .getGauges(new MetricFilter() {
+					 @Override
+					 public boolean matches(String s, Metric m) {
+						 return s.equals(metric_name);
+					 }
+
+				 }).size() > 0) {
 				LOG.debug("Removing existing metric: '{}'", metric_name);
 				MetricRegistrySingleton.getInstance().getMetricsRegistry()
 					 .remove(metric_name);
@@ -328,214 +282,182 @@ public class Worker implements Runnable
 		}
 
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register(lagGaugeName, new Gauge<Long>()
-				  {
-					  @Override
-					  public Long getValue()
-					  {
-						  return lag;
-					  }
+			 .register(lagGaugeName, new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 return lag;
+				 }
+
 			 });
 
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register(lagSecGaugeName, new Gauge<Integer>()
-				  {
-					  @Override
-					  public Integer getValue()
-					  {
-						  return lag_sec;
-					  }
+			 .register(lagSecGaugeName, new Gauge<Integer>() {
+				 @Override
+				 public Integer getValue() {
+					 return lag_sec;
+				 }
+
 			 });
 
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register(msgWrittenGaugeName, new Gauge<Long>()
-				  {
-					  @Override
-					  public Long getValue()
-					  {
-						  return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
-					  }
+			 .register(msgWrittenGaugeName, new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
+				 }
+
 			 });
 
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register(lowerOffsetsGaugeName, new Gauge<Long>()
-				  {
-					  @Override
-					  public Long getValue()
-					  {
-						  return lowerOffsetsReceived;
-					  }
+			 .register(lowerOffsetsGaugeName, new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 return lowerOffsetsReceived;
+				 }
+
 			 });
-		
-		synchronized (workersLock)
-		{
+
+		synchronized (workersLock) {
 			// NetBeans considers this unsafe: See https://www.google.ca/#q=leaking+this+in+constructor
 			workers.add(this);
 		}
-		
+
 		LOG.info("[{}] Created worker.", partitionId);
 	}
 
-	private static String dateString(Long ts)
-	{		
-		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");		
+	private static String dateString(Long ts) {
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
 		Date now = new Date();
 		String strDate = sdf.format(ts);
-		return strDate;		
-	}		
-	
+		return strDate;
+	}
+
 	@Override
-	public void run()
-	{
-		try
-		{
-			for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths)
-			{
+	public void run() {
+		try {
+			for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths) {
 				outputPath.setKaboomWorker(this);
 			}
-			
+
 			zkPath = getZK_ROOT() + "/topics/" + getTopic() + "/" + getPartition();
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
-			zkPath_offSetOverride = zkPath + "/offset_override";						
+			zkPath_offSetOverride = zkPath + "/offset_override";
 
-			try
-			{
+			try {
 				offset = getOffset();
-			} 
-			catch (Exception e)
-			{
+			} catch (Exception e) {
 				LOG.error("[{}] Error getting offset.", getPartitionId(), e);
 				return;
 			}
 
-			try
-			{
+			try {
 				hostname = InetAddress.getLocalHost().getCanonicalHostName();
-			} 
-			catch (UnknownHostException e)
-			{
+			} catch (UnknownHostException e) {
 				LOG.error("[{}] Can't determine local hostname", getPartitionId());
 				hostname = "unknown.host";
 			}
 
 			String clientId = "kaboom-" + hostname;
 
-			consumer = new Consumer(config.getConsumerConfiguration(), clientId, getTopic(), getPartition(),offset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
+			consumer = new Consumer(config.getConsumerConfiguration(), 
+				 clientId, getTopic(), 
+				 getPartition(), 
+				 offset, 
+				 MetricRegistrySingleton.getInstance().getMetricsRegistry());
 
 			LOG.info("[{}] Created worker.  Starting at offset {}.", getPartitionId(), offset);
 
 			byte[] bytes = new byte[1024 * 1024];
 			int length;
 			byte version;
-			int pos;			
+			int pos;
 			PriParser pri = new PriParser();
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();
-			
-			
+
 			while (stopping == false) {
 				try {
 					if (pinged) {
 						pong = true;
-					}					
+					}
 					if (killed || Thread.interrupted()) {
 						throw new Exception("A kill request/interrupt has been received");
 					}
-					
 					length = consumer.getMessage(bytes, 0, bytes.length);
-
 					if (length == -1) {
-						
 						/**
 						 * Ensure that very quiet partitions are updating their offset timestamp in ZK 
-						 * even when they are not receiving any messages.  If the last received 
+						 * even when they are not receiving any messages. If the last received 
 						 * message was during the previous hour and it's been more than 
-						 * getForcedZkOffsetTsUpdateMs() milliseconds then write the start of the
-						 * hour's timestamp into ZK for the partition providing we haven't already
+						 * getForcedZkOffsetTsUpdateMs() milliseconds then write the start of the 
+						 * hour's timestamp into ZK for the partition providing we haven't already 
 						 * stored for the current hour already.
 						 */
-						
-						long now = System.currentTimeMillis();						
-						long startOfCurrentHour = now - now % (60 * 60 * 1000);						
-						
+						long now = System.currentTimeMillis();
+						long startOfCurrentHour = now - now % (60 * 60 * 1000);
 						if (lastMessageReceivedTimestamp < startOfCurrentHour
 							 && now - lastMessageReceivedTimestamp > config.getRunningConfig().getForcedZkOffsetTsUpdateMs()
 							 && lastForcedZkOffsetTimestampStore != startOfCurrentHour
-							 && lastMessageReceivedTimestamp != -1) {							
+							 && lastMessageReceivedTimestamp != -1) {
 							storeOffsetTimestamp(startOfCurrentHour);
-							lastForcedZkOffsetTimestampStore = startOfCurrentHour;							
-						}						
-						
+							lastForcedZkOffsetTimestampStore = startOfCurrentHour;
+						}
 						continue;
 					}
-
-					// offset always refers to the next offset we expect to 
-					// since we just called consumer.getMessage() let's see
-					// if the offset of the last message is what we expected
-					// and handle the fun edge cases when it's not
-					
-					if (offset != consumer.getLastOffset())
-					{
+					/**
+					 * offset always refers to the next offset we expect and
+					 * since we just called consumer.getMessage() let's see
+					 * if the offset of the last message is what we expected
+					 * and handle the fun edge cases when it's not
+					 */					
+					if (offset != consumer.getLastOffset()) {
 						long highWatermark = consumer.getHighWaterMark();
-						
-						if (offset > consumer.getLastOffset())
-						{
-							if (offset < highWatermark)
-							{
+
+						if (offset > consumer.getLastOffset()) {
+							if (offset < highWatermark) {
 								/* 
 								 * When using SNAPPY compression in Krackle's consumer there will be messages received
 								 * that are in the snappy block that are from earlier than our requested offset.  When this
 								 * happens the consumer will continue to send us messages from within that block so we
 								 * should just be patient until the offsets are from where we want.  
-								*/
-
+								 */
 								LOG.debug("[{}] skipping last offset {} since it's lower than high watermark {}", getPartitionId(), consumer.getLastOffset(), highWatermark);
-								
+
 								lowerOffsetsReceived++;
 								continue;
-							} 
-							else if (offset > highWatermark)
-							{
-								/*	
-								 *	If the expected offset is greater than than actual offset and also higher than the high watermark 
-								 *	then perhaps the broker we're receiving messages from has changed and the new broker has a 
-								 *	lower offset because it was behind when it took over... Maybe?  
-								 */
+							} else {
+								if (offset > highWatermark) {
+									/*	
+									 *	If the expected offset is greater than than actual offset and also higher than the high watermark 
+									 *	then perhaps the broker we're receiving messages from has changed and the new broker has a 
+									 *	lower offset because it was behind when it took over... Maybe?  
+									 */
+									if (config.getRunningConfig().getSinkToHighWatermark()) {
+										LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
+											 getPartitionId(), offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
+										consumer.setNextOffset(highWatermark);
+										offset = highWatermark;
 
-								if (config.getRunningConfig().getSinkToHighWatermark())
-								{
-									LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.", 
-										 getPartitionId(), offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
+										LOG.info("[{}] Successfully set offset to the high watermark of {}", getPartitionId(), highWatermark);
 
-									consumer.setNextOffset(highWatermark);
-									offset = highWatermark;
+										continue;
+									} else {
+										LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
+											 getPartitionId(), offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
+										continue;
+									}
+								} else {
+									// TODO: Should this continue or not?
 
-									LOG.info("[{}] Successfully set offset to the high watermark of {}", getPartitionId(), highWatermark);
-
-									continue;
-								} 
-								else
-								{
-									LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.", 
-										 getPartitionId(), offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
-
-									continue;
-								}		
-							} 
-							else
-							{
-								// TODO: Should this continue or not?
-
-								LOG.error("[{}] Unhandled edge case when expected offset is greater than last offset "
-									 + "and expected offset is also the high watermark");
+									LOG.error("[{}] Unhandled edge case when expected offset is greater than last offset "
+										 + "and expected offset is also the high watermark");
+								}
 							}
-						} 
-						else
-						{
-							LOG.error("[{}] Offset anomaly! Expected:{}, Got {}, Consumer high watermark {}, latest {}, earliest {}", getPartitionId(), 
-								 offset, 
-								 consumer.getLastOffset(), 
-								 consumer.getHighWaterMark(), 
+						} else {
+							LOG.error("[{}] Offset anomaly! Expected:{}, Got {}, Consumer high watermark {}, latest {}, earliest {}", getPartitionId(),
+								 offset,
+								 consumer.getLastOffset(),
+								 consumer.getHighWaterMark(),
 								 consumer.getLatestOffset(),
 								 consumer.getEarliestOffset());
 						}
@@ -545,107 +467,84 @@ public class Worker implements Runnable
 					offset = consumer.getNextOffset();
 					lag = consumer.getHighWaterMark() - offset;
 
-					
 					// (byte) 0xFE: -2
 					// (byte) 0x00: 0
 					// (byte) 0xFF: -1
-
 					// Check for version
-					if (bytes[0] == (byte) 0xFE)
-					{
+					if (bytes[0] == (byte) 0xFE) {
 						version = bytes[1];
-						
-						if (version == (byte) 0x00)
-						{
+						if (version == (byte) 0x00) {
 							// Version 0 has a timestamp in the front, so we can skip that for now. Come back if we need it.
 							pos = 10;
-						}
-						else
-						{
+						} else {
 							LOG.warn("[{}] Unrecognized encoding version: {}", getPartitionId(), version);
 							pos = 0;
 						}
-					} 
-					else
-					{
+					} else {
 						// version -1 is a raw log
 						version = (byte) 0xFF;
 						pos = 0;
 					}
 
 					// Optional PRI at the start of the line.
-					if (pri.parsePri(bytes, pos, length))
-					{
+					if (pri.parsePri(bytes, pos, length)) {
 						pos += pri.getPriLength();
 					}
 
 					// On the off chance that someone is following RFC5424 and has
 					// inserted a version in the log line.
-					
-					if (ver.parseVersion(bytes, pos, length - pos))
-					{
+					if (ver.parseVersion(bytes, pos, length - pos)) {
 						// Skip the length of the version and the following space.
 						pos += ver.getVersionLength() + 1;
 					}
 
 					tsp.parse(bytes, pos, length - pos);
-					
-					if (tsp.getError() == TimestampParser.NO_ERROR)
-					{
+
+					if (tsp.getError() == TimestampParser.NO_ERROR) {
 						timestamp = tsp.getTimestamp();
 						// Move position to the end of the timestamp						
 						pos += tsp.getLength();
-						
-						// mbruce: occasionally we get a line that is truncated partway through the timestamp,
-						// however we still have the rest of the last message in the byte buffer and parsing the 
-						// timestamp will push us past then end of the line
-						
-						if (pos > length)
-						{
+						/**
+						 * mbruce: occasionally we get a line that is truncated partway through the timestamp,
+						 * however we still have the rest of the last message in the byte buffer and parsing the 
+						 * timestamp will push us past then end of the line
+						 */
+						if (pos > length) {
 							LOG.error("Error: parsing timestamp has went beyond length of the message");
 							continue;
 						}
 						// If the next char is a space, skip that too.
-						if (pos < length && bytes[pos] == ' ')
-						{
+						if (pos < length && bytes[pos] == ' ') {
 							pos++;
 						}
-					} 
-					else
-					{
-						if (version == (byte) 0x00)
-						{
+					} else {
+						if (version == (byte) 0x00) {
 							LOG.debug("[{}] Failed to parse timestamp.  Using stored timestamp", getPartitionId());
 							timestamp = Converter.longFromBytes(bytes, 2);
-						} 
-						else
-						{
+						} else {
 							LOG.error("[{}] Error parsing timestamp.", getPartitionId());
 							timestamp = System.currentTimeMillis();
 						}
 					}
 
 					lag_sec = (int) (System.currentTimeMillis() - timestamp) / 1000;
-					
-					if (lag_sec < 0) 
-					{
+
+					if (lag_sec < 0) {
 						lag_sec = 0;
 					}
 
-					if ((length - pos) < 0)
-					{
+					if ((length - pos) < 0) {
 						LOG.info("[{}] Skipping offset as length - Offset is < 0: timestamp: {}, pos: {}, length: {}", getPartitionId(), timestamp, pos, length);
 						continue;
-					}					
-					
-					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
-					{
-						path.getBoomWriter(timestamp, partitionId + "-" + offset +".bm").writeLine(timestamp, bytes, pos, length - pos, offset);
-						boomWritesMeter.mark();						
+					}
+
+					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths()) {
+						path.getBoomWriter(timestamp, partitionId + "-" + offset + ".bm").writeLine(timestamp, bytes, pos, length - pos, offset);
+						boomWritesMeter.mark();
 						boomWritesMeterTopic.mark();
 						boomWritesMeterTotal.mark();
 					}
-					
+
 					lastMessageReceivedTimestamp = System.currentTimeMillis();
 
 					/*
@@ -655,60 +554,45 @@ public class Worker implements Runnable
 					 * was ever corruption of the timestamp or if there's significant
 					 * skew in the log's time.
 					 */
-					
-					if (timestamp > maxTimestamp || maxTimestamp == -1)
-					{
-						maxTimestamp = timestamp;						
+					if (timestamp > maxTimestamp || maxTimestamp == -1) {
+						maxTimestamp = timestamp;
 					}
 
-				} 
-				catch (Exception e)
-				{
+				} catch (Exception e) {
 					LOG.error("[{}] Error processing message: ", partitionId, e);
 					LOG.info("[{}] Deleting all tmp files", partitionId);
-					
-					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
-					{
+
+					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths()) {
 						path.abortAll();
-					}								
-					
+					}
+
 					return;
 				}
 			}
-			
+
 			LOG.info("[{}] KaBoom client shutting down and closing all output files.", getPartitionId());
-			
-			for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths())
-			{
+
+			for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths()) {
 				path.closeAll();
-			}			
-			
-			try
-			{
+			}
+
+			try {
 				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.", partitionId, offset, maxTimestamp);
-				
 				storeOffset();
 				storeOffsetTimestamp();
-			} 
-			catch (Exception e)
-			{
+			} catch (Exception e) {
 				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper", partitionId, offset, maxTimestamp, e);
 			}
 
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagGaugeName);
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagSecGaugeName);
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(msgWrittenGaugeName);
-			
+
 			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})", getPartitionId(), messagesWritten, offset);
-		}
-		catch (Exception e) 
-		{
+		} catch (Exception e) {
 			LOG.error("[{}] An exception occured while setting up this worker thread giving up and returing => error : {} ", getPartitionId(), e);
-		}
-		finally
-		{
-			synchronized (workersLock)
-			{
+		} finally {
+			synchronized (workersLock) {
 				workers.remove(this);
 			}
 		}
@@ -717,11 +601,11 @@ public class Worker implements Runnable
 	public void storeOffset() throws Exception {
 		storeOffset(offset);
 	}
-	
+
 	public void storeOffset(long valueToStore) throws Exception {
 		if (curator.checkExists().forPath(zkPath) == null) {
 			curator.create().creatingParentsIfNeeded()
-				 .withMode(CreateMode.PERSISTENT).forPath(zkPath, Converter.getBytes(valueToStore));			
+				 .withMode(CreateMode.PERSISTENT).forPath(zkPath, Converter.getBytes(valueToStore));
 			LOG.info("[{}] new ZK path created to write offset {} to {}", partitionId, valueToStore, zkPath);
 		} else {
 			curator.setData().forPath(zkPath, Converter.getBytes(valueToStore));
@@ -732,62 +616,51 @@ public class Worker implements Runnable
 	/*
 	 * Get the offset in ZK, but if an override exists, perfer it instead.
 	 */
-	
-	private long getOffset() throws Exception
-	{
-		if (curator.checkExists().forPath(zkPath) == null)
-		{
+	private long getOffset() throws Exception {
+		if (curator.checkExists().forPath(zkPath) == null) {
 			LOG.info("[{}] offset path {} does not exist, returning zero", partitionId, zkPath);
 			return 0L;
-		} 
-		else
-		{
-			long zkOffset = Converter.longFromBytes(curator.getData().forPath(zkPath), 0);			
-			
+		} else {
+			long zkOffset = Converter.longFromBytes(curator.getData().forPath(zkPath), 0);
+
 			LOG.info("[{}] offset {} found in path {}", partitionId, zkOffset, zkPath);
-			
-			if (curator.checkExists().forPath(zkPath_offSetOverride) != null)
-			{
+
+			if (curator.checkExists().forPath(zkPath_offSetOverride) != null) {
 				long zkOffsetOverride = Converter.longFromBytes(curator.getData().forPath(zkPath_offSetOverride), 0);
 
-				if (config.getRunningConfig().getAllowOffsetOverrides())
-				{
-					LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}", 
+				if (config.getRunningConfig().getAllowOffsetOverrides()) {
+					LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}",
 						 this.getPartitionId(), zkOffset, zkOffsetOverride, config.getRunningConfig().getAllowOffsetOverrides());
-					
 					curator.delete().forPath(zkPath_offSetOverride);
-					
 					LOG.info("{} successfully deleted offset override ZK path: {}", this.getPartitionId(), zkPath_offSetOverride);
-					
 					return zkOffsetOverride;
-				} 
-				else
-				{
-					LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}", 
+				} else {
+					LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}",
 						 this.getPartitionId(), zkOffset, zkOffsetOverride, config.getRunningConfig().getAllowOffsetOverrides());
 				}
 			}
-
 			return zkOffset;
 		}
 	}
-	
+
 	/**
 	 * Stores to ZK and resets the maximum timestamp the worker has parsed
+	 *
 	 * @throws Exception
 	 */
 	public void storeOffsetTimestamp() throws Exception {
 		storeOffsetTimestamp(maxTimestamp);
 		maxTimestamp = -1;
 	}
-	
+
 	/**
-	 * Stores a specific timestamp to ZK and doesn't reset 
+	 * Stores a specific timestamp to ZK and doesn't reset
+	 *
 	 * @param timestampToStore
 	 * @throws Exception
 	 */
 	public void storeOffsetTimestamp(long timestampToStore) throws Exception {
-		if (timestampToStore == -1) 		{
+		if (timestampToStore == -1) {
 			LOG.info("Partition {} has a -1 offsetTime and will not be written to ZK", partitionId);
 			return;
 		}
@@ -796,13 +669,12 @@ public class Worker implements Runnable
 			curator.create().creatingParentsIfNeeded()
 				 .withMode(CreateMode.PERSISTENT)
 				 .forPath(zkPath_offSetTimestamp, Converter.getBytes(timestampToStore));
-		} 
-		else {
+		} else {
 			curator.setData().forPath(zkPath_offSetTimestamp,
 				 Converter.getBytes(timestampToStore));
 		}
-		
-		LOG.info("[{}] stored offset timestamp in ZK {} ({})", partitionId, maxTimestamp, dateString(maxTimestamp));				
+
+		LOG.info("[{}] stored offset timestamp in ZK {} ({})", partitionId, maxTimestamp, dateString(maxTimestamp));
 	}
 
 	/**
@@ -811,89 +683,73 @@ public class Worker implements Runnable
 	 * @return the offset timestamp
 	 * @throws Exception
 	 */
-	
-	private long getOffsetTimestamp() throws Exception
-	{
-		if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null)
-		{
+	private long getOffsetTimestamp() throws Exception {
+		if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
 			return 0L;
-		} 
-		else
-		{
+		} else {
 			return Converter.longFromBytes(curator.getData().forPath(zkPath_offSetTimestamp), 0);
 		}
 	}
 
-	public void stop()
-	{
+	public void stop() {
 		LOG.info("[{}] Stop request received", partitionId);
 		stopping = true;
 	}
 
-	public void kill()
-	{
+	public void kill() {
 		LOG.info("[{}] Kill request received", partitionId);
 		killed = true;
 	}
 
-	public void ping()
-	{
+	public void ping() {
 		this.pinged = true;
 		this.pong = false;
 	}
 
-	public long getLag()
-	{
+	public long getLag() {
 		return lag;
 	}
 
-	public int getLagSec()
-	{
+	public int getLagSec() {
 		return lag_sec;
 	}
 
-	public long getMsgWrittenPerSec()
-	{
+	public long getMsgWrittenPerSec() {
 		return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
 	}
 
 	/**
 	 * @return the hdfsOutputPaths
 	 */
-	public ArrayList<TimeBasedHdfsOutputPath> getHdfsOutputPaths()
-	{
+	public ArrayList<TimeBasedHdfsOutputPath> getHdfsOutputPaths() {
 		return hdfsOutputPaths;
 	}
 
 	/**
 	 * @return the partitionId
 	 */
-	public String getPartitionId()
-	{
+	public String getPartitionId() {
 		return partitionId;
 	}
 
 	/**
 	 * @return the topic
 	 */
-	public String getTopic()
-	{
+	public String getTopic() {
 		return topic;
 	}
 
 	/**
 	 * @return the partition
 	 */
-	public int getPartition()
-	{
+	public int getPartition() {
 		return partition;
 	}
 
 	/**
 	 * @param partition the partition to set
 	 */
-	public void setPartition(int partition)
-	{
+	public void setPartition(int partition) {
 		this.partition = partition;
 	}
 
@@ -910,4 +766,5 @@ public class Worker implements Runnable
 	public Boolean getPong() {
 		return pong;
 	}
+
 }
