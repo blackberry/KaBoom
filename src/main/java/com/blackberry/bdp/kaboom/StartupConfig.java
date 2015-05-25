@@ -135,7 +135,7 @@ public class StartupConfig {
 		nodeCache.getListenable().addListener(new NodeCacheListener() {
 			@Override
 			public void nodeChanged() throws Exception {
-				LOG.info("The running configuration has changed in Zoo Keeper");
+				LOG.info("The running configuration has changed in ZooKeeper");
 				runningConfig.reload();
 			}
 		});

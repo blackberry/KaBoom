@@ -71,7 +71,7 @@ public class FastBoomWriter
 	private final ByteBuffer longBuffer = ByteBuffer.wrap(longBytes);
 
 	private long lastKafkaOffset;
-	private long lastMessageTimestamp;
+	private long maxMessageTimestamp;
 	
 	private static final byte[] MAGIC_NUMBER = new byte[]
 	{
@@ -376,7 +376,9 @@ public class FastBoomWriter
 				 logBlockBuffer.position(), length);
 		}
 		lastKafkaOffset = kafkaOffset;
-		lastMessageTimestamp = timestamp;
+		if (timestamp > maxMessageTimestamp) {
+			maxMessageTimestamp = timestamp;
+		}		
 		logLineCount++;
 		periodicHdfsFlushPoll();
 	}
@@ -551,10 +553,10 @@ public class FastBoomWriter
 	}
 
 	/**
-	 * @return the lastMessageTimestamp
+	 * @return the maxMessageTimestamp
 	 */
-	public long getLastMessageTimestamp() {
-		return lastMessageTimestamp;
+	public long getMaxMessageTimestamp() {
+		return maxMessageTimestamp;
 	}
 
 }

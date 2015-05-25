@@ -83,6 +83,7 @@ public class Worker implements Runnable {
 	private long sprintStart;
 	private long sprintEnd;
 	private KaBoomTopicConfig topicConfig;
+	private int sprintNumber = 1;
 
 	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()

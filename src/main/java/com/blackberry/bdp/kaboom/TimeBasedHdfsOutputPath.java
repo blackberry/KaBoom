@@ -1,7 +1,17 @@
 /*
- * To change this license header, choose License Headers in Project Properties.
- * To change this dirTemplate file, choose Tools | Templates
- * and open the dirTemplate in the editor.
+ * Copyright 2014 BlackBerry, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package com.blackberry.bdp.kaboom;
 
@@ -37,7 +47,6 @@ public class TimeBasedHdfsOutputPath
 	private int partition;
 	private final FileSystem fileSystem;
 	private String partitionId = "unknown-partitionId";
-	private long lastPeriodicClosePollTime  = System.currentTimeMillis();
 
 	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();
 	
@@ -66,18 +75,18 @@ public class TimeBasedHdfsOutputPath
 		return strDate;		
 	}	
 	
-	public FastBoomWriter getBoomWriter(long ts, String filename) throws IOException, Exception
+	public FastBoomWriter getBoomWriter(int sprintNumber, long ts, String filename) throws IOException, Exception
 	{		
 		//closeOffHour();		
-		reusableRequestedStartTime = ts - ts % (this.topicConfig.getSprintDurationSeconds() * 1000);
+		reusableRequestedStartTime = ts - ts % (this.config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000);
 		reusableRequestedOutputFile = outputFileMap.get(reusableRequestedStartTime);
 		
 		if (reusableRequestedOutputFile == null)
 		{			
 			reusableRequestedOutputFile = new OutputFile(
+				 sprintNumber,
 				 filename, 
-				 reusableRequestedStartTime, 
-				 System.currentTimeMillis() + this.topicConfig.getSprintDurationSeconds() * 1000, 
+				 reusableRequestedStartTime, 				 
 				 config.getRunningConfig().getUseTempOpenFileDirectory());
 			
 			outputFileMap.put(reusableRequestedStartTime, reusableRequestedOutputFile);
@@ -95,20 +104,16 @@ public class TimeBasedHdfsOutputPath
 				 * a new boom writer will be created that isn't the oldest.				
 				 */
 				if (timestampKeys.first() != reusableRequestedStartTime) {
-					try
-					{
+					try {
 						oldestOutputFile.close();
 						kaboomWorker.storeOffset(oldestboomWriter.getLastKafkaOffset());
 						kaboomWorker.storeOffsetTimestamp(oldestboomWriter.getLastMessageTimestamp());
-						outputFileMap.remove(timestampKeys.first());
-						
+						outputFileMap.remove(timestampKeys.first());						
 						LOG.info("[{}]  over max open boom file limit ({}/{}) oldest boom file closed: {}",
 							 partitionId,
 							 outputFileMap.size(),
 							 config.getRunningConfig().getMaxOpenBoomFilesPerPartition(),
-							 outputFileMap.get(timestampKeys.first()).openFilePath);
-
-						
+							 outputFileMap.get(timestampKeys.first()).openFilePath);						
 					} catch (Exception e) {
 						LOG.error("[{}] Failed to close off oldest boom writer: ", partitionId, e);
 					}
@@ -140,36 +145,51 @@ public class TimeBasedHdfsOutputPath
 		}
 	}
 	
-	public void closeOffHour(long hourStartTimestamp)
+	public void closeOffSprint(int sprintNumber) throws Exception
 	{
-		if (lastPeriodicClosePollTime > System.currentTimeMillis() - config.getRunningConfig().getPeriodicFileCloseInterval())
-		{
-			return;
-		}
-		
 		Iterator<Map. Entry<Long,OutputFile>> iter = outputFileMap.entrySet().iterator();
+		long maxOffset = -1;
+		long maxTimestamp = -1;
+		int closedFiles = 0;
 		
-		while (iter.hasNext())
-		{
+		while (iter.hasNext()) {
 			Map.Entry<Long, OutputFile> entry = iter.next();
-
-			if (entry.getValue().closeTime < (System.currentTimeMillis() - config.getRunningConfig().getFileCloseGraceTimeAfterExpiredMs()))
-			{
-				try
-				{					
+			if (entry.getValue().sprintNumber == sprintNumber) {
+				try {					
 					entry.getValue().close();
-					kaboomWorker.storeOffset(entry.getValue().getBoomWriter().getLastKafkaOffset());
-					kaboomWorker.storeOffsetTimestamp(entry.getValue().getBoomWriter().getLastMessageTimestamp());
-					LOG.info("[{}] expired open file has been closed: {}  ({} files still open): {}", partitionId, entry.getValue().openFilePath, outputFileMap.size());					
+					if (entry.getValue().getBoomWriter().getLastKafkaOffset() > maxOffset) {
+						maxOffset = entry.getValue().getBoomWriter().getLastKafkaOffset();
+					}
+					if (entry.getValue().getBoomWriter().getMaxMessageTimestamp() > maxTimestamp) {
+						maxTimestamp = entry.getValue().getBoomWriter().getMaxMessageTimestamp();
+					}
+					closedFiles++;
+					LOG.info("[{}] file closed: {}  ({} files still open): {}", partitionId, entry.getValue().openFilePath, outputFileMap.size());
 					iter.remove();
 				} catch (Exception e) {
 					LOG.error("Error closing output path {}", this, e);
+					throw e;
 				}
-			}
-			LOG.trace("[{}] {} does not expire until {}", partitionId, entry.getValue().openFilePath, dateString(entry.getValue().closeTime));
+			}			
 		}
 		
-		lastPeriodicClosePollTime = System.currentTimeMillis();
+		try {
+			LOG.info("[{}] Closed a total of {} files", partitionId, closedFiles);			
+			if (maxOffset > -1) {				
+				kaboomWorker.storeOffset(maxOffset);
+				LOG.info("[{}] Sprint number {} was finished with a max offet {} written to ZK", partitionId, sprintNumber, maxOffset);
+			} else {
+				LOG.warn("[{}] Sprint {} finished and the max offset is {}", partitionId, sprintNumber, maxOffset);
+			}
+			if (maxOffset > -1) {				
+				kaboomWorker.storeOffsetTimestamp(maxTimestamp);
+				LOG.info("[{}] Sprint number {} was finished with a max offet {} written to ZK", partitionId, maxOffset);
+			} else {
+				LOG.warn("[{}] Sprint {} finished and the max timestamp is {}", partitionId, sprintNumber, maxTimestamp);
+			}
+		} catch (Exception e) {
+			LOG.error("[{}] an error occured closing off sprint {}", partitionId, sprintNumber, e);
+		}
 	}
 
 	/**
@@ -216,21 +236,20 @@ public class TimeBasedHdfsOutputPath
 	{
 		private String dir;
 		private String openFileDirectory;
-
+		private int sprintNumber;
 		private String filename;
 		private Path finalPath;
 		private Path openFilePath;
 		private FastBoomWriter boomWriter;
 		private HdfsDataOutputStream hdfsDataOut;
-		private Long startTime;
-		private Long closeTime;
+		private Long startTime;		
 		private Boolean useTempOpenFileDir;
 
-		public OutputFile(String filename, Long startTime, Long closeTime, Boolean useTempOpenFileDir)
+		public OutputFile(int sprintNumber, String filename, Long startTime, Boolean useTempOpenFileDir)
 		{
+			this.sprintNumber = sprintNumber;
 			this.filename = filename;
-			this.startTime = startTime;
-			this.closeTime = closeTime;
+			this.startTime = startTime;			
 			this.useTempOpenFileDir = useTempOpenFileDir;
 			
 			dir = Converter.timestampTemplateBuilder(startTime, topicConfig.getDefaultDirectory());			
@@ -294,8 +313,7 @@ public class TimeBasedHdfsOutputPath
 				 getClass().getName(), 
 				 this.openFilePath, 
 				 this.finalPath,
-				 this.startTime, dateString(this.startTime),
-				 this.closeTime, dateString(this.closeTime));
+				 this.startTime, dateString(this.startTime));
 		}		
 
 		public void abort()

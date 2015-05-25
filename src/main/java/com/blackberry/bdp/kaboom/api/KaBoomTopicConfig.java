@@ -32,8 +32,7 @@ public class KaBoomTopicConfig extends ZkVersioned{
 	@Getter @Setter @VersionedAttribute public String id = "<NEW TOPIC NAME";
 	@Getter @Setter @VersionedAttribute public String hdfsRootDir = "/path/to/some/dir";
 	@Getter @Setter @VersionedAttribute public String proxyUser = "<SOMEUSER>";
-	@Getter @Setter @VersionedAttribute public String defaultDirectory = "data";
-	@Getter @Setter @VersionedAttribute public long sprintDurationSeconds = 60 * 60;
+	@Getter @Setter @VersionedAttribute public String defaultDirectory = "data";	
 	@Getter @Setter @VersionedAttribute public ArrayList<TopicFilter> filterSet = new ArrayList<>();
 	
 	/**

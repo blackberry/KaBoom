@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 dariens.
+ * Copyright 2014 BlackBerry, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,14 +45,13 @@ public class RunningConfig extends ZkVersioned{
 	@Getter @Setter @VersionedAttribute public short boomFileReplicas = 3;
 	@Getter @Setter @VersionedAttribute public long boomFileBlocksize = 256 * 1024 * 1024;
 	@Getter @Setter @VersionedAttribute public String boomFileTmpPrefix = "_tmp_";
-	@Getter @Setter @VersionedAttribute public long periodicHdfsFlushInterval = 30 * 1000l;
-	@Getter @Setter @VersionedAttribute public long periodicFileCloseInterval = 60 * 1000l;	
+	@Getter @Setter @VersionedAttribute public long periodicHdfsFlushInterval = 30 * 1000l;	
 	@Getter @Setter @VersionedAttribute public long kaboomServerSleepDurationMs = 10 * 1000;
 	@Getter @Setter @VersionedAttribute public long fileCloseGraceTimeAfterExpiredMs = 30 * 1000;
 	@Getter @Setter @VersionedAttribute public long forcedZkOffsetTsUpdateMs = 10 * 60 * 1000;
 	@Getter @Setter @VersionedAttribute public String kafkaReadyFlagFilename = "_READY";
 	@Getter @Setter @VersionedAttribute public int maxOpenBoomFilesPerPartition = 5;
-	@Getter @Setter @VersionedAttribute public long workerSprintDuration = 10 * 60 * 1000;
+	@Getter @Setter @VersionedAttribute public long workerSprintDurationSeconds = 60 * 60;
 
 	/**
 	 * Instantiates a default RunningConfig without any ZK interaction
