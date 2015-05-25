@@ -52,6 +52,7 @@ public class RunningConfig extends ZkVersioned{
 	@Getter @Setter @VersionedAttribute public long forcedZkOffsetTsUpdateMs = 10 * 60 * 1000;
 	@Getter @Setter @VersionedAttribute public String kafkaReadyFlagFilename = "_READY";
 	@Getter @Setter @VersionedAttribute public int maxOpenBoomFilesPerPartition = 5;
+	@Getter @Setter @VersionedAttribute public long workerSprintDuration = 10 * 60 * 1000;
 
 	/**
 	 * Instantiates a default RunningConfig without any ZK interaction

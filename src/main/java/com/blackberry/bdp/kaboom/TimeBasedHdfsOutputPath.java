@@ -6,6 +6,7 @@
 package com.blackberry.bdp.kaboom;
 
 import com.blackberry.bdp.common.conversion.Converter;
+import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -30,13 +31,12 @@ public class TimeBasedHdfsOutputPath
 	private static final Logger LOG = LoggerFactory.getLogger(TimeBasedHdfsOutputPath.class);
 
 	private final StartupConfig config;
+	private final KaBoomTopicConfig topicConfig;
 	private Worker kaboomWorker;
 	private final String topic;
 	private int partition;
 	private final FileSystem fileSystem;
 	private String partitionId = "unknown-partitionId";
-	private final String dirTemplate;
-	private final Integer durationSeconds;	
 	private long lastPeriodicClosePollTime  = System.currentTimeMillis();
 
 	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();
@@ -50,13 +50,12 @@ public class TimeBasedHdfsOutputPath
 	private long reusableRequestedStartTime;
 	private OutputFile reusableRequestedOutputFile;
 	
-	public TimeBasedHdfsOutputPath(FileSystem fileSystem, String topic, StartupConfig kaboomConfig, String pathTemplate, Integer durationSeconds)
+	public TimeBasedHdfsOutputPath(FileSystem fileSystem, StartupConfig kaboomConfig, KaBoomTopicConfig topicConfig)
 	{
-		this.fileSystem = fileSystem;
-		this.topic = topic;
+		this.fileSystem = fileSystem;		
 		this.config = kaboomConfig;
-		this.durationSeconds = durationSeconds;
-		this.dirTemplate = pathTemplate;
+		this.topicConfig = topicConfig;
+		this.topic = topicConfig.getId();
 	}
 	
 	private static String dateString(Long ts)
@@ -69,9 +68,8 @@ public class TimeBasedHdfsOutputPath
 	
 	public FastBoomWriter getBoomWriter(long ts, String filename) throws IOException, Exception
 	{		
-		periodicCloseExpiredPoll();
-		
-		reusableRequestedStartTime = ts - ts % (this.durationSeconds * 1000);
+		//closeOffHour();		
+		reusableRequestedStartTime = ts - ts % (this.topicConfig.getSprintDurationSeconds() * 1000);
 		reusableRequestedOutputFile = outputFileMap.get(reusableRequestedStartTime);
 		
 		if (reusableRequestedOutputFile == null)
@@ -79,7 +77,7 @@ public class TimeBasedHdfsOutputPath
 			reusableRequestedOutputFile = new OutputFile(
 				 filename, 
 				 reusableRequestedStartTime, 
-				 System.currentTimeMillis() + durationSeconds * 1000, 
+				 System.currentTimeMillis() + this.topicConfig.getSprintDurationSeconds() * 1000, 
 				 config.getRunningConfig().getUseTempOpenFileDirectory());
 			
 			outputFileMap.put(reusableRequestedStartTime, reusableRequestedOutputFile);
@@ -103,6 +101,7 @@ public class TimeBasedHdfsOutputPath
 						kaboomWorker.storeOffset(oldestboomWriter.getLastKafkaOffset());
 						kaboomWorker.storeOffsetTimestamp(oldestboomWriter.getLastMessageTimestamp());
 						outputFileMap.remove(timestampKeys.first());
+						
 						LOG.info("[{}]  over max open boom file limit ({}/{}) oldest boom file closed: {}",
 							 partitionId,
 							 outputFileMap.size(),
@@ -141,7 +140,7 @@ public class TimeBasedHdfsOutputPath
 		}
 	}
 	
-	public void periodicCloseExpiredPoll()
+	public void closeOffHour(long hourStartTimestamp)
 	{
 		if (lastPeriodicClosePollTime > System.currentTimeMillis() - config.getRunningConfig().getPeriodicFileCloseInterval())
 		{
@@ -234,7 +233,7 @@ public class TimeBasedHdfsOutputPath
 			this.closeTime = closeTime;
 			this.useTempOpenFileDir = useTempOpenFileDir;
 			
-			dir = Converter.timestampTemplateBuilder(startTime, dirTemplate);			
+			dir = Converter.timestampTemplateBuilder(startTime, topicConfig.getDefaultDirectory());			
 			finalPath = new Path(dir + "/" + filename);
 			
 			openFileDirectory = dir;
@@ -348,7 +347,7 @@ public class TimeBasedHdfsOutputPath
 			{
 				boomWriter.close();
 				LOG.info("Boom writer closed for {}", openFilePath);
-				hdfsDataOut.close();	
+				hdfsDataOut.close();
 				LOG.info("Output stream closed for {}", openFilePath);
 			}
 			catch (IOException ioe)
@@ -399,8 +398,8 @@ public class TimeBasedHdfsOutputPath
 			 + "\tseconds: %s%n"
 			 + "\tpathTemplate: %s%n",
 			 getClass().getName(), 
-			 this.durationSeconds, 
-			 this.dirTemplate);
+			 this.topicConfig.getSprintDurationSeconds(), 
+			 this.topicConfig.getDefaultDirectory());
 	}
 	
 }

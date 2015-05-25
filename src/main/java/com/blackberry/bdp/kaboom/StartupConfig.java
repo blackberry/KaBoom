@@ -19,7 +19,6 @@ import java.io.InputStream;
 import java.io.IOException;
 
 import java.util.HashMap;
-import java.util.ArrayList;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -36,6 +35,7 @@ import org.apache.curator.retry.ExponentialBackoffRetry;
 import com.blackberry.bdp.common.props.Parser;
 
 import com.blackberry.bdp.kaboom.api.RunningConfig;
+import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.cache.NodeCache;
@@ -76,9 +76,9 @@ public class StartupConfig {
 	private final String runningConfigZkPath;
 
 	private final Map<String, String> topicToProxyUser = new HashMap<>();
-	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
-	private final Map<String, String> topicToHdfsRootDir = new HashMap<>();
+	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();	
 	private final Map<String, Boolean> topicToSupportedStatus = new HashMap<>();
+	private final Map<String, KaBoomTopicConfig> topicConfigs = new HashMap<>();
 
 	/**
 	 * POSIX style NONE("---"), EXECUTE("--x"), WRITE("-w-"), WRITE_EXECUTE("-wx"), READ("r--"), READ_EXECUTE("r-x"), READ_WRITE("rw-"), ALL("rwx");
@@ -104,10 +104,6 @@ public class StartupConfig {
 			LOG.debug("topicToProxyUser: {} -> {}", entry.getKey(), entry.getValue());
 		}
 
-		for (Map.Entry<String, String> entry : getTopicToHdfsRoot().entrySet()) {
-			LOG.debug("topicToKrFlagPath: {} -> {}", entry.getKey(), entry.getValue());
-		}
-
 		LOG.info(" *** end dumping configuration *** ");
 	}
 
@@ -119,9 +115,7 @@ public class StartupConfig {
 		/**
 		 * Static configuration items: read once and remain fixed until Kaboom is restarted
 		 */
-		hadoopConfiguration = buildHadoopConfiguration();			
-		
-
+		hadoopConfiguration = buildHadoopConfiguration();
 		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));
@@ -134,13 +128,10 @@ public class StartupConfig {
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
 		runningConfigZkPath = propsParser.parseString("kaboom.runningConfig.zkPath", "/kaboom/config");
-		
 		curator = buildCuratorFramework();
-
 		runningConfig = new RunningConfig(this);
 
 		final NodeCache nodeCache = new NodeCache(curator, runningConfigZkPath);
-
 		nodeCache.getListenable().addListener(new NodeCacheListener() {
 			@Override
 			public void nodeChanged() throws Exception {
@@ -148,146 +139,64 @@ public class StartupConfig {
 				runningConfig.reload();
 			}
 		});
-		
 		nodeCache.start();
-
-		/**
-		 * Build the maps we need to associate configuration
+		
+		/** 
+		 * Get all the topic configurations and build the following maps while we're at it 
+		 *	- topicToProxyUser 
+		 *	- topicToSupportedStatus
 		 */
-		mapTopicsToSupportedStatus();
-		mapTopicToProxyUser(props);
-		mapProxyUserToHadoopFileSystem();
-	}
-
-	private void mapTopicsToSupportedStatus() {
-		Pattern topicPathPattern = Pattern.compile("^topic\\.([^\\\\.]+)\\.hdfsRootDir");
-
-		for (Map.Entry<Object, Object> e : props.entrySet()) {
-			Matcher m = topicPathPattern.matcher(e.getKey().toString());
-			if (m.matches()) {
-				String topic = m.group(1);
-
-				if (!getTopicToSupportedStatus().containsKey(topic)) {
-					getTopicToSupportedStatus().put(topic, true);
+		for(final KaBoomTopicConfig topicConfig : KaBoomTopicConfig.getAll(curator, "/kaboom/topics")) {
+			topicConfigs.put(topicConfig.getId(), topicConfig);
+			topicToProxyUser.put(topicConfig.getId(), topicConfig.getProxyUser());			
+			topicToSupportedStatus.put(topicConfig.getId(), true);
+			authenticatedFsForProxyUser(topicConfig.getId());
+			final NodeCache nodeCacheTopic = new NodeCache(curator, "/kaboom/topics/" + topicConfig.getId());
+			nodeCacheTopic.getListenable().addListener(new NodeCacheListener() {
+				@Override
+				public void nodeChanged() throws Exception {
+					LOG.info("The topic configuration has changed in ZooKeeper");
+					topicConfig.reload();
 				}
-
-				String hdfsRootDir = hadoopUrlPath + props.getProperty(String.format("topic.%s.hdfsRootDir", topic));
-
-				//if (!topicToHdfsRootDir.containsKey(topic))
-				//{					
-				//	topicToHdfsRootDir.put(topic, hdfsRootDir);
-				//}
-			}
+			});
+			nodeCacheTopic.start();
 		}
 	}
 
 	/**
-	 * Builds the topic to an HDFS paths Map
-	 *
-	 * Sample property definition:
-	 *
-	 * topic.devtest-test1.hdfsRootDir=hdfs://hadoop.log82.bblabs/service/82/devtest/logs/%y%M%d/%H/test1 topic.devtest-test1.proxy.user=dariens topic.devtest-test1.hdfsDir.1=incoming/%l topic.devtest-test1.hdfsDir.2=hourly_temp topic.devtest-test1.hdfsDir.2.duration=3600
-	 *
-	 * @param topic
-	 * @return ArrayList<TimeBasedHdfsOutputPath>
-	 *
+	 * Builds the proxyUserToFileSystem mapping
+	 * @param proxyUser
+	 * @return 
 	 */
-	public ArrayList<TimeBasedHdfsOutputPath> getHdfsPathsForTopic(String topic) {
-		ArrayList<TimeBasedHdfsOutputPath> paths = new ArrayList<>();
-
-		Pattern topicPathPattern = Pattern.compile("^topic\\." + topic + "\\.hdfsDir\\.(\\d+)");
-
-		for (Map.Entry<Object, Object> e : props.entrySet()) {
-			Matcher m = topicPathPattern.matcher(e.getKey().toString());
-			if (m.matches()) {
-				String pathNumber = m.group(1);
-
-				if (!props.containsKey(String.format("topic.%s.hdfsRootDir", topic))) {
-					LOG.error("Topic {} configuration property missing", String.format("topic.%s.hdfsRootDir", topic));
-					continue;
-				}
-
-				String hdfsRootDir = hadoopUrlPath + props.getProperty(String.format("topic.%s.hdfsRootDir", topic));
-				String directory = String.format("%s/%s", hdfsRootDir, e.getValue().toString());
-				String durationProperty = String.format("topic.%s.hdfsDir.%d.duration", topic, Integer.parseInt(pathNumber));
-				Integer duration = Integer.parseInt(props.getProperty(durationProperty, "180"));
-
-				LOG.debug("HDFS output path property matched topic: {} path number: {} duration: {} directory: {}", topic, pathNumber, duration, directory);
-
-				TimeBasedHdfsOutputPath path = new TimeBasedHdfsOutputPath(
-					 getProxyUserToFileSystem().get(topicToProxyUser.get(topic)),
-					 topic,
-					 this,
-					 directory,
-					 duration);
-
-				paths.add(path);
-
-				if (!getTopicToSupportedStatus().containsKey(topic)) {
-					getTopicToSupportedStatus().put(topic, true);
-				}
-			}
-		}
-
-		return paths;
-	}
-
-	/**
-	 * Builds the topic to proxy users map
-	 *
-	 * @param props Properties to parse for topics and users
-	 */
-	private void mapTopicToProxyUser(Properties props) {
-		Pattern topicProxyUsersPattern = Pattern.compile("^topic\\.([^\\.]+)\\.proxy.user$");
-
-		for (Map.Entry<Object, Object> e : props.entrySet()) {
-			String proxyUser = e.getValue().toString();
-
-			Matcher m = topicProxyUsersPattern.matcher(e.getKey().toString());
-			if (m.matches()) {
-				topicToProxyUser.put(m.group(1), proxyUser);
-			}
-		}
-	}
-
-	/**
-	 * Builds the proxy user to hadoop file system map
-	 */
-	private void mapProxyUserToHadoopFileSystem() {
+	private FileSystem authenticatedFsForProxyUser(final String proxyUser) {
 		Authenticator.getInstance().setKerbConfPrincipal(getKerberosPrincipal());
 		Authenticator.getInstance().setKerbKeytab(getKerberosKeytab());
-
-		for (Map.Entry<String, String> entry : topicToProxyUser.entrySet()) {
-			final String proxyUser = entry.getValue();
-
-			if (getProxyUserToFileSystem().containsKey(proxyUser)) {
-				continue;
-			}
-
-			try {
+		if (proxyUserToFileSystem.containsKey(proxyUser)) {
+			return proxyUserToFileSystem.get(proxyUser);
+		} else {
+			try {				
 				LOG.info("Attempting to create file system {} for {}", hadoopUrlPath, proxyUser);
-				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>() {
-					@Override
+				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>() {					
+					@Override					
 					public Void run() throws Exception {
 						synchronized (fsLock) {
 							try {
 								FileSystem fs = hadoopUrlPath.getFileSystem(hadoopConfiguration);
-								getProxyUserToFileSystem().put(proxyUser, fs);
-
-								LOG.debug("Opening {} for proxy user {}", hadoopUrlPath, proxyUser);
+								proxyUserToFileSystem.put(proxyUser, fs);
+								LOG.debug("Opening {} for proxy user {}", hadoopUrlPath, proxyUser);								
 							} catch (IOException ioe) {
-								LOG.error("Error getting file system {} for proxy user {}", hadoopUrlPath, ioe);
+								LOG.error("Error getting file system {} for proxy user {}", hadoopUrlPath, proxyUser, ioe);
+								throw ioe;
 							}
 						}
-
 						return null;
 					}
-
 				});
-			} catch (Exception e) {
+			} catch (IOException | InterruptedException e) {
 				LOG.error("Error creating file.", e);
-			}
-		}
+			}			
+			return proxyUserToFileSystem.get(proxyUser);
+		}		
 	}
 
 	/**
@@ -354,13 +263,9 @@ public class StartupConfig {
 	 */
 	private CuratorFramework buildCuratorFramework() {
 		RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
-
 		LOG.info("attempting to connect to ZK with connection string {}", kaboomZkConnectionString);
-
 		String[] connStringAndPrefix = getKaboomZkConnectionString().split("/", 2);
-
 		CuratorFramework newCurator;
-
 		if (connStringAndPrefix.length == 1) {
 			newCurator = CuratorFrameworkFactory.newClient(kaboomZkConnectionString, retryPolicy);
 		} else {
@@ -369,7 +274,6 @@ public class StartupConfig {
 				 .connectString(connStringAndPrefix[0]).retryPolicy(retryPolicy)
 				 .build();
 		}
-
 		newCurator.start();
 		return newCurator;
 	}
@@ -508,13 +412,6 @@ public class StartupConfig {
 	}
 
 	/**
-	 * @return the topicToHdfsRootDir
-	 */
-	public Map<String, String> getTopicToHdfsRoot() {
-		return topicToHdfsRootDir;
-	}
-
-	/**
 	 * @return the hadoopUrlPath
 	 */
 	public Path getHadoopUrlPath() {
@@ -550,13 +447,6 @@ public class StartupConfig {
 	}
 
 	/**
-	 * @return the proxyUserToFileSystem
-	 */
-	public Map<String, FileSystem> getProxyUserToFileSystem() {
-		return proxyUserToFileSystem;
-	}
-
-	/**
 	 * @return the consumerConfiguration
 	 */
 	public ConsumerConfiguration getConsumerConfiguration() {
@@ -575,6 +465,14 @@ public class StartupConfig {
 	 */
 	public String getRunningConfigZkPath() {
 		return runningConfigZkPath;
+	}
+	
+	public KaBoomTopicConfig getTopicConfig(String topicName) {
+		return topicConfigs.get(topicName);
+	}
+	
+	public FileSystem getTopicFileSystem(String topicName) {
+		return proxyUserToFileSystem.get(topicName);
 	}
 
 }

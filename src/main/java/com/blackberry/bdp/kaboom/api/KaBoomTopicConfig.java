@@ -32,6 +32,8 @@ public class KaBoomTopicConfig extends ZkVersioned{
 	@Getter @Setter @VersionedAttribute public String id = "<NEW TOPIC NAME";
 	@Getter @Setter @VersionedAttribute public String hdfsRootDir = "/path/to/some/dir";
 	@Getter @Setter @VersionedAttribute public String proxyUser = "<SOMEUSER>";
+	@Getter @Setter @VersionedAttribute public String defaultDirectory = "data";
+	@Getter @Setter @VersionedAttribute public long sprintDurationSeconds = 60 * 60;
 	@Getter @Setter @VersionedAttribute public ArrayList<TopicFilter> filterSet = new ArrayList<>();
 	
 	/**
@@ -87,6 +89,7 @@ public class KaBoomTopicConfig extends ZkVersioned{
 				LOG.info("Attempt to retrieve {} with {}", KaBoomTopicConfig.class, new String(jsonBytes));		
 				KaBoomTopicConfig config = mapper.readValue(jsonBytes, KaBoomTopicConfig.class);
 				config.setVersion(configStat.getVersion());
+				config.setZkPath(configPath);
 				config.id = topicName;
 				topicConfigs.add(config);
 			} else {

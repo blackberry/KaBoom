@@ -24,8 +24,8 @@ import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import com.blackberry.bdp.common.conversion.Converter;
-
 import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 import com.blackberry.bdp.krackle.consumer.Consumer;
 
@@ -46,7 +46,6 @@ public class Worker implements Runnable {
 	}
 
 	private String partitionId;
-
 	private Consumer consumer;
 	private long offset;
 	private long lowerOffsetsReceived = 0;
@@ -55,42 +54,35 @@ public class Worker implements Runnable {
 	private long lastMessageReceivedTimestamp = -1;
 	private long lastForcedZkOffsetTimestampStore = -1;
 	private boolean stopping = false;
-
 	private String hostname;
 	private StartupConfig config;
-
 	private CuratorFramework curator;
 	private static final String ZK_ROOT = "/kaboom";
 	private String zkPath;
 	private String zkPath_offSetTimestamp;
 	private String zkPath_offSetOverride;
-
 	private String topic;
 	private int partition;
-
 	private long startTime;
-
 	private long lag = 0;
 	private int lag_sec = 0;
 	private long messagesWritten = 0;
-
 	private String lagGaugeName;
 	private String lagSecGaugeName;
 	private String msgWrittenGaugeName;
 	private String lowerOffsetsGaugeName;
-
 	private Meter boomWritesMeter;
 	private Meter boomWritesMeterTopic;
 	private Meter boomWritesMeterTotal;
-
-	private ArrayList<TimeBasedHdfsOutputPath> hdfsOutputPaths;
-
+	private TimeBasedHdfsOutputPath hdfsOutputPath;
 	private static Set<Worker> workers = new HashSet<>();
 	private static final Object workersLock = new Object();
-
 	private Boolean pinged = false;
 	private Boolean pong = false;
 	private Boolean killed = false;
+	private long sprintStart;
+	private long sprintEnd;
+	private KaBoomTopicConfig topicConfig;
 
 	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
@@ -232,7 +224,6 @@ public class Worker implements Runnable {
 					 }
 					 return sumMsgWritten;
 				 }
-
 			 });
 	}
 
@@ -243,19 +234,21 @@ public class Worker implements Runnable {
 		this.partition = partition;
 		this.startTime = System.currentTimeMillis();
 		this.messagesWritten = 0;
-		this.hdfsOutputPaths = config.getHdfsPathsForTopic(topic);
+		this.topicConfig = KaBoomTopicConfig.get(config.getCurator(), ZK_ROOT + "/topics/" + topic);		
 		this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
 		this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
+		
+		this.hdfsOutputPath = new TimeBasedHdfsOutputPath(
+			 config.getTopicFileSystem(topic),
+			 config,
+			 topicConfig);
 
 		partitionId = topic + "-" + partition;
-
-		LOG.info("Worker instantiated for {} and configured for {} output paths", partitionId, hdfsOutputPaths.size());
-
-		for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths) {
-			outputPath.setPartition(partition);
-			outputPath.setPartitionId(partitionId);
-			LOG.info("\t {} {} => {}", config.getKaboomId(), partitionId, outputPath);
-		}
+		hdfsOutputPath.setPartition(partition);
+		hdfsOutputPath.setPartitionId(partitionId);		
+		
+		LOG.info("\t {} {} => {}", config.getKaboomId(), partitionId, hdfsOutputPath);
+		LOG.info("Worker instantiated for {} and configured", partitionId);
 
 		this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
 
@@ -335,10 +328,7 @@ public class Worker implements Runnable {
 	@Override
 	public void run() {
 		try {
-			for (TimeBasedHdfsOutputPath outputPath : hdfsOutputPaths) {
-				outputPath.setKaboomWorker(this);
-			}
-
+			hdfsOutputPath.setKaboomWorker(this);
 			zkPath = getZK_ROOT() + "/topics/" + getTopic() + "/" + getPartition();
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
 			zkPath_offSetOverride = zkPath + "/offset_override";
@@ -374,7 +364,6 @@ public class Worker implements Runnable {
 			PriParser pri = new PriParser();
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();
-
 			while (stopping == false) {
 				try {
 					if (pinged) {
@@ -383,6 +372,15 @@ public class Worker implements Runnable {
 					if (killed || Thread.interrupted()) {
 						throw new Exception("A kill request/interrupt has been received");
 					}
+					if (System.currentTimeMillis() 
+						 > sprintEnd + config.getRunningConfig().getFileCloseGraceTimeAfterExpiredMs()) {
+						/**
+						 * It's time to ask TimeBasedHdfsOutputPath to close off all the files that were 
+						 * opened during the last sprint.  						 
+						 */
+						
+					}
+					
 					length = consumer.getMessage(bytes, 0, bytes.length);
 					if (length == -1) {
 						/**
@@ -463,7 +461,7 @@ public class Worker implements Runnable {
 						}
 					}
 
-					messagesWritten += hdfsOutputPaths.size();
+					messagesWritten++;
 					offset = consumer.getNextOffset();
 					lag = consumer.getHighWaterMark() - offset;
 
@@ -538,13 +536,10 @@ public class Worker implements Runnable {
 						continue;
 					}
 
-					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths()) {
-						path.getBoomWriter(timestamp, partitionId + "-" + offset + ".bm").writeLine(timestamp, bytes, pos, length - pos, offset);
-						boomWritesMeter.mark();
-						boomWritesMeterTopic.mark();
-						boomWritesMeterTotal.mark();
-					}
-
+					hdfsOutputPath.getBoomWriter(timestamp, partitionId + "-" + offset + ".bm").writeLine(timestamp, bytes, pos, length - pos, offset);
+					boomWritesMeter.mark();
+					boomWritesMeterTopic.mark();
+					boomWritesMeterTotal.mark();
 					lastMessageReceivedTimestamp = System.currentTimeMillis();
 
 					/*
@@ -557,24 +552,21 @@ public class Worker implements Runnable {
 					if (timestamp > maxTimestamp || maxTimestamp == -1) {
 						maxTimestamp = timestamp;
 					}
-
 				} catch (Exception e) {
 					LOG.error("[{}] Error processing message: ", partitionId, e);
-					LOG.info("[{}] Deleting all tmp files", partitionId);
-
-					for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths()) {
-						path.abortAll();
-					}
-
+					LOG.info("[{}] Calling abort on {}", partitionId, hdfsOutputPath);
+					hdfsOutputPath.abortAll();					
 					return;
 				}
 			}
 
 			LOG.info("[{}] KaBoom client shutting down and closing all output files.", getPartitionId());
 
-			for (TimeBasedHdfsOutputPath path : getHdfsOutputPaths()) {
-				path.closeAll();
-			}
+			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagGaugeName);
+			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagSecGaugeName);
+			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(msgWrittenGaugeName);
+
+			hdfsOutputPath.closeAll();
 
 			try {
 				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.", partitionId, offset, maxTimestamp);
@@ -583,14 +575,9 @@ public class Worker implements Runnable {
 			} catch (Exception e) {
 				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper", partitionId, offset, maxTimestamp, e);
 			}
-
-			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagGaugeName);
-			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagSecGaugeName);
-			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(msgWrittenGaugeName);
-
 			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})", getPartitionId(), messagesWritten, offset);
 		} catch (Exception e) {
-			LOG.error("[{}] An exception occured while setting up this worker thread giving up and returing => error : {} ", getPartitionId(), e);
+			LOG.error("[{}] An exception occured while setting up this worker thread", getPartitionId(), e);
 		} finally {
 			synchronized (workersLock) {
 				workers.remove(this);
@@ -642,6 +629,13 @@ public class Worker implements Runnable {
 			return zkOffset;
 		}
 	}
+	
+	private void calculateSprintTimes() {
+		sprintStart = System.currentTimeMillis() - System.currentTimeMillis() % (60 * 60 * 1000);
+		sprintEnd = sprintStart + config.getRunningConfig().workerSprintDuration;
+		LOG.info("Sprint start time {} and end time is {}", dateString(sprintStart), dateString(sprintEnd));
+	}
+		 
 
 	/**
 	 * Stores to ZK and resets the maximum timestamp the worker has parsed
@@ -716,13 +710,6 @@ public class Worker implements Runnable {
 
 	public long getMsgWrittenPerSec() {
 		return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
-	}
-
-	/**
-	 * @return the hdfsOutputPaths
-	 */
-	public ArrayList<TimeBasedHdfsOutputPath> getHdfsOutputPaths() {
-		return hdfsOutputPaths;
 	}
 
 	/**

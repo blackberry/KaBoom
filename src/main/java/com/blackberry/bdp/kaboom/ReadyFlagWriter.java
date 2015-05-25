@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import com.blackberry.bdp.common.threads.NotifyingThread;
 import com.blackberry.bdp.common.conversion.Converter;
+import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import java.util.concurrent.TimeUnit;
 
 public class ReadyFlagWriter extends NotifyingThread
@@ -139,7 +140,10 @@ public class ReadyFlagWriter extends NotifyingThread
 	public void doRun() throws Exception
 	{
 		Map<String, List<PartitionMetadata>> topicsWithPartitions = new HashMap<>();
-		StateUtils.getTopicParitionMetaData(config.getKafkaZkConnectionString(), config.getKafkaSeedBrokers(), topicsWithPartitions, config.getTopicToSupportedStatus());
+		StateUtils.getTopicParitionMetaData(config.getKafkaZkConnectionString(), 
+			 config.getKafkaSeedBrokers(), 
+			 topicsWithPartitions, 
+			 config.getTopicToSupportedStatus());
 
 		Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
 		Calendar previousHourCal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
@@ -150,8 +154,8 @@ public class ReadyFlagWriter extends NotifyingThread
 		for (Map.Entry<String, List<PartitionMetadata>> entry : topicsWithPartitions.entrySet())
 		{
 			String topicName = entry.getKey();
-			
-			String hdfsTemplate = config.getTopicToHdfsRoot().get(topicName);
+			KaBoomTopicConfig topicConfig = config.getTopicConfig(topicName);
+			String hdfsTemplate = topicConfig.getHdfsRootDir();
 
 			if (hdfsTemplate == null)
 			{
@@ -161,7 +165,7 @@ public class ReadyFlagWriter extends NotifyingThread
 			
 			LOG.trace(LOG_TAG + "Checking {} partition(s) in topic={} for offset timestamps...", entry.getValue().size(), topicName);
 			
-			fs = config.getProxyUserToFileSystem().get(config.getTopicToProxyUser().get(topicName));
+			fs = config.getTopicFileSystem(topicName);
 			
 			long oldestTimestamp = oldestPartitionOffsetForTopic(topicName, entry.getValue());
 			long oldestTimestampMillisAgo = System.currentTimeMillis() - oldestTimestamp;
