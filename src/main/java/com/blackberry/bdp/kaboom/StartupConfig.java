@@ -150,7 +150,7 @@ public class StartupConfig {
 			topicConfigs.put(topicConfig.getId(), topicConfig);
 			topicToProxyUser.put(topicConfig.getId(), topicConfig.getProxyUser());			
 			topicToSupportedStatus.put(topicConfig.getId(), true);
-			authenticatedFsForProxyUser(topicConfig.getId());
+			authenticatedFsForProxyUser(topicConfig.getProxyUser());
 			final NodeCache nodeCacheTopic = new NodeCache(curator, "/kaboom/topics/" + topicConfig.getId());
 			nodeCacheTopic.getListenable().addListener(new NodeCacheListener() {
 				@Override

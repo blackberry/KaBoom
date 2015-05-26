@@ -24,12 +24,10 @@ import lombok.Setter;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.zookeeper.data.Stat;
-//import org.codehaus.jackson.annotate.JsonIgnoreProperties;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-//@JsonIgnoreProperties({"zkPath", "curator"})
 public class RunningConfig extends ZkVersioned{
 
 	private static final Logger LOG = LoggerFactory.getLogger(RunningConfig.class);

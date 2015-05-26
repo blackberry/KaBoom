@@ -67,7 +67,7 @@ public class KaBoomTopicConfig extends ZkVersioned{
 			throw new MissingConfigurationException("Configuration doesn't exist in ZK at " + zkPath);
 		}
 		byte[] jsonBytes = curator.getData().forPath(zkPath);
-		LOG.info("Attempt to retrieve {} with {}", RunningConfig.class, new String(jsonBytes));
+		LOG.info("Attempt to retrieve {} with {}", KaBoomTopicConfig.class, new String(jsonBytes));
 		KaBoomTopicConfig obj = mapper.readValue(jsonBytes, KaBoomTopicConfig.class);
 		obj.setVersion(stat.getVersion());
 		return obj;
@@ -88,6 +88,7 @@ public class KaBoomTopicConfig extends ZkVersioned{
 				LOG.info("Attempt to retrieve {} with {}", KaBoomTopicConfig.class, new String(jsonBytes));		
 				KaBoomTopicConfig config = mapper.readValue(jsonBytes, KaBoomTopicConfig.class);
 				config.setVersion(configStat.getVersion());
+				config.setCurator(curator);
 				config.setZkPath(configPath);
 				config.id = topicName;
 				topicConfigs.add(config);

@@ -69,9 +69,6 @@ public class FastBoomWriter
 	
 	private final byte[] longBytes = new byte[10];
 	private final ByteBuffer longBuffer = ByteBuffer.wrap(longBytes);
-
-	private long lastKafkaOffset;
-	private long maxMessageTimestamp;
 	
 	private static final byte[] MAGIC_NUMBER = new byte[]
 	{
@@ -304,7 +301,7 @@ public class FastBoomWriter
 		longBuffer.put((byte) n);
 	}
 
-	public void writeLine(long timestamp, byte[] message, int offset, int length, long kafkaOffset) throws IOException
+	public void writeLine(long timestamp, byte[] message, int offset, int length) throws IOException
 	{		
 		ms = timestamp % 1000l;
 		second = timestamp / 1000l;
@@ -375,10 +372,6 @@ public class FastBoomWriter
 			LOG.info("[{}] ???.  {} - {} < 10 + 10 + {}", partitionId, logBlockBytes.length,
 				 logBlockBuffer.position(), length);
 		}
-		lastKafkaOffset = kafkaOffset;
-		if (timestamp > maxMessageTimestamp) {
-			maxMessageTimestamp = timestamp;
-		}		
 		logLineCount++;
 		periodicHdfsFlushPoll();
 	}
@@ -543,20 +536,6 @@ public class FastBoomWriter
 	public void setUseNativeCompression(boolean useNativeCompression)
 	{
 		this.useNativeCompression = useNativeCompression;
-	}
-
-	/**
-	 * @return the lastKafkaOffset
-	 */
-	public long getLastKafkaOffset() {
-		return lastKafkaOffset;
-	}
-
-	/**
-	 * @return the maxMessageTimestamp
-	 */
-	public long getMaxMessageTimestamp() {
-		return maxMessageTimestamp;
 	}
 
 }

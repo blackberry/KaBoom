@@ -33,6 +33,7 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.Meter;
+import org.apache.hadoop.fs.Path;
 
 public class Worker implements Runnable {
 
@@ -47,10 +48,8 @@ public class Worker implements Runnable {
 
 	private String partitionId;
 	private Consumer consumer;
-	private long offset;
 	private long lowerOffsetsReceived = 0;
 	private long timestamp;
-	private long maxTimestamp = -1;
 	private long lastMessageReceivedTimestamp = -1;
 	private long lastForcedZkOffsetTimestampStore = -1;
 	private boolean stopping = false;
@@ -80,10 +79,8 @@ public class Worker implements Runnable {
 	private Boolean pinged = false;
 	private Boolean pong = false;
 	private Boolean killed = false;
-	private long sprintStart;
-	private long sprintEnd;
-	private KaBoomTopicConfig topicConfig;
-	private int sprintNumber = 1;
+	private KaBoomTopicConfig topicConfig;	
+	private long sprintCounter;
 
 	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
@@ -229,6 +226,7 @@ public class Worker implements Runnable {
 	}
 
 	public Worker(StartupConfig config, CuratorFramework curator, String topic, int partition) throws Exception {
+		this.sprintCounter = 0;
 		this.config = config;
 		this.curator = curator;
 		this.topic = topic;
@@ -240,7 +238,7 @@ public class Worker implements Runnable {
 		this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 		
 		this.hdfsOutputPath = new TimeBasedHdfsOutputPath(
-			 config.getTopicFileSystem(topic),
+			 config.getTopicFileSystem(topicConfig.getProxyUser()),
 			 config,
 			 topicConfig);
 
@@ -333,9 +331,12 @@ public class Worker implements Runnable {
 			zkPath = getZK_ROOT() + "/topics/" + getTopic() + "/" + getPartition();
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
 			zkPath_offSetOverride = zkPath + "/offset_override";
+			
+			WorkSprint previousSprint = null;
+			WorkSprint currentSprint = new WorkSprint();
 
 			try {
-				offset = getOffset();
+				currentSprint.offset = getStoredOffsetFromZk();
 			} catch (Exception e) {
 				LOG.error("[{}] Error getting offset.", getPartitionId(), e);
 				return;
@@ -353,10 +354,10 @@ public class Worker implements Runnable {
 			consumer = new Consumer(config.getConsumerConfiguration(), 
 				 clientId, getTopic(), 
 				 getPartition(), 
-				 offset, 
+				 currentSprint.offset, 
 				 MetricRegistrySingleton.getInstance().getMetricsRegistry());
 
-			LOG.info("[{}] Created worker.  Starting at offset {}.", getPartitionId(), offset);
+			LOG.info("[{}] Created worker.  Starting at offset {}.", getPartitionId(), currentSprint.offset);
 
 			byte[] bytes = new byte[1024 * 1024];
 			int length;
@@ -365,6 +366,7 @@ public class Worker implements Runnable {
 			PriParser pri = new PriParser();
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();
+			
 			while (stopping == false) {
 				try {
 					if (pinged) {
@@ -373,13 +375,13 @@ public class Worker implements Runnable {
 					if (killed || Thread.interrupted()) {
 						throw new Exception("A kill request/interrupt has been received");
 					}
-					if (System.currentTimeMillis() 
-						 > sprintEnd + config.getRunningConfig().getFileCloseGraceTimeAfterExpiredMs()) {
-						/**
-						 * It's time to ask TimeBasedHdfsOutputPath to close off all the files that were 
-						 * opened during the last sprint.  						 
-						 */
-						
+					if (currentSprint.sprintEnd <= System.currentTimeMillis()) {
+						previousSprint = currentSprint;
+						currentSprint = new WorkSprint();
+					} else if (previousSprint != null  && System.currentTimeMillis() - previousSprint.sprintEnd 
+						 >=  config.getRunningConfig().getFileCloseGraceTimeAfterExpiredMs()) {						
+						previousSprint.finish();
+						previousSprint = null;						
 					}
 					
 					length = consumer.getMessage(bytes, 0, bytes.length);
@@ -398,7 +400,13 @@ public class Worker implements Runnable {
 							 && now - lastMessageReceivedTimestamp > config.getRunningConfig().getForcedZkOffsetTsUpdateMs()
 							 && lastForcedZkOffsetTimestampStore != startOfCurrentHour
 							 && lastMessageReceivedTimestamp != -1) {
-							storeOffsetTimestamp(startOfCurrentHour);
+							/**
+							 * 
+							 * TODO: Uncomment this and make it work 
+							 * 
+							 */
+							
+							//storeOffsetTimestamp(startOfCurrentHour);
 							lastForcedZkOffsetTimestampStore = startOfCurrentHour;
 						}
 						continue;
@@ -409,11 +417,11 @@ public class Worker implements Runnable {
 					 * if the offset of the last message is what we expected
 					 * and handle the fun edge cases when it's not
 					 */					
-					if (offset != consumer.getLastOffset()) {
+					if (currentSprint.offset != consumer.getLastOffset()) {
 						long highWatermark = consumer.getHighWaterMark();
 
-						if (offset > consumer.getLastOffset()) {
-							if (offset < highWatermark) {
+						if (currentSprint.offset > consumer.getLastOffset()) {
+							if (currentSprint.offset < highWatermark) {
 								/* 
 								 * When using SNAPPY compression in Krackle's consumer there will be messages received
 								 * that are in the snappy block that are from earlier than our requested offset.  When this
@@ -425,7 +433,7 @@ public class Worker implements Runnable {
 								lowerOffsetsReceived++;
 								continue;
 							} else {
-								if (offset > highWatermark) {
+								if (currentSprint.offset > highWatermark) {
 									/*	
 									 *	If the expected offset is greater than than actual offset and also higher than the high watermark 
 									 *	then perhaps the broker we're receiving messages from has changed and the new broker has a 
@@ -433,16 +441,16 @@ public class Worker implements Runnable {
 									 */
 									if (config.getRunningConfig().getSinkToHighWatermark()) {
 										LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
-											 getPartitionId(), offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
+											 getPartitionId(), currentSprint.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
 										consumer.setNextOffset(highWatermark);
-										offset = highWatermark;
+										currentSprint.offset = highWatermark;
 
 										LOG.info("[{}] Successfully set offset to the high watermark of {}", getPartitionId(), highWatermark);
 
 										continue;
 									} else {
 										LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
-											 getPartitionId(), offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
+											 getPartitionId(), currentSprint.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
 										continue;
 									}
 								} else {
@@ -454,7 +462,7 @@ public class Worker implements Runnable {
 							}
 						} else {
 							LOG.error("[{}] Offset anomaly! Expected:{}, Got {}, Consumer high watermark {}, latest {}, earliest {}", getPartitionId(),
-								 offset,
+								 currentSprint.offset,
 								 consumer.getLastOffset(),
 								 consumer.getHighWaterMark(),
 								 consumer.getLatestOffset(),
@@ -463,8 +471,8 @@ public class Worker implements Runnable {
 					}
 
 					messagesWritten++;
-					offset = consumer.getNextOffset();
-					lag = consumer.getHighWaterMark() - offset;
+					currentSprint.offset = consumer.getNextOffset();
+					lag = consumer.getHighWaterMark() - currentSprint.offset;
 
 					// (byte) 0xFE: -2
 					// (byte) 0x00: 0
@@ -537,22 +545,19 @@ public class Worker implements Runnable {
 						continue;
 					}
 
-					hdfsOutputPath.getBoomWriter(timestamp, partitionId + "-" + offset + ".bm").writeLine(timestamp, bytes, pos, length - pos, offset);
+					hdfsOutputPath.getBoomWriter(
+						 currentSprint.sprintNumber,
+						 timestamp, 
+						 partitionId + "-" + currentSprint.offset + ".bm",
+						 currentSprint.paths).writeLine(timestamp, bytes, pos, length - pos);
+					
 					boomWritesMeter.mark();
 					boomWritesMeterTopic.mark();
 					boomWritesMeterTotal.mark();
 					lastMessageReceivedTimestamp = System.currentTimeMillis();
 
-					/*
-					 * Let's track the max timestamp and write that to ZK for the 
-					 * partitions oldest offset timestamp.  Previously we used the last
-					 * message's timestamp however that could lead to problems if there
-					 * was ever corruption of the timestamp or if there's significant
-					 * skew in the log's time.
-					 */
-					if (timestamp > maxTimestamp || maxTimestamp == -1) {
-						maxTimestamp = timestamp;
-					}
+					currentSprint.checkTimestamp(timestamp);
+					
 				} catch (Exception e) {
 					LOG.error("[{}] Error processing message: ", partitionId, e);
 					LOG.info("[{}] Calling abort on {}", partitionId, hdfsOutputPath);
@@ -567,16 +572,22 @@ public class Worker implements Runnable {
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagSecGaugeName);
 			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(msgWrittenGaugeName);
 
-			hdfsOutputPath.closeAll();
-
 			try {
-				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.", partitionId, offset, maxTimestamp);
-				storeOffset();
-				storeOffsetTimestamp();
+				hdfsOutputPath.closeAll();
+				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.",
+					 partitionId, 
+					 currentSprint.offset, 
+					 currentSprint.maxMessageTimestamp);
+				currentSprint.storeOffset();
+				currentSprint.storeOffsetTimestamp();
 			} catch (Exception e) {
-				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper", partitionId, offset, maxTimestamp, e);
+				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper", 
+					 partitionId, 
+					 currentSprint.offset, 
+					 currentSprint.maxMessageTimestamp, 
+					 e);
 			}
-			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})", getPartitionId(), messagesWritten, offset);
+			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})", partitionId, messagesWritten, currentSprint.offset);
 		} catch (Exception e) {
 			LOG.error("[{}] An exception occured while setting up this worker thread", getPartitionId(), e);
 		} finally {
@@ -586,25 +597,7 @@ public class Worker implements Runnable {
 		}
 	}
 
-	public void storeOffset() throws Exception {
-		storeOffset(offset);
-	}
-
-	public void storeOffset(long valueToStore) throws Exception {
-		if (curator.checkExists().forPath(zkPath) == null) {
-			curator.create().creatingParentsIfNeeded()
-				 .withMode(CreateMode.PERSISTENT).forPath(zkPath, Converter.getBytes(valueToStore));
-			LOG.info("[{}] new ZK path created to write offset {} to {}", partitionId, valueToStore, zkPath);
-		} else {
-			curator.setData().forPath(zkPath, Converter.getBytes(valueToStore));
-			LOG.info("[{}] wrote offset {} to existing path {}", partitionId, valueToStore, zkPath);
-		}
-	}
-
-	/*
-	 * Get the offset in ZK, but if an override exists, perfer it instead.
-	 */
-	private long getOffset() throws Exception {
+	private long getStoredOffsetFromZk() throws Exception {
 		if (curator.checkExists().forPath(zkPath) == null) {
 			LOG.info("[{}] offset path {} does not exist, returning zero", partitionId, zkPath);
 			return 0L;
@@ -631,61 +624,85 @@ public class Worker implements Runnable {
 		}
 	}
 	
-	private void calculateSprintTimes() {
-		sprintStart = System.currentTimeMillis() - System.currentTimeMillis() % (60 * 60 * 1000);
-		sprintEnd = sprintStart + config.getRunningConfig().workerSprintDuration;
-		LOG.info("Sprint start time {} and end time is {}", dateString(sprintStart), dateString(sprintEnd));
-	}
-		 
+	private class WorkSprint{
+		private long sprintStart;
+		private long sprintEnd;
+		private final ArrayList<Path> paths;
+		private long offset;
+		private long maxMessageTimestamp;
+		private final long sprintNumber;
+		
+		private WorkSprint() {			
+			sprintCounter++;
+			calculateSprintTimes();
+			this.paths = new ArrayList<>();			
+			this.sprintNumber = sprintCounter;
+			this.maxMessageTimestamp = -1;
+			LOG.info("[{}] New sprint #{} start time is {} and end time is {}", 
+				 partitionId, 
+				 sprintNumber, 
+				 dateString(sprintStart), 
+				 dateString(sprintEnd));
+		}
+		
+		private void checkTimestamp(long timestamp) {
+			if (timestamp > maxMessageTimestamp) {
+				maxMessageTimestamp = timestamp;
+			}
+		}
+		
+		private void calculateSprintTimes() {
+			sprintStart = System.currentTimeMillis() - System.currentTimeMillis() 
+				 % (config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000);
+			sprintEnd = sprintStart + config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000;			
+		}
+		
+		private void finish() {
+			try {
+				LOG.info("Sprint ending at {} is finished", dateString(sprintEnd));
+				hdfsOutputPath.closeOffSprint(sprintNumber);
+				storeOffset();
+				storeOffsetTimestamp();
+				
+			} catch (Exception e) {
+				LOG.error("[{}] There was an error closing off a sprint: ", partitionId, e);
+			}
+			
+		}
+		private void storeOffsetTimestamp() throws Exception {
+			if (maxMessageTimestamp == -1) {
+				LOG.info("[{}] -1 offsetTimestamp will not be written to ZK", partitionId);
+				return;
+			}
 
-	/**
-	 * Stores to ZK and resets the maximum timestamp the worker has parsed
-	 *
-	 * @throws Exception
-	 */
-	public void storeOffsetTimestamp() throws Exception {
-		storeOffsetTimestamp(maxTimestamp);
-		maxTimestamp = -1;
-	}
+			if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
+				curator.create().creatingParentsIfNeeded()
+					 .withMode(CreateMode.PERSISTENT)
+					 .forPath(zkPath_offSetTimestamp, Converter.getBytes(maxMessageTimestamp));
+			} else {
+				curator.setData().forPath(zkPath_offSetTimestamp,
+					 Converter.getBytes(maxMessageTimestamp));
+			}
 
-	/**
-	 * Stores a specific timestamp to ZK and doesn't reset
-	 *
-	 * @param timestampToStore
-	 * @throws Exception
-	 */
-	public void storeOffsetTimestamp(long timestampToStore) throws Exception {
-		if (timestampToStore == -1) {
-			LOG.info("Partition {} has a -1 offsetTime and will not be written to ZK", partitionId);
-			return;
+			LOG.info("[{}] stored offset timestamp in ZK {} ({})", 
+				 partitionId, 
+				 maxMessageTimestamp, 
+				 dateString(maxMessageTimestamp));
+		}
+		
+		private void storeOffset() throws Exception {
+			if (curator.checkExists().forPath(zkPath) == null) {
+				curator.create().creatingParentsIfNeeded()
+					 .withMode(CreateMode.PERSISTENT).forPath(zkPath, Converter.getBytes(offset));
+				LOG.info("[{}] new ZK path created to write offset {} to {}", partitionId, offset, zkPath);
+			} else {
+				curator.setData().forPath(zkPath, Converter.getBytes(offset));
+				LOG.info("[{}] wrote offset {} to existing path {}", partitionId, offset, zkPath);
+			}
 		}
 
-		if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
-			curator.create().creatingParentsIfNeeded()
-				 .withMode(CreateMode.PERSISTENT)
-				 .forPath(zkPath_offSetTimestamp, Converter.getBytes(timestampToStore));
-		} else {
-			curator.setData().forPath(zkPath_offSetTimestamp,
-				 Converter.getBytes(timestampToStore));
-		}
-
-		LOG.info("[{}] stored offset timestamp in ZK {} ({})", partitionId, maxTimestamp, dateString(maxTimestamp));
 	}
-
-	/**
-	 * Returns the partitions offset timestamp from ZK
-	 *
-	 * @return the offset timestamp
-	 * @throws Exception
-	 */
-	private long getOffsetTimestamp() throws Exception {
-		if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
-			return 0L;
-		} else {
-			return Converter.longFromBytes(curator.getData().forPath(zkPath_offSetTimestamp), 0);
-		}
-	}
-
+	
 	public void stop() {
 		LOG.info("[{}] Stop request received", partitionId);
 		stopping = true;
@@ -713,46 +730,23 @@ public class Worker implements Runnable {
 		return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
 	}
 
-	/**
-	 * @return the partitionId
-	 */
 	public String getPartitionId() {
 		return partitionId;
 	}
 
-	/**
-	 * @return the topic
-	 */
 	public String getTopic() {
 		return topic;
 	}
 
-	/**
-	 * @return the partition
-	 */
 	public int getPartition() {
 		return partition;
 	}
 
-	/**
-	 * @param partition the partition to set
-	 */
-	public void setPartition(int partition) {
-		this.partition = partition;
-	}
-
-	/**
-	 * @return the pinged
-	 */
 	public Boolean pinged() {
 		return pinged;
 	}
 
-	/**
-	 * @return the pong
-	 */
 	public Boolean getPong() {
 		return pong;
 	}
-
 }
