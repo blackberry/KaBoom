@@ -131,7 +131,7 @@ public class TimeBasedHdfsOutputPath {
 				try {					
 					entry.getValue().close();
 					closedFiles++;
-					LOG.info("[{}] Sprint {} file closed : {}  ({} files still open): {}", 
+					LOG.info("[{}] Sprint {} file closed: {}  ({} files still open", 
 						 partitionId, 
 						 sprintNumber, 
 						 entry.getValue().openFilePath, 

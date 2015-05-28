@@ -131,8 +131,7 @@ public class FastBoomWriter
 		this.partitionId = topic + "-" + partition;
 		this.config = config;		
 		this.compressionLevel = config.getRunningConfig().getCompressionLevel();
-		this.deflater = new Deflater(compressionLevel, true);		
-		
+		this.deflater = new Deflater(compressionLevel, true);				
 		this.hdfsFlushTimerTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":hdfs flush timer");
 		this.hdfsFlushTimerTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:hdfs flush timer");
 		this.compressionTimerTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:compression timer");
@@ -207,7 +206,6 @@ public class FastBoomWriter
 			}		
 			
 			hdfsDataOut.hsync(EnumSet.of(SyncFlag.UPDATE_LENGTH));
-			LOG.info("Flushed output file for {}", partitionId);
 			numHdfsFlushedAVroBlocks = numAvroBlocksWritten;
 			lastHdfsFlushTimestamp = System.currentTimeMillis();
 		}

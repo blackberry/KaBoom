@@ -81,6 +81,8 @@ public class Worker implements Runnable {
 	private Boolean killed = false;
 	private KaBoomTopicConfig topicConfig;	
 	private long sprintCounter;
+	private WorkSprint previousSprint;
+	private WorkSprint currentSprint;
 
 	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
@@ -238,7 +240,7 @@ public class Worker implements Runnable {
 		this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 		
 		this.hdfsOutputPath = new TimeBasedHdfsOutputPath(
-			 config.getTopicFileSystem(topicConfig.getProxyUser()),
+			 config.authenticatedFsForProxyUser(topicConfig.getProxyUser()),
 			 config,
 			 topicConfig);
 
@@ -309,8 +311,7 @@ public class Worker implements Runnable {
 
 			 });
 
-		synchronized (workersLock) {
-			// NetBeans considers this unsafe: See https://www.google.ca/#q=leaking+this+in+constructor
+		synchronized (workersLock) {			
 			workers.add(this);
 		}
 
@@ -330,25 +331,20 @@ public class Worker implements Runnable {
 			hdfsOutputPath.setKaboomWorker(this);
 			zkPath = getZK_ROOT() + "/topics/" + getTopic() + "/" + getPartition();
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
-			zkPath_offSetOverride = zkPath + "/offset_override";
+			zkPath_offSetOverride = zkPath + "/offset_override";		
 			
-			WorkSprint previousSprint = null;
-			WorkSprint currentSprint = new WorkSprint();
-
 			try {
-				currentSprint.offset = getStoredOffsetFromZk();
+				previousSprint = null;
+				currentSprint = new WorkSprint(getStoredOffsetFromZk());
+				hostname = InetAddress.getLocalHost().getCanonicalHostName();
+			} catch (UnknownHostException uhe) {
+				LOG.error("[{}] Can't determine local hostname", getPartitionId());
+				hostname = "unknown.host";				
 			} catch (Exception e) {
 				LOG.error("[{}] Error getting offset.", getPartitionId(), e);
 				return;
 			}
-
-			try {
-				hostname = InetAddress.getLocalHost().getCanonicalHostName();
-			} catch (UnknownHostException e) {
-				LOG.error("[{}] Can't determine local hostname", getPartitionId());
-				hostname = "unknown.host";
-			}
-
+			
 			String clientId = "kaboom-" + hostname;
 
 			consumer = new Consumer(config.getConsumerConfiguration(), 
@@ -366,9 +362,10 @@ public class Worker implements Runnable {
 			PriParser pri = new PriParser();
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();
+			int topicConfigVersion = topicConfig.getVersion();
 			
 			while (stopping == false) {
-				try {
+				try {					
 					if (pinged) {
 						pong = true;
 					}
@@ -377,7 +374,7 @@ public class Worker implements Runnable {
 					}
 					if (currentSprint.sprintEnd <= System.currentTimeMillis()) {
 						previousSprint = currentSprint;
-						currentSprint = new WorkSprint();
+						currentSprint = new WorkSprint(previousSprint.offset);
 					} else if (previousSprint != null  && System.currentTimeMillis() - previousSprint.sprintEnd 
 						 >=  config.getRunningConfig().getFileCloseGraceTimeAfterExpiredMs()) {						
 						previousSprint.finish();
@@ -386,41 +383,18 @@ public class Worker implements Runnable {
 					
 					length = consumer.getMessage(bytes, 0, bytes.length);
 					if (length == -1) {
-						/**
-						 * Ensure that very quiet partitions are updating their offset timestamp in ZK 
-						 * even when they are not receiving any messages. If the last received 
-						 * message was during the previous hour and it's been more than 
-						 * getForcedZkOffsetTsUpdateMs() milliseconds then write the start of the 
-						 * hour's timestamp into ZK for the partition providing we haven't already 
-						 * stored for the current hour already.
-						 */
-						long now = System.currentTimeMillis();
-						long startOfCurrentHour = now - now % (60 * 60 * 1000);
-						if (lastMessageReceivedTimestamp < startOfCurrentHour
-							 && now - lastMessageReceivedTimestamp > config.getRunningConfig().getForcedZkOffsetTsUpdateMs()
-							 && lastForcedZkOffsetTimestampStore != startOfCurrentHour
-							 && lastMessageReceivedTimestamp != -1) {
-							/**
-							 * 
-							 * TODO: Uncomment this and make it work 
-							 * 
-							 */
-							
-							//storeOffsetTimestamp(startOfCurrentHour);
-							lastForcedZkOffsetTimestampStore = startOfCurrentHour;
-						}
 						continue;
 					}
+					
 					/**
 					 * offset always refers to the next offset we expect and
 					 * since we just called consumer.getMessage() let's see
 					 * if the offset of the last message is what we expected
 					 * and handle the fun edge cases when it's not
 					 */					
-					if (currentSprint.offset != consumer.getLastOffset()) {
-						long highWatermark = consumer.getHighWaterMark();
-
-						if (currentSprint.offset > consumer.getLastOffset()) {
+					if (currentSprint.offset != consumer.getLastOffset()) {						
+						long highWatermark = consumer.getHighWaterMark();						
+						if (currentSprint.offset > consumer.getLastOffset()) {	
 							if (currentSprint.offset < highWatermark) {
 								/* 
 								 * When using SNAPPY compression in Krackle's consumer there will be messages received
@@ -428,40 +402,39 @@ public class Worker implements Runnable {
 								 * happens the consumer will continue to send us messages from within that block so we
 								 * should just be patient until the offsets are from where we want.  
 								 */
-								LOG.debug("[{}] skipping last offset {} since it's lower than high watermark {}", getPartitionId(), consumer.getLastOffset(), highWatermark);
-
+								LOG.debug("[{}] skipping last offset {} since earlier than our requested offset 's and lower than high watermark {}", 
+									 getPartitionId(), 
+									 consumer.getLastOffset(), 
+									 highWatermark);
 								lowerOffsetsReceived++;
 								continue;
-							} else {
-								if (currentSprint.offset > highWatermark) {
-									/*	
-									 *	If the expected offset is greater than than actual offset and also higher than the high watermark 
-									 *	then perhaps the broker we're receiving messages from has changed and the new broker has a 
-									 *	lower offset because it was behind when it took over... Maybe?  
-									 */
-									if (config.getRunningConfig().getSinkToHighWatermark()) {
-										LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
-											 getPartitionId(), currentSprint.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
-										consumer.setNextOffset(highWatermark);
-										currentSprint.offset = highWatermark;
+							} else if (currentSprint.offset > highWatermark) {
+								/*	
+								 *	If the expected offset is greater than than actual offset and also higher than the high watermark 
+								 *	then perhaps the broker we're receiving messages from has changed and the new broker has a 
+								 *	lower offset because it was behind when it took over... Maybe?  
+								 */
+								if (config.getRunningConfig().getSinkToHighWatermark()) {
+									LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
+										 getPartitionId(), currentSprint.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
+									consumer.setNextOffset(highWatermark);
+									currentSprint.offset = highWatermark;
 
-										LOG.info("[{}] Successfully set offset to the high watermark of {}", getPartitionId(), highWatermark);
+									LOG.info("[{}] Successfully set offset to the high watermark of {}", getPartitionId(), highWatermark);
 
-										continue;
-									} else {
-										LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
-											 getPartitionId(), currentSprint.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
-										continue;
-									}
+									continue;
 								} else {
-									// TODO: Should this continue or not?
-
-									LOG.error("[{}] Unhandled edge case when expected offset is greater than last offset "
-										 + "and expected offset is also the high watermark");
+									LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
+										 getPartitionId(), currentSprint.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
+									continue;
 								}
+							} else {									
+								LOG.error("[{}] Unhandled edge case: offset > last offset && offset == high watermark");
+								continue;
 							}
 						} else {
-							LOG.error("[{}] Offset anomaly! Expected:{}, Got {}, Consumer high watermark {}, latest {}, earliest {}", getPartitionId(),
+							LOG.error("[{}] Offset anomaly! Expected:{}, Got {}, Consumer high watermark {}, latest {}, earliest {}", 
+								 partitionId,
 								 currentSprint.offset,
 								 consumer.getLastOffset(),
 								 consumer.getHighWaterMark(),
@@ -632,15 +605,17 @@ public class Worker implements Runnable {
 		private long maxMessageTimestamp;
 		private final long sprintNumber;
 		
-		private WorkSprint() {			
+		private WorkSprint(long startingOffset) {			
 			sprintCounter++;
 			calculateSprintTimes();
+			this.offset = startingOffset;
 			this.paths = new ArrayList<>();			
 			this.sprintNumber = sprintCounter;
 			this.maxMessageTimestamp = -1;
-			LOG.info("[{}] New sprint #{} start time is {} and end time is {}", 
+			LOG.info("[{}] New sprint #{} for offest {} start time is {} and end time is {}", 
 				 partitionId, 
 				 sprintNumber, 
+				 this.offset,
 				 dateString(sprintStart), 
 				 dateString(sprintEnd));
 		}
@@ -659,7 +634,7 @@ public class Worker implements Runnable {
 		
 		private void finish() {
 			try {
-				LOG.info("Sprint ending at {} is finished", dateString(sprintEnd));
+				LOG.info("[{}] Sprint ending at {} is finished", partitionId, dateString(sprintEnd));
 				hdfsOutputPath.closeOffSprint(sprintNumber);
 				storeOffset();
 				storeOffsetTimestamp();
@@ -700,7 +675,6 @@ public class Worker implements Runnable {
 				LOG.info("[{}] wrote offset {} to existing path {}", partitionId, offset, zkPath);
 			}
 		}
-
 	}
 	
 	public void stop() {

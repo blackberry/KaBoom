@@ -168,7 +168,7 @@ public class StartupConfig {
 	 * @param proxyUser
 	 * @return 
 	 */
-	private FileSystem authenticatedFsForProxyUser(final String proxyUser) {
+	public final FileSystem authenticatedFsForProxyUser(final String proxyUser) {
 		Authenticator.getInstance().setKerbConfPrincipal(getKerberosPrincipal());
 		Authenticator.getInstance().setKerbKeytab(getKerberosKeytab());
 		if (proxyUserToFileSystem.containsKey(proxyUser)) {
@@ -469,10 +469,6 @@ public class StartupConfig {
 	
 	public KaBoomTopicConfig getTopicConfig(String topicName) {
 		return topicConfigs.get(topicName);
-	}
-	
-	public FileSystem getTopicFileSystem(String topicName) {
-		return proxyUserToFileSystem.get(topicName);
 	}
 
 }

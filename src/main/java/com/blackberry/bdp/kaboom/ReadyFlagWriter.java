@@ -165,7 +165,7 @@ public class ReadyFlagWriter extends NotifyingThread
 			
 			LOG.trace(LOG_TAG + "Checking {} partition(s) in topic={} for offset timestamps...", entry.getValue().size(), topicName);
 			
-			fs = config.getTopicFileSystem(topicName);
+			fs = config.authenticatedFsForProxyUser(topicConfig.proxyUser);
 			
 			long oldestTimestamp = oldestPartitionOffsetForTopic(topicName, entry.getValue());
 			long oldestTimestampMillisAgo = System.currentTimeMillis() - oldestTimestamp;
@@ -255,7 +255,7 @@ public class ReadyFlagWriter extends NotifyingThread
 				} 
 				catch (Exception e)
 				{
-					LOG.error(LOG_TAG + "topic {} error occured processing a partition: {}", topicName, e.toString());
+					LOG.error(LOG_TAG + "topic {} error occured processing a partition: ", topicName, e);
 				}
 			}
 		}
