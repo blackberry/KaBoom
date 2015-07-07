@@ -1,5 +1,23 @@
-<<<<<<< HEAD
 Changes in 0.8.0:
+
+Changes in 0.7.15 HF1
+
+- Fixes IPGBD-3830 [Kaboom] Bug when handling zero padded date field
+
+Changes in 0.7.15
+
+- Ensures that only topics with unique HDFS root paths are examined
+- New configuration option: kaboom.propagate.ready.flags.delay.ms (long, how often wait between paths, default 0) can be used to ease the burden on the name nodes if there's a massive amount of HDFS path traversal required 
+
+Changes in 0.7.14
+
+- Moved the READY flag propagation to KaBoom (from an older to-be-deprecated project
+- New JMX metric: kaboom:topic:<topicName>:flag propagator timer (timer for recursive HDFS directory traversal)
+- New JMX metric: kaboom:topic:<topicName>:flag propagator paths checked (merter for number of paths checked)
+- New JMX metric: kaboom:topic:<topicName>:flags written (merter for number of flags created)
+- New configuration option: kaboom.propagate.ready.flags (boolean, default false)
+- New configuration option: kaboom.propagate.ready.flags.frequency (long, how often in ms to spawn propagator thread, default 10 * 60 * 1000)
+>>>>>>> ba5a01b... changelog
 
 - Supports bdp-common 0,0.6 which provides all logging and monitoring deps
 - Instruments log4j2 with io.dropwizard.metrics
