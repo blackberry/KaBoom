@@ -15,23 +15,13 @@
  */
 package com.blackberry.bdp.kaboom.api;
 
-import com.blackberry.bdp.common.versioned.MissingConfigurationException;
 import com.blackberry.bdp.common.versioned.VersionedAttribute;
 import com.blackberry.bdp.common.versioned.ZkVersioned;
 import com.blackberry.bdp.kaboom.StartupConfig;
 import lombok.Getter;
 import lombok.Setter;
 
-import org.apache.curator.framework.CuratorFramework;
-import org.apache.zookeeper.data.Stat;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-public class RunningConfig extends ZkVersioned{
-
-	private static final Logger LOG = LoggerFactory.getLogger(RunningConfig.class);
-	
+public class RunningConfig extends ZkVersioned {
 	@Getter @Setter @VersionedAttribute public Boolean allowOffsetOverrides = false;
 	@Getter @Setter @VersionedAttribute public Boolean sinkToHighWatermark = false;
 	@Getter @Setter @VersionedAttribute public Boolean useTempOpenFileDirectory = true;		
@@ -52,8 +42,7 @@ public class RunningConfig extends ZkVersioned{
 	@Getter @Setter @VersionedAttribute public long workerSprintDurationSeconds = 60 * 60;
 	@Getter @Setter @VersionedAttribute public boolean propagateReadyFlags = false;
 	@Getter @Setter @VersionedAttribute public long propagateReadyFlagFrequency = 10 * 60 *  1000;
-	@Getter @Setter @VersionedAttribute public long propateReadyFlagDelayBetweenPathsMs = 0;
-	
+	//@Getter @Setter @VersionedAttribute public long propateReadyFlagDelayBetweenPathsMs = 0;
 
 	/**
 	 * Instantiates a default RunningConfig without any ZK interaction
@@ -66,39 +55,6 @@ public class RunningConfig extends ZkVersioned{
 	 * @throws Exception
 	 */
 	public RunningConfig(StartupConfig startupConfig) throws Exception {
-		this(startupConfig.getCurator(), startupConfig.getRunningConfigZkPath());		
+		super(startupConfig.getCurator(), startupConfig.getRunningConfigZkPath());		
 	}
-
-	/**
-	 * Instantiates a ZkVersioned RunningConfig with a specific ZK curator/path
-	 * @param curator
-	 * @param zkPath
-	 * @throws Exception
-	 */
-	public RunningConfig(CuratorFramework curator, String zkPath) throws Exception {
-		super(curator, zkPath);		
-	}
-
-	/**
-	 * Static provider of a ZkVersioned RunningConfig from a specific ZK curator/path
-	 * 
-	 * TODO: This is here and not within the interface because I can't find a way to have
-	 * Jacskon create an instantiation of the implemented class within abstract class.
-	 * 
-	 * @param curator
-	 * @param zkPath
-	 * @return
-	 * @throws Exception
-	 */	
-	public static RunningConfig get(CuratorFramework curator, String zkPath) throws Exception {
-		Stat stat = curator.checkExists().forPath(zkPath);
-		if (stat == null) {
-			throw new MissingConfigurationException("Configuration doesn't exist in ZK at " + zkPath);
-		}
-		byte[] jsonBytes = curator.getData().forPath(zkPath);		
-		LOG.info("Attempt to retrieve {} with {}", RunningConfig.class, new String(jsonBytes));		
-		RunningConfig obj = mapper.readValue(jsonBytes, RunningConfig.class);
-		obj.setVersion(stat.getVersion());
-		return obj;
-	}	
 }

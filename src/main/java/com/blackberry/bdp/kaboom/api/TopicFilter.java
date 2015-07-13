@@ -21,8 +21,7 @@ import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class TopicFilter {
-	
+public class TopicFilter {	
 	private static final Logger LOG = LoggerFactory.getLogger(TopicFilter.class);
 	public enum FilterType {STRING_MATCH, REGEX};
 	

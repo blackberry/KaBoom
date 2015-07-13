@@ -146,7 +146,7 @@ public class StartupConfig {
 		 *	- topicToProxyUser 
 		 *	- topicToSupportedStatus
 		 */
-		for(final KaBoomTopicConfig topicConfig : KaBoomTopicConfig.getAll(curator, "/kaboom/topics")) {
+		for(final KaBoomTopicConfig topicConfig : KaBoomTopicConfig.getAll(KaBoomTopicConfig.class, curator, "/kaboom/topics")) {
 			topicConfigs.put(topicConfig.getId(), topicConfig);
 			topicToProxyUser.put(topicConfig.getId(), topicConfig.getProxyUser());			
 			topicToSupportedStatus.put(topicConfig.getId(), true);

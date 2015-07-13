@@ -15,6 +15,7 @@
  */
 package com.blackberry.bdp.kaboom.api;
 
+import com.blackberry.bdp.common.versioned.Util;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
