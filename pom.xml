@@ -18,7 +18,7 @@ limitations under the License.
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>com.blackberry.bdp.kaboom</groupId>
-	<name>kaboom</name>
+	<name>kaboom-0.8.0</name>
 	<artifactId>kaboom</artifactId>
 	<version>0.8.0</version>
 	<packaging>jar</packaging>	
@@ -55,6 +55,12 @@ limitations under the License.
 	</repositories>
 
 	<dependencies>
+		<dependency>
+			<groupId>args4j</groupId>
+			<artifactId>args4j</artifactId>
+			<version>2.32</version>				
+		</dependency>
+
 		<!-- Hadoop dependencies -->
 		<dependency>
 			<groupId>org.apache.hadoop</groupId>

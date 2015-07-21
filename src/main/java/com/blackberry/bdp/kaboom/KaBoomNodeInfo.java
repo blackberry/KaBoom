@@ -19,9 +19,10 @@ package com.blackberry.bdp.kaboom;
 public class KaBoomNodeInfo {
 	private String hostname;
 	private int weight;
-
 	private int load = 0;
 	private double targetLoad = 0.0;
+	private int flagPropagatorLoad = 0;
+	private double flagPropagatorTargetLoad = 0.0;
 
 	public String getHostname() {
 		return hostname;
@@ -58,6 +59,34 @@ public class KaBoomNodeInfo {
 	@Override
 	public String toString() {
 		return "KaBoomNodeInfo [hostname=" + hostname + ", weight=" + weight + "]";
+	}
+
+	/**
+	 * @return the flagPropagatorLoad
+	 */
+	public int getFlagPropagatorLoad() {
+		return flagPropagatorLoad;
+	}
+
+	/**
+	 * @param flagPropagatorLoad the flagPropagatorLoad to set
+	 */
+	public void setFlagPropagatorLoad(int flagPropagatorLoad) {
+		this.flagPropagatorLoad = flagPropagatorLoad;
+	}
+
+	/**
+	 * @return the flagPropagatorTargetLoad
+	 */
+	public double getFlagPropagatorTargetLoad() {
+		return flagPropagatorTargetLoad;
+	}
+
+	/**
+	 * @param flagPropagatorTargetLoad the flagPropagatorTargetLoad to set
+	 */
+	public void setFlagPropagatorTargetLoad(double flagPropagatorTargetLoad) {
+		this.flagPropagatorTargetLoad = flagPropagatorTargetLoad;
 	}
 
 }

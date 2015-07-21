@@ -10,6 +10,7 @@
 package com.blackberry.bdp.kaboom;
 
 import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
+import com.blackberry.bdp.kaboom.api.RunningConfig;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Timer;
 import java.io.IOException;
@@ -18,7 +19,6 @@ import java.nio.charset.Charset;
 import java.util.EnumSet;
 import java.util.Random;
 import java.util.zip.Deflater;
-//import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.hdfs.client.HdfsDataOutputStream;
 import org.apache.hadoop.hdfs.client.HdfsDataOutputStream.SyncFlag;
 
@@ -32,8 +32,7 @@ public class FastBoomWriter
 	private long lastHdfsFlushTimestamp = System.currentTimeMillis();	
 	private long numAvroBlocksWritten = 0l;
 	private long numHdfsFlushedAVroBlocks = 0l;
-	private String topic = null;
-	private StartupConfig config = null;
+	private RunningConfig runningConfig = null;
 	private final String partitionId;
 	private Long periodicHdfsFlushInterval = null;	
 	private final Timer hdfsFlushTimerTopic;
@@ -42,31 +41,24 @@ public class FastBoomWriter
 	private final Timer compressionTimerTotal;
 	private final Timer compressionTimerTopic;
 	private boolean useNativeCompression = false;
-	private short compressionLevel;
+	private final short compressionLevel;
 	private final Histogram compressionRatioHistogramTopic;
-	private final Histogram compressionRatioHistogramTotal;
-	
+	private final Histogram compressionRatioHistogramTotal;	
 	private int compressedSize;
 	private byte[] compressedBlockBytes = new byte[256 * 1024];
-	private final Deflater deflater;
-	
+	private final Deflater deflater;	
 	private long avroBlockRecordCount = 0L;
 	private final byte[] avroBlockBytes = new byte[2 * 1024 * 1024];
 	private final ByteBuffer avroBlockBuffer = ByteBuffer.wrap(avroBlockBytes);
-
 	private long ms;
 	private long second;
-
 	private long blockNumber = 0L;
-
 	private long logBlockSecond = 0L;
 	private final byte[] logBlockBytes = new byte[1024 * 1024];
 	private final ByteBuffer logBlockBuffer = ByteBuffer.wrap(logBlockBytes);
-
 	private long logLineCount;
 	private final byte[] logLinesBytes = new byte[logBlockBytes.length - 41];
-	private final ByteBuffer logLinesBuffer = ByteBuffer.wrap(logLinesBytes);
-	
+	private final ByteBuffer logLinesBuffer = ByteBuffer.wrap(logLinesBytes);	
 	private final byte[] longBytes = new byte[10];
 	private final ByteBuffer longBuffer = ByteBuffer.wrap(longBytes);
 	
@@ -124,13 +116,12 @@ public class FastBoomWriter
 
 	private final HdfsDataOutputStream  hdfsDataOut;
 
-	public FastBoomWriter(HdfsDataOutputStream out,  String topic, int partition, StartupConfig config) throws IOException
+	public FastBoomWriter(HdfsDataOutputStream out,  String topic, int partition, StartupConfig startupConfig) throws IOException
 	{
 		this.hdfsDataOut = out;		
-		this.topic = topic;		
 		this.partitionId = topic + "-" + partition;
-		this.config = config;		
-		this.compressionLevel = config.getRunningConfig().getCompressionLevel();
+		this.runningConfig = startupConfig.getRunningConfig();
+		this.compressionLevel = runningConfig.getCompressionLevel();
 		this.deflater = new Deflater(compressionLevel, true);				
 		this.hdfsFlushTimerTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":hdfs flush timer");
 		this.hdfsFlushTimerTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:total:hdfs flush timer");
@@ -373,8 +364,6 @@ public class FastBoomWriter
 		logLineCount++;
 		periodicHdfsFlushPoll();
 	}
-
-	
 
 	private void writeLogBlock() throws IOException
 	{

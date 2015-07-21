@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.blackberry.bdp.kaboom</groupId>
   <artifactId>kaboom</artifactId>
-  <name>kaboom</name>
+  <name>kaboom-0.8.0</name>
   <version>0.8.0</version>
   <url>http://blackberry.com</url>
   <scm>

@@ -42,7 +42,7 @@ public class RunningConfig extends ZkVersioned {
 	@Getter @Setter @VersionedAttribute public long workerSprintDurationSeconds = 60 * 60;
 	@Getter @Setter @VersionedAttribute public boolean propagateReadyFlags = false;
 	@Getter @Setter @VersionedAttribute public long propagateReadyFlagFrequency = 10 * 60 *  1000;
-	//@Getter @Setter @VersionedAttribute public long propateReadyFlagDelayBetweenPathsMs = 0;
+	@Getter @Setter @VersionedAttribute public long propateReadyFlagDelayBetweenPathsMs = 0;
 
 	/**
 	 * Instantiates a default RunningConfig without any ZK interaction

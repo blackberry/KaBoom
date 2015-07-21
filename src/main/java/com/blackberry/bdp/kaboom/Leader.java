@@ -1,19 +1,18 @@
 /**
  * Copyright 2014 BlackBerry, Limited.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License"); you 
+ * may not use this file except in compliance with the License. You may 
+ * obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, 
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either 
+ * express or implied. See the License for the specific language 
+ * governing permissions and limitations under the License.
  */
-
 package com.blackberry.bdp.kaboom;
 
 import java.nio.charset.Charset;
@@ -32,154 +31,146 @@ import org.slf4j.LoggerFactory;
 
 import com.blackberry.bdp.common.threads.NotifyingThread;
 import com.blackberry.bdp.common.threads.ThreadCompleteListener;
+import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public abstract class Leader extends LeaderSelectorListenerAdapter implements ThreadCompleteListener
-{
+public abstract class Leader extends LeaderSelectorListenerAdapter implements ThreadCompleteListener {
+
 	private static final Logger LOG = LoggerFactory.getLogger(Leader.class);
 	protected static final Charset UTF8 = Charset.forName("UTF-8");
 	protected static final Random rand = new Random();
 
 	private ReadyFlagWriter readyFlagWriter;
-	private Thread readyFlagThread;
+	private Thread readyFlagWriterThread;
 	final protected StartupConfig config;
 	CuratorFramework curator;
-	
-	Map<String, String> partitionToHost = new HashMap<>();
-	Map<String, List<String>> hostToPartition = new HashMap<>();
-	Map<String, KaBoomNodeInfo> clientIdToNodeInfo = new HashMap<>();
-	Map<String, String> hostnameToClientId = new HashMap<>();			
-	Map<String, List<String>> clientToPartitions = new HashMap<>();
-	Map<String, String> partitionToClient = new HashMap<>();			
-	List<String> topics = new ArrayList<>();	
-	
-	public Leader(StartupConfig config)
-	{
+
+	protected Map<String, String> partitionToHost = new HashMap<>();
+	protected Map<String, List<String>> hostToPartition = new HashMap<>();
+	protected Map<String, KaBoomNodeInfo> clientIdToNodeInfo = new HashMap<>();
+	protected Map<String, String> hostnameToClientId = new HashMap<>();
+	protected Map<String, List<String>> clientToPartitions = new HashMap<>();
+	protected Map<String, String> partitionToClient = new HashMap<>();
+	protected List<String> topics = new ArrayList<>();
+	protected ReadyFlagController readyFlagController;
+
+	public Leader(StartupConfig config) {
 		this.config = config;
 	}
-	
+
 	protected abstract void run_balancer() throws Exception;
 
 	@Override
-	public void takeLeadership(CuratorFramework curator) throws Exception
-	{
+	public void takeLeadership(CuratorFramework curator) throws Exception {
 		this.curator = curator;
-		
+
 		/**
 		 * Chill for 30 seconds after the election, give whatever caused it a few moments to potentially subside
 		 */
-
 		LOG.info("A new leader has been elected: kaboom.id={}", config.getKaboomId());
-	
+
 		Thread.sleep(30 * 1000);
 
-		while (true)
-		{			
+		while (true) {
 			// (Re-)build the data structures and maps that our leader needs to make balancing decisions
-			
-			topics = new ArrayList<>();			
+
+			topics = new ArrayList<>();
 			StateUtils.readTopicsFromZooKeeper(config.getKafkaZkConnectionString(), topics, config.getTopicToSupportedStatus());
-			
+
 			partitionToHost = new HashMap<>();
 			hostToPartition = new HashMap<>();
 			StateUtils.getPartitionHosts(config.getKafkaSeedBrokers(), topics, partitionToHost, hostToPartition);
-			
+
 			clientIdToNodeInfo = new HashMap<>();
 			hostnameToClientId = new HashMap<>();
-			StateUtils.getActiveClients(curator, clientIdToNodeInfo, hostnameToClientId);			
-			
+			StateUtils.getActiveClients(curator, clientIdToNodeInfo, hostnameToClientId);
+
 			LOG.info("Found a total of {} supported topics in ZooKeeper", topics.size());
-			
+
 			/**
-			 * This an an abstract KaBoom leader that must be extended and implemented by an actual 
-			 * load balancer.  There are, however, tasks that must always be performed regardless of 
-			 * a balancer implementation.  Tasks such as removing assignments for non-existent clients
-			 * and running the Kafka ready flag writer, etc.  Let's do those, and then call the balancer...
+			 * This an an abstract KaBoom leader that must be extended and 
+			 * implemented by an actual load balancer. There are, however, 
+			 * tasks that must always be performed regardless of a balancer 
+			 * implementation. Tasks such as removing assignments for 
+			 * non-existent clients and running the Kafka ready flag writer, 
+			 * etc. Let's do those, and then call the balancer...
 			 */
-			
-			// Delete any assignments for topics that are not supported (configured) for KaBoom
-			
-			try
-			{
-				for (String partitionId : curator.getChildren().forPath("/kaboom/assignments")) 
-				{
-					try
-					{
+			// Delete any assignments for topics that are not supported (configured) for KaBoom			
+			try {
+				for (String partitionId : curator.getChildren().forPath("/kaboom/assignments")) {
+					try {
 						Pattern topicPartitionPattern = Pattern.compile("^(.*)-(\\d+)$");
 						Matcher m = topicPartitionPattern.matcher(partitionId);
 
-						if (m.matches())
-						{
+						if (m.matches()) {
 							String topic = m.group(1);
 							if (!config.getTopicToSupportedStatus().containsKey(topic)
-								 || config.getTopicToSupportedStatus().get(topic) == false)
-							{
-								String assignedClient = new String(curator.getData().forPath("/kaboom/assignments/" + partitionId), UTF8);
-								LOG.info("Deleted assignment for unsupported topic partiton {} previously assigned to {}", partitionId, assignedClient);
+								 || config.getTopicToSupportedStatus().get(topic) == false) {
+								String assignedClient = new String(curator.getData().forPath(
+									 "/kaboom/assignments/" + partitionId), UTF8);
+								LOG.info("Deleted assignment for unsupported topic partiton {} previously assigned to {}",
+									 partitionId, assignedClient);
 								curator.delete().forPath("/kaboom/assignments/" + partitionId);
 							}
 						}
-					}
-					catch (Exception e)
-					{
+					} catch (Exception e) {
 						LOG.error("There was a problem pruning the assignments of unsupported topic {}", partitionId, e);
 					}
 				}
-			}
-			catch (Exception e)
-			{
+			} catch (Exception e) {
 				LOG.error("There was a problem pruning the assignments of unsupported topics", e);
-			}			
+			}
 
 			// Build up our clientToPartitions and partitionsToClients, while 
 			// deleting any assignments for clientIdToNodeInfo that are not connected
-			
-			partitionToClient = new HashMap<>();			
-			clientToPartitions = new HashMap<>();			
-			
-			for (String partition : partitionToHost.keySet())
-			{
+			partitionToClient = new HashMap<>();
+			clientToPartitions = new HashMap<>();
+
+			for (String partition : partitionToHost.keySet()) {
 				Stat stat = curator.checkExists().forPath("/kaboom/assignments/" + partition);
-				
-				if (stat != null)
-				{	
+
+				if (stat != null) {
 					String client = new String(curator.getData().forPath("/kaboom/assignments/" + partition), UTF8);
-					
-					if (clientIdToNodeInfo.containsKey(client))
-					{
+
+					if (clientIdToNodeInfo.containsKey(client)) {
 						LOG.debug("Partition {} : client {} is connected", partition, client);
-						
-						partitionToClient.put(partition, client);						
+
+						partitionToClient.put(partition, client);
 						List<String> parts = clientToPartitions.get(client);
-						
-						if (parts == null)
-						{
+
+						if (parts == null) {
 							parts = new ArrayList<>();
 							clientToPartitions.put(client, parts);
 						}
 						parts.add(partition);
-					} 
-					else
-					{
+					} else {
 						LOG.debug("Partition {} : client {} is not connected", partition, client);
 						curator.delete().forPath("/kaboom/assignments/" + partition);
 					}
 				}
 			}
-			
+
 			// Calculate our existing load
 			StateUtils.calculateLoad(partitionToHost, clientIdToNodeInfo, clientToPartitions);
-			
-			try
-			{
-				run_balancer();
-			}
-			catch (Exception e)
-			{
-				LOG.error("The load balancer raised an exception: ", e);
-			}						
 
+			try {
+				run_balancer();
+			} catch (Exception e) {
+				LOG.error("The load balancer raised an exception: ", e);
+			}
+
+			try {				
+				ArrayList<KaBoomTopicConfig> topicConfigs = KaBoomTopicConfig.getAll(
+					 KaBoomTopicConfig.class, 
+					 curator, 
+					 "/kaboom/topics");
+				readyFlagController = new ReadyFlagController(config, clientIdToNodeInfo, topicConfigs);
+				readyFlagController.balance();
+			} catch (Exception e) {
+				LOG.error("There was an error running the ready flag controller's balancer", e);
+			}
+			
 			/*
 			 *  Check to see if the kafka_ready flag writer thread exists and is alive:
 			 *  
@@ -188,18 +179,14 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			 *  work.  If that behavior changes then additional logic will be required
 			 *  to ensure this isn't executed too often  
 			 */
-			
-			if (readyFlagThread == null || !readyFlagThread.isAlive())
-			{
-				LOG.info("[ready flag writer] thread doesn't exist or is not running");				
+			if (readyFlagWriterThread == null || !readyFlagWriterThread.isAlive()) {
+				LOG.info("[ready flag writer] thread doesn't exist or is not running");
 				readyFlagWriter = new ReadyFlagWriter(config);
 				readyFlagWriter.addListener(this);
-				readyFlagThread = new Thread(readyFlagWriter);
-				readyFlagThread.start();
+				readyFlagWriterThread = new Thread(readyFlagWriter);
+				readyFlagWriterThread.start();
 				LOG.info("[ready flag writer] thread created and started");
-			}
-			else
-			{
+			} else {
 				LOG.warn("[ready flag writer] is either not null or is still alive (could it be hung?)");
 			}
 
@@ -213,13 +200,11 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	 * greater control over when threads start/stop and when they need to be ran 
 	 * again
 	 */
-	
 	@Override
-	public void notifyOfThreadComplete(NotifyingThread notifyingThread, Exception e)
-	{
-		if (e != null)
-		{
+	public void notifyOfThreadComplete(NotifyingThread notifyingThread, Exception e) {
+		if (e != null) {
 			LOG.error("[ready flag writer] Exception raised in thread: {}", e);
 		}
 	}
+
 }

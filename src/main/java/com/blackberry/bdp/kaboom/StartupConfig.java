@@ -9,6 +9,7 @@
  */
 package com.blackberry.bdp.kaboom;
 
+import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 import java.net.InetAddress;
 import java.security.PrivilegedExceptionAction;
 
@@ -20,8 +21,6 @@ import java.io.IOException;
 
 import java.util.HashMap;
 import java.util.Properties;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.Map;
 
 import org.apache.hadoop.conf.Configuration;
@@ -37,6 +36,7 @@ import com.blackberry.bdp.common.props.Parser;
 import com.blackberry.bdp.kaboom.api.RunningConfig;
 import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
+import com.codahale.metrics.Meter;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.cache.NodeCache;
 import org.apache.curator.framework.recipes.cache.NodeCacheListener;
@@ -74,6 +74,7 @@ public class StartupConfig {
 	private final String loadBalancer;
 	private final RunningConfig runningConfig;
 	private final String runningConfigZkPath;
+	private final Meter deadWorkerMeter;
 
 	private final Map<String, String> topicToProxyUser = new HashMap<>();
 	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();	
@@ -107,6 +108,10 @@ public class StartupConfig {
 		LOG.info(" *** end dumping configuration *** ");
 	}
 
+	public StartupConfig() throws Exception {
+		this(getProperties());
+	}	
+	
 	public StartupConfig(Properties props) throws Exception {
 		propsParser = new Parser(props);
 
@@ -129,7 +134,8 @@ public class StartupConfig {
 		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
 		runningConfigZkPath = propsParser.parseString("kaboom.runningConfig.zkPath", "/kaboom/config");
 		curator = buildCuratorFramework();
-		runningConfig = new RunningConfig(this);
+		runningConfig = new RunningConfig(this);		
+		deadWorkerMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:dead workers");
 
 		final NodeCache nodeCache = new NodeCache(curator, runningConfigZkPath);
 		nodeCache.getListenable().addListener(new NodeCacheListener() {
@@ -469,6 +475,13 @@ public class StartupConfig {
 	
 	public KaBoomTopicConfig getTopicConfig(String topicName) {
 		return topicConfigs.get(topicName);
+	}
+
+	/**
+	 * @return the deadWorkerMeter
+	 */
+	public Meter getDeadWorkerMeter() {
+		return deadWorkerMeter;
 	}
 
 }
