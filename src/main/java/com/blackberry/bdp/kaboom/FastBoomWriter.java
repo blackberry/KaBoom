@@ -129,7 +129,9 @@ public class FastBoomWriter
 		this.compressionTimerTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:topic:" + topic + ":compression timer");
 		this.compressionRatioHistogramTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:topic:" + topic + ":compresssion ratio");
 		this.compressionRatioHistogramTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:total:compression ratio");
-		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");		
+		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");				
+		this.periodicHdfsFlushInterval = runningConfig.getPeriodicHdfsFlushInterval();
+		this.useNativeCompression = runningConfig.getUseNativeCompression();
 		
 		LOG.info("[{}] FastBoomWriter instantiated with compression level {}", partitionId, compressionLevel);
 		

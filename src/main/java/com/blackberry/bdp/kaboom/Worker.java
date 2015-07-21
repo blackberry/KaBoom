@@ -239,17 +239,11 @@ public class Worker implements Runnable {
 		this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
 		this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 		
-		this.hdfsOutputPath = new TimeBasedHdfsOutputPath(
-			 config.authenticatedFsForProxyUser(topicConfig.getProxyUser()),
-			 config,
-			 topicConfig);
+		this.hdfsOutputPath = new TimeBasedHdfsOutputPath(config, topicConfig, partition);
 
-		partitionId = topic + "-" + partition;
-		hdfsOutputPath.setPartition(partition);
-		hdfsOutputPath.setPartitionId(partitionId);		
+		partitionId = String.format("%s-%d", topic, partition);
 		
-		LOG.info("\t {} {} => {}", config.getKaboomId(), partitionId, hdfsOutputPath);
-		LOG.info("Worker instantiated for {} and configured", partitionId);
+		LOG.info("[{}] worker instantiated", partitionId);
 
 		this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
 
@@ -328,7 +322,7 @@ public class Worker implements Runnable {
 	@Override
 	public void run() {
 		try {
-			hdfsOutputPath.setKaboomWorker(this);
+
 			zkPath = getZK_ROOT() + "/topics/" + getTopic() + "/" + getPartition();
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
 			zkPath_offSetOverride = zkPath + "/offset_override";		
@@ -362,8 +356,7 @@ public class Worker implements Runnable {
 			PriParser pri = new PriParser();
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();
-			int topicConfigVersion = topicConfig.getVersion();
-			
+						
 			while (stopping == false) {
 				try {					
 					if (pinged) {
@@ -521,8 +514,7 @@ public class Worker implements Runnable {
 					hdfsOutputPath.getBoomWriter(
 						 currentSprint.sprintNumber,
 						 timestamp, 
-						 partitionId + "-" + currentSprint.offset + ".bm",
-						 currentSprint.paths).writeLine(timestamp, bytes, pos, length - pos);
+						 partitionId + "-" + currentSprint.offset + ".bm").writeLine(timestamp, bytes, pos, length - pos);
 					
 					boomWritesMeter.mark();
 					boomWritesMeterTopic.mark();
@@ -534,7 +526,7 @@ public class Worker implements Runnable {
 				} catch (Exception e) {
 					LOG.error("[{}] Error processing message: ", partitionId, e);
 					LOG.info("[{}] Calling abort on {}", partitionId, hdfsOutputPath);
-					hdfsOutputPath.abortAll();					
+					hdfsOutputPath.abortAll();
 					return;
 				}
 			}
@@ -600,7 +592,6 @@ public class Worker implements Runnable {
 	private class WorkSprint{
 		private long sprintStart;
 		private long sprintEnd;
-		private final ArrayList<Path> paths;
 		private long offset;
 		private long maxMessageTimestamp;
 		private final long sprintNumber;
@@ -609,7 +600,6 @@ public class Worker implements Runnable {
 			sprintCounter++;
 			calculateSprintTimes();
 			this.offset = startingOffset;
-			this.paths = new ArrayList<>();			
 			this.sprintNumber = sprintCounter;
 			this.maxMessageTimestamp = -1;
 			LOG.info("[{}] New sprint #{} for offest {} start time is {} and end time is {}", 
