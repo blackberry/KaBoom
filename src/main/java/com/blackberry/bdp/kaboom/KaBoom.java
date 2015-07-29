@@ -12,7 +12,6 @@ package com.blackberry.bdp.kaboom;
 import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 import com.blackberry.bdp.common.logger.InstrumentedLoggerSingleton;
 import com.blackberry.bdp.common.props.Parser;
-import com.blackberry.bdp.common.versioned.ZkVersioned;
 import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
@@ -76,7 +75,7 @@ public class KaBoom {
 		}
 
 		 // Instantiate the ZK curator and ensure that the required nodes exist
-		for (String path : new String[]{"/kaboom/leader", "/kaboom/clients", "/kaboom/assignments"}) {
+		for (String path : new String[]{"/kaboom/leader", "/kaboom/clients", "/kaboom/assignments", "/kaboom/flag-assignments"}) {
 			if (config.getCurator().checkExists().forPath(path) == null) {
 				try {
 					LOG.warn("the path {} was not found in ZK and needs to be created", path);

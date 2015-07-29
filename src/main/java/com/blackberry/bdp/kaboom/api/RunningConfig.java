@@ -18,9 +18,11 @@ package com.blackberry.bdp.kaboom.api;
 import com.blackberry.bdp.common.versioned.VersionedAttribute;
 import com.blackberry.bdp.common.versioned.ZkVersioned;
 import com.blackberry.bdp.kaboom.StartupConfig;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Getter;
 import lombok.Setter;
 
+@JsonIgnoreProperties({"version", "curator", "zkPath"})
 public class RunningConfig extends ZkVersioned {
 	@Getter @Setter @VersionedAttribute public Boolean allowOffsetOverrides = false;
 	@Getter @Setter @VersionedAttribute public Boolean sinkToHighWatermark = false;
@@ -36,6 +38,9 @@ public class RunningConfig extends ZkVersioned {
 	@Getter @Setter @VersionedAttribute public long periodicHdfsFlushInterval = 30 * 1000l;	
 	@Getter @Setter @VersionedAttribute public long kaboomServerSleepDurationMs = 10 * 1000;
 	@Getter @Setter @VersionedAttribute public long fileCloseGraceTimeAfterExpiredMs = 30 * 1000;
+	
+	
+	
 	@Getter @Setter @VersionedAttribute public long forcedZkOffsetTsUpdateMs = 10 * 60 * 1000;
 	@Getter @Setter @VersionedAttribute public String kafkaReadyFlagFilename = "_READY";
 	@Getter @Setter @VersionedAttribute public int maxOpenBoomFilesPerPartition = 5;	
