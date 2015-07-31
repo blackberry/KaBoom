@@ -3,8 +3,8 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.blackberry.bdp.kaboom</groupId>
   <artifactId>kaboom</artifactId>
-  <name>kaboom-0.8.0</name>
-  <version>0.8.0</version>
+  <name>kaboom</name>
+  <version>0.8.1</version>
   <url>http://blackberry.com</url>
   <scm>
     <connection>scm:git:git@gitlab.rim.net:ipgbd-software/kaboom.git</connection>
@@ -292,8 +292,29 @@
             <goals>
               <goal>shade</goal>
             </goals>
+            <configuration>
+              <transformers>
+                <transformer />
+                <transformer>
+                  <mainClass>com.blackberry.bdp.kaboom.KaBoom</mainClass>
+                </transformer>
+              </transformers>
+            </configuration>
           </execution>
         </executions>
+        <configuration>
+          <createDependencyReducedPom>true</createDependencyReducedPom>
+          <filters>
+            <filter>
+              <artifact>*:*</artifact>
+              <excludes>
+                <exclude>META-INF/*.SF</exclude>
+                <exclude>META-INF/*.DSA</exclude>
+                <exclude>META-INF/*.RSA</exclude>
+              </excludes>
+            </filter>
+          </filters>
+        </configuration>
       </plugin>
     </plugins>
   </build>

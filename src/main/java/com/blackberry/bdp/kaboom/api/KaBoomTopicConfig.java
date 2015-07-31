@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 dariens.
+ * Copyright 2015 BlackBerry Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package com.blackberry.bdp.kaboom.api;
 
 import org.apache.curator.framework.CuratorFramework;
 
-import com.blackberry.bdp.common.versioned.VersionedAttribute;
 import com.blackberry.bdp.common.versioned.ZkVersioned;
 
 import java.util.ArrayList;
@@ -32,16 +31,18 @@ import org.slf4j.LoggerFactory;
 public class KaBoomTopicConfig extends ZkVersioned{
 	private static final Logger LOG = LoggerFactory.getLogger(KaBoomTopicConfig.class);
 	
-	@Getter @Setter @VersionedAttribute public String id = "<NEW TOPIC NAME>";
-	@Getter @Setter @VersionedAttribute public String hdfsRootDir = "/path/to/some/dir";
-	@Getter @Setter @VersionedAttribute public String proxyUser = "<SOMEUSER>";
-	@Getter @Setter @VersionedAttribute public String defaultDirectory = "data";
-	@Getter @Setter @VersionedAttribute public ArrayList<TopicFilter> filterSet = new ArrayList<>();
+	@Getter @Setter public String id = "<NEW TOPIC NAME>";
+	@Getter @Setter public String hdfsRootDir = "/path/to/some/dir";
+	@Getter @Setter public String proxyUser = "<SOMEUSER>";
+	@Getter @Setter public String defaultDirectory = "data";
+	@Getter @Setter public ArrayList<TopicFilter> filterSet = new ArrayList<>();
 	
 	/**
 	 * Instantiates a default KaBoomTopicConfig without any ZK interaction
 	 */
-	public KaBoomTopicConfig() { }
+	public KaBoomTopicConfig() {
+		super();
+	}
 	
 	/**
 	 * Instantiates a ZkVersioned KaBoomTopicConfig with a specific ZK curator/path

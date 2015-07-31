@@ -1,4 +1,10 @@
+Changes in 0.8.1:
+
+- Version bump
+
 Changes in 0.8.0:
+
+- Major improvements to configuration
 
 Changes in 0.7.15 HF1
 

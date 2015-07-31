@@ -15,23 +15,22 @@
  */
 package com.blackberry.bdp.kaboom.api;
 
-import com.blackberry.bdp.common.versioned.VersionedAttribute;
 import lombok.Getter;
 import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class TopicFilter {	
+public class TopicFilter {
 	private static final Logger LOG = LoggerFactory.getLogger(TopicFilter.class);
 	public enum FilterType {STRING_MATCH, REGEX};
 	
-	@Getter @Setter @VersionedAttribute public int number = 0;
-	@Getter @Setter @VersionedAttribute public String name = "<FILTER NAME>";
-	@Getter @Setter @VersionedAttribute public FilterType type = FilterType.STRING_MATCH;
-	@Getter @Setter @VersionedAttribute public boolean filterIntentionIsToMatch = true;
-	@Getter @Setter @VersionedAttribute public String filter = "<TEXT TO MATCH>";
-	@Getter @Setter @VersionedAttribute public long duration = 3600;
-	@Getter @Setter @VersionedAttribute public String directory = "<SUBDIR>";	
+	@Getter @Setter public int number = 0;
+	@Getter @Setter public String name = "<FILTER NAME>";
+	@Getter @Setter public FilterType type = FilterType.STRING_MATCH;
+	@Getter @Setter public boolean filterIntentionIsToMatch = true;
+	@Getter @Setter public String filter = "<TEXT TO MATCH>";
+	@Getter @Setter public long duration = 3600;
+	@Getter @Setter public String directory = "<SUBDIR>";	
 	
 	public TopicFilter() { }
 	

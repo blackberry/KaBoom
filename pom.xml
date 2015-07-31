@@ -18,9 +18,9 @@ limitations under the License.
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>com.blackberry.bdp.kaboom</groupId>
-	<name>kaboom-0.8.0</name>
+	<name>kaboom</name>
 	<artifactId>kaboom</artifactId>
-	<version>0.8.0</version>
+	<version>0.8.1</version>
 	<packaging>jar</packaging>	
 	<url>http://blackberry.com</url>
 
@@ -81,27 +81,17 @@ limitations under the License.
 			<groupId>com.blackberry.bdp.krackle</groupId>
 			<artifactId>krackle</artifactId>
 			<version>0.8.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>com.blackberry.bdp.common</groupId>
+					<artifactId>bdp-common</artifactId>					
+				</exclusion>
+			</exclusions>			
 		</dependency>
 		<dependency>
 			<groupId>com.blackberry.bdp.common</groupId>
-			<artifactId>bdp-common</artifactId>
-			<version>0.0.10</version>
-			<!--
-			<exclusions>
-				<exclusion>
-					<groupId>org.apache.logging.log4j</groupId>
-					<artifactId>log4j-core</artifactId>					
-				</exclusion>
-				<exclusion>
-					<groupId>org.apache.logging.log4j</groupId>
-					<artifactId>log4j-api</artifactId>		
-				</exclusion>
-				<exclusion>
-					<groupId>org.apache.logging.log4j</groupId>
-					<artifactId>log4j-slf4j-impl</artifactId>
-				</exclusion>
-			</exclusions>			
-			-->
+			<artifactId>bdp-common-dev</artifactId>
+			<version>0.0.11</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.kafka</groupId>
@@ -451,6 +441,7 @@ limitations under the License.
 				</configuration>
 			</plugin>
 
+			<!--
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
@@ -464,9 +455,10 @@ limitations under the License.
 					</execution>
 				</executions>
 			</plugin>		
+			-->
 			
 			<!--
-				<plugin> 
+			<plugin> 
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
 				<version>2.3</version>
@@ -499,42 +491,10 @@ limitations under the License.
 						</configuration>
 					</execution>
 				</executions>
-			</plugin>-->
-						
+			</plugin>
+			-->
 		</plugins>
 
-		<pluginManagement>
-			<plugins>
-				<!--This plugin's configuration is used to store Eclipse m2e settings 
-				only. It has no influence on the Maven build itself. -->
-				<plugin>
-					<groupId>org.eclipse.m2e</groupId>
-					<artifactId>lifecycle-mapping</artifactId>
-					<version>1.0.0</version>
-					<configuration>
-						<lifecycleMappingMetadata>
-							<pluginExecutions>
-								<pluginExecution>
-									<pluginExecutionFilter>
-										<groupId>org.apache.maven.plugins</groupId>
-										<artifactId>maven-dependency-plugin</artifactId>
-										<versionRange>[2.1,)</versionRange>
-										<goals>
-											<goal>copy-dependencies</goal>
-										</goals>
-									</pluginExecutionFilter>
-									<action>
-										<ignore></ignore>
-									</action>
-								</pluginExecution>
-							</pluginExecutions>
-						</lifecycleMappingMetadata>
-					</configuration>
-				</plugin>
-			</plugins>
-		</pluginManagement>
 	</build>
 
 </project>
-
-
