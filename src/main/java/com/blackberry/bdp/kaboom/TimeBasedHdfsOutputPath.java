@@ -75,11 +75,14 @@ public class TimeBasedHdfsOutputPath {
 		reusableRequestedOutputFile = outputFileMap.get(reusableRequestedStartTime);
 		if (reusableRequestedOutputFile == null) {
 			reusableRequestedOutputFile = new OutputFile(sprintNumber, filename, reusableRequestedStartTime);
-			outputFileMap.put(reusableRequestedStartTime, reusableRequestedOutputFile);			
+			outputFileMap.put(reusableRequestedStartTime, reusableRequestedOutputFile);
 			if (outputFileMap.size() > config.getRunningConfig().getMaxOpenBoomFilesPerPartition()) {
 				long oldestTs = getOldestLastUsedTimestamp();
 				try {
 					OutputFile oldestOutputFile = outputFileMap.get(oldestTs);
+					if (oldestOutputFile == null) {
+						throw new Exception("Attempt at finding LRU output file returned null");
+					}
 					oldestOutputFile.close();
 					LOG.info("[{}]  over max open boom file limit ({}/{}) closing oldest last used boom file: {}",
 						 partitionId,
@@ -99,12 +102,15 @@ public class TimeBasedHdfsOutputPath {
 
 	private long getOldestLastUsedTimestamp() {
 		long oldestTs = outputFileMap.entrySet().iterator().next().getValue().lastUsedTimestmap;
+		long outputFileStartTime = outputFileMap.entrySet().iterator().next().getKey();
 		for (Entry<Long, OutputFile> entry : outputFileMap.entrySet()) {
 			if (oldestTs < entry.getValue().lastUsedTimestmap) {
 				oldestTs = entry.getValue().lastUsedTimestmap;
+				// We actually need the entry's key, which represents the outputfile's start time
+				outputFileStartTime = entry.getKey();
 			}
 		}
-		return oldestTs;
+		return outputFileStartTime;
 	}
 
 	public void abortAll() {

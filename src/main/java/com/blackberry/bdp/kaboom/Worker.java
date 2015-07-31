@@ -17,7 +17,6 @@ import java.net.UnknownHostException;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.ArrayList;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.zookeeper.CreateMode;
@@ -33,29 +32,21 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.Meter;
-import org.apache.hadoop.fs.Path;
+import org.apache.curator.framework.recipes.cache.NodeCache;
+import org.apache.curator.framework.recipes.cache.NodeCacheListener;
 
 public class Worker implements Runnable {
 
 	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
 
-	/**
-	 * @return the ZK_ROOT
-	 */
-	public static String getZK_ROOT() {
-		return ZK_ROOT;
-	}
-
 	private String partitionId;
 	private Consumer consumer;
 	private long lowerOffsetsReceived = 0;
 	private long timestamp;
-	private long lastMessageReceivedTimestamp = -1;
-	private long lastForcedZkOffsetTimestampStore = -1;
 	private boolean stopping = false;
 	private String hostname;
-	private StartupConfig config;
-	private CuratorFramework curator;
+	private final StartupConfig config;
+	private final CuratorFramework curator;
 	private static final String ZK_ROOT = "/kaboom";
 	private String zkPath;
 	private String zkPath_offSetTimestamp;
@@ -79,7 +70,7 @@ public class Worker implements Runnable {
 	private Boolean pinged = false;
 	private Boolean pong = false;
 	private Boolean killed = false;
-	private KaBoomTopicConfig topicConfig;	
+	private KaBoomTopicConfig topicConfig;
 	private long sprintCounter;
 	private WorkSprint previousSprint;
 	private WorkSprint currentSprint;
@@ -224,28 +215,45 @@ public class Worker implements Runnable {
 					 }
 					 return sumMsgWritten;
 				 }
+
 			 });
 	}
 
-	public Worker(StartupConfig config, CuratorFramework curator, String topic, int partition) throws Exception {
+	public Worker(StartupConfig config, String topicName, int partition) throws Exception {
 		this.sprintCounter = 0;
 		this.config = config;
-		this.curator = curator;
-		this.topic = topic;
+		this.curator = config.getCurator();
+		this.topic = topicName;
 		this.partition = partition;
 		this.startTime = System.currentTimeMillis();
 		this.messagesWritten = 0;
-		this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getCurator(), ZK_ROOT + "/topics/" + topic);		
+		this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getCurator(), ZK_ROOT + "/topics/" + topic);
 		this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
 		this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
-		
-		this.hdfsOutputPath = new TimeBasedHdfsOutputPath(config, topicConfig, partition);
 
+		this.hdfsOutputPath = new TimeBasedHdfsOutputPath(config, topicConfig, partition);
 		partitionId = String.format("%s-%d", topic, partition);
-		
-		LOG.info("[{}] worker instantiated", partitionId);
+		LOG.info("[{}] worker instantiated with topic configuration version {}", partitionId, topicConfig.getVersion());
 
 		this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
+
+		NodeCache nodeCache = new NodeCache(curator, topicConfig.getZkPath());
+
+		nodeCache.getListenable().addListener(new NodeCacheListener() {
+			@Override
+			public void nodeChanged() throws Exception {
+				KaBoomTopicConfig newTopicConfig = KaBoomTopicConfig.get(
+					 KaBoomTopicConfig.class, curator, ZK_ROOT + "/topics/" + topic);
+				if (!newTopicConfig.getVersion().equals(topicConfig.getVersion())) {
+					LOG.info("[{}] topic configuration (version {}) was updated to version {}, shutting down worker...",
+						 partitionId, 
+						 topicConfig.getVersion(),
+						 newTopicConfig.getVersion());
+					stop();
+				}
+			}
+		});
+		nodeCache.start();
 
 		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
 		lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
@@ -305,11 +313,9 @@ public class Worker implements Runnable {
 
 			 });
 
-		synchronized (workersLock) {			
+		synchronized (workersLock) {
 			workers.add(this);
 		}
-
-		LOG.info("[{}] Created worker.", partitionId);
 	}
 
 	private static String dateString(Long ts) {
@@ -325,29 +331,32 @@ public class Worker implements Runnable {
 
 			zkPath = getZK_ROOT() + "/topics/" + getTopic() + "/" + getPartition();
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
-			zkPath_offSetOverride = zkPath + "/offset_override";		
-			
+			zkPath_offSetOverride = zkPath + "/offset_override";
+
 			try {
 				previousSprint = null;
 				currentSprint = new WorkSprint(getStoredOffsetFromZk());
 				hostname = InetAddress.getLocalHost().getCanonicalHostName();
 			} catch (UnknownHostException uhe) {
 				LOG.error("[{}] Can't determine local hostname", getPartitionId());
-				hostname = "unknown.host";				
+				hostname = "unknown.host";
 			} catch (Exception e) {
 				LOG.error("[{}] Error getting offset.", getPartitionId(), e);
 				return;
 			}
-			
+
 			String clientId = "kaboom-" + hostname;
 
-			consumer = new Consumer(config.getConsumerConfiguration(), 
-				 clientId, getTopic(), 
-				 getPartition(), 
-				 currentSprint.offset, 
+			consumer = new Consumer(config.getConsumerConfiguration(),
+				 clientId, getTopic(),
+				 getPartition(),
+				 currentSprint.offset,
 				 MetricRegistrySingleton.getInstance().getMetricsRegistry());
 
-			LOG.info("[{}] Created worker.  Starting at offset {}.", getPartitionId(), currentSprint.offset);
+			LOG.info("[{}] Created worker with topic config version {} starting at offset {}.", 
+				 getPartitionId(),
+				 topicConfig.getVersion(),
+				 currentSprint.offset);
 
 			byte[] bytes = new byte[1024 * 1024];
 			int length;
@@ -356,9 +365,9 @@ public class Worker implements Runnable {
 			PriParser pri = new PriParser();
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();
-						
+
 			while (stopping == false) {
-				try {					
+				try {
 					if (pinged) {
 						pong = true;
 					}
@@ -368,26 +377,28 @@ public class Worker implements Runnable {
 					if (currentSprint.sprintEnd <= System.currentTimeMillis()) {
 						previousSprint = currentSprint;
 						currentSprint = new WorkSprint(previousSprint.offset);
-					} else if (previousSprint != null  && System.currentTimeMillis() - previousSprint.sprintEnd 
-						 >=  config.getRunningConfig().getFileCloseGraceTimeAfterExpiredMs()) {						
-						previousSprint.finish();
-						previousSprint = null;						
+					} else {
+						if (previousSprint != null && System.currentTimeMillis() - previousSprint.sprintEnd
+							 >= config.getRunningConfig().getFileCloseGraceTimeAfterExpiredMs()) {
+							previousSprint.finish();
+							previousSprint = null;
+						}
 					}
-					
+
 					length = consumer.getMessage(bytes, 0, bytes.length);
 					if (length == -1) {
 						continue;
 					}
-					
+
 					/**
 					 * offset always refers to the next offset we expect and
 					 * since we just called consumer.getMessage() let's see
 					 * if the offset of the last message is what we expected
 					 * and handle the fun edge cases when it's not
-					 */					
-					if (currentSprint.offset != consumer.getLastOffset()) {						
-						long highWatermark = consumer.getHighWaterMark();						
-						if (currentSprint.offset > consumer.getLastOffset()) {	
+					 */
+					if (currentSprint.offset != consumer.getLastOffset()) {
+						long highWatermark = consumer.getHighWaterMark();
+						if (currentSprint.offset > consumer.getLastOffset()) {
 							if (currentSprint.offset < highWatermark) {
 								/* 
 								 * When using SNAPPY compression in Krackle's consumer there will be messages received
@@ -395,38 +406,40 @@ public class Worker implements Runnable {
 								 * happens the consumer will continue to send us messages from within that block so we
 								 * should just be patient until the offsets are from where we want.  
 								 */
-								LOG.debug("[{}] skipping last offset {} since earlier than our requested offset 's and lower than high watermark {}", 
-									 getPartitionId(), 
-									 consumer.getLastOffset(), 
+								LOG.debug("[{}] skipping last offset {} since earlier than our requested offset 's and lower than high watermark {}",
+									 getPartitionId(),
+									 consumer.getLastOffset(),
 									 highWatermark);
 								lowerOffsetsReceived++;
 								continue;
-							} else if (currentSprint.offset > highWatermark) {
-								/*	
-								 *	If the expected offset is greater than than actual offset and also higher than the high watermark 
-								 *	then perhaps the broker we're receiving messages from has changed and the new broker has a 
-								 *	lower offset because it was behind when it took over... Maybe?  
-								 */
-								if (config.getRunningConfig().getSinkToHighWatermark()) {
-									LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
-										 getPartitionId(), currentSprint.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
-									consumer.setNextOffset(highWatermark);
-									currentSprint.offset = highWatermark;
+							} else {
+								if (currentSprint.offset > highWatermark) {
+									/*	
+									 *	If the expected offset is greater than than actual offset and also higher than the high watermark 
+									 *	then perhaps the broker we're receiving messages from has changed and the new broker has a 
+									 *	lower offset because it was behind when it took over... Maybe?  
+									 */
+									if (config.getRunningConfig().getSinkToHighWatermark()) {
+										LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
+											 getPartitionId(), currentSprint.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
+										consumer.setNextOffset(highWatermark);
+										currentSprint.offset = highWatermark;
 
-									LOG.info("[{}] Successfully set offset to the high watermark of {}", getPartitionId(), highWatermark);
+										LOG.info("[{}] Successfully set offset to the high watermark of {}", getPartitionId(), highWatermark);
 
-									continue;
+										continue;
+									} else {
+										LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
+											 getPartitionId(), currentSprint.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
+										continue;
+									}
 								} else {
-									LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
-										 getPartitionId(), currentSprint.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
+									LOG.error("[{}] Unhandled edge case: offset > last offset && offset == high watermark");
 									continue;
 								}
-							} else {									
-								LOG.error("[{}] Unhandled edge case: offset > last offset && offset == high watermark");
-								continue;
 							}
 						} else {
-							LOG.error("[{}] Offset anomaly! Expected:{}, Got {}, Consumer high watermark {}, latest {}, earliest {}", 
+							LOG.error("[{}] Offset anomaly! Expected:{}, Got {}, Consumer high watermark {}, latest {}, earliest {}",
 								 partitionId,
 								 currentSprint.offset,
 								 consumer.getLastOffset(),
@@ -513,16 +526,15 @@ public class Worker implements Runnable {
 
 					hdfsOutputPath.getBoomWriter(
 						 currentSprint.sprintNumber,
-						 timestamp, 
+						 timestamp,
 						 partitionId + "-" + currentSprint.offset + ".bm").writeLine(timestamp, bytes, pos, length - pos);
-					
+
 					boomWritesMeter.mark();
 					boomWritesMeterTopic.mark();
 					boomWritesMeterTotal.mark();
-					lastMessageReceivedTimestamp = System.currentTimeMillis();
 
 					currentSprint.checkTimestamp(timestamp);
-					
+
 				} catch (Exception e) {
 					LOG.error("[{}] Error processing message: ", partitionId, e);
 					LOG.info("[{}] Calling abort on {}", partitionId, hdfsOutputPath);
@@ -540,16 +552,16 @@ public class Worker implements Runnable {
 			try {
 				hdfsOutputPath.closeAll();
 				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.",
-					 partitionId, 
-					 currentSprint.offset, 
+					 partitionId,
+					 currentSprint.offset,
 					 currentSprint.maxMessageTimestamp);
 				currentSprint.storeOffset();
 				currentSprint.storeOffsetTimestamp();
 			} catch (Exception e) {
-				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper", 
-					 partitionId, 
-					 currentSprint.offset, 
-					 currentSprint.maxMessageTimestamp, 
+				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper",
+					 partitionId,
+					 currentSprint.offset,
+					 currentSprint.maxMessageTimestamp,
 					 e);
 			}
 			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})", partitionId, messagesWritten, currentSprint.offset);
@@ -588,52 +600,54 @@ public class Worker implements Runnable {
 			return zkOffset;
 		}
 	}
-	
-	private class WorkSprint{
+
+	private class WorkSprint {
+
 		private long sprintStart;
 		private long sprintEnd;
 		private long offset;
 		private long maxMessageTimestamp;
 		private final long sprintNumber;
-		
-		private WorkSprint(long startingOffset) {			
+
+		private WorkSprint(long startingOffset) {
 			sprintCounter++;
 			calculateSprintTimes();
 			this.offset = startingOffset;
 			this.sprintNumber = sprintCounter;
 			this.maxMessageTimestamp = -1;
-			LOG.info("[{}] New sprint #{} for offest {} start time is {} and end time is {}", 
-				 partitionId, 
-				 sprintNumber, 
+			LOG.info("[{}] New sprint #{} for offest {} start time is {} and end time is {}",
+				 partitionId,
+				 sprintNumber,
 				 this.offset,
-				 dateString(sprintStart), 
+				 dateString(sprintStart),
 				 dateString(sprintEnd));
 		}
-		
+
 		private void checkTimestamp(long timestamp) {
 			if (timestamp > maxMessageTimestamp) {
 				maxMessageTimestamp = timestamp;
 			}
 		}
-		
+
 		private void calculateSprintTimes() {
-			sprintStart = System.currentTimeMillis() - System.currentTimeMillis() 
+			sprintStart = System.currentTimeMillis() - System.currentTimeMillis()
 				 % (config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000);
-			sprintEnd = sprintStart + config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000;			
+			sprintEnd = sprintStart + config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000;
 		}
-		
+
 		private void finish() {
 			try {
 				LOG.info("[{}] Sprint ending at {} is finished", partitionId, dateString(sprintEnd));
 				hdfsOutputPath.closeOffSprint(sprintNumber);
 				storeOffset();
 				storeOffsetTimestamp();
-				
+
 			} catch (Exception e) {
 				LOG.error("[{}] There was an error closing off a sprint: ", partitionId, e);
 			}
-			
+
 		}
+
 		private void storeOffsetTimestamp() throws Exception {
 			if (maxMessageTimestamp == -1) {
 				LOG.info("[{}] -1 offsetTimestamp will not be written to ZK", partitionId);
@@ -649,12 +663,12 @@ public class Worker implements Runnable {
 					 Converter.getBytes(maxMessageTimestamp));
 			}
 
-			LOG.info("[{}] stored offset timestamp in ZK {} ({})", 
-				 partitionId, 
-				 maxMessageTimestamp, 
+			LOG.info("[{}] stored offset timestamp in ZK {} ({})",
+				 partitionId,
+				 maxMessageTimestamp,
 				 dateString(maxMessageTimestamp));
 		}
-		
+
 		private void storeOffset() throws Exception {
 			if (curator.checkExists().forPath(zkPath) == null) {
 				curator.create().creatingParentsIfNeeded()
@@ -665,8 +679,13 @@ public class Worker implements Runnable {
 				LOG.info("[{}] wrote offset {} to existing path {}", partitionId, offset, zkPath);
 			}
 		}
+
 	}
-	
+
+	public static String getZK_ROOT() {
+		return ZK_ROOT;
+	}
+
 	public void stop() {
 		LOG.info("[{}] Stop request received", partitionId);
 		stopping = true;
@@ -713,4 +732,5 @@ public class Worker implements Runnable {
 	public Boolean getPong() {
 		return pong;
 	}
+
 }

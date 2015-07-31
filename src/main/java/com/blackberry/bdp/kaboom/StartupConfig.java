@@ -133,9 +133,10 @@ public class StartupConfig {
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
 		runningConfigZkPath = propsParser.parseString("kaboom.runningConfig.zkPath", "/kaboom/config");
-		curator = buildCuratorFramework();
-		runningConfig = new RunningConfig(this);		
+		curator = buildCuratorFramework();		
 		deadWorkerMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:dead workers");
+		
+		runningConfig = RunningConfig.get(RunningConfig.class, curator, runningConfigZkPath);		
 
 		final NodeCache nodeCache = new NodeCache(curator, runningConfigZkPath);
 		nodeCache.getListenable().addListener(new NodeCacheListener() {

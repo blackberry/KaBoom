@@ -241,7 +241,7 @@ public class KaBoom {
 							String topic = m.group(1);
 							int partition = Integer.parseInt(m.group(2));
 
-							Worker worker = new Worker(config, config.getCurator(), topic, partition);
+							Worker worker = new Worker(config, topic, partition);
 
 							partitionToWorkerMap.put(partitionId, worker);
 							partitionToThreadsMap.put(partitionId, new Thread(worker));
