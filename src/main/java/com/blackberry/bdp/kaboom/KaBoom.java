@@ -74,7 +74,7 @@ public class KaBoom {
 			throw e;
 		}
 
-		 // Instantiate the ZK curator and ensure that the required nodes exist
+		// Instantiate the ZK curator and ensure that the required nodes exist
 		for (String path : new String[]{"/kaboom/leader", "/kaboom/clients", "/kaboom/assignments", "/kaboom/flag-assignments"}) {
 			if (config.getCurator().checkExists().forPath(path) == null) {
 				try {
@@ -171,14 +171,14 @@ public class KaBoom {
 		}));
 
 		Pattern topicPartitionPattern = Pattern.compile("^(.*)-(\\d+)$");
-		
+
 		long lastFlagPropagationTs = System.currentTimeMillis();
-		
+
 		Map<String, Thread> topicToFlagPropThread = new HashMap<>();
 		Map<String, ReadyFlagPropagator> topicToFlagPropagator = new HashMap<>();
 
 		while (shutdown == false) {
-			if (config.getRunningConfig().isPropagateReadyFlags() && System.currentTimeMillis() 
+			if (config.getRunningConfig().isPropagateReadyFlags() && System.currentTimeMillis()
 				 > (lastFlagPropagationTs + config.getRunningConfig().getPropagateReadyFlagFrequency())) {
 				List<String> topics = ReadyFlagController.getAssignments(config);
 				LOG.info("Found a total of {} topics that we are assigned to propagate ready flags for", topics.size());
@@ -212,7 +212,7 @@ public class KaBoom {
 			for (String partitionId : config.getCurator().getChildren().forPath("/kaboom/assignments")) {
 				String assignee = null;
 				try {
-					assignee = new String(config.getCurator().getData().forPath("/kaboom/assignments/" 
+					assignee = new String(config.getCurator().getData().forPath("/kaboom/assignments/"
 						 + partitionId), UTF8);
 				} catch (NoNodeException nne) {
 					LOG.warn("The weird 'NoNodeException' has been raised, let's just continue and it'll retry");
@@ -221,18 +221,25 @@ public class KaBoom {
 
 				if (assignee.equals(Integer.toString(config.getKaboomId()))) {
 					if (partitionToWorkerMap.containsKey(partitionId)) {
-						if (false == partitionToThreadsMap.get(partitionId).isAlive()) {
-							LOG.error("[{}] worker thead found dead (removed thread/worker objects)", partitionId);
-							config.getDeadWorkerMeter().mark();
-							partitionToThreadsMap.remove(partitionId);
-							partitionToWorkerMap.remove(partitionId);
+						if (false == partitionToThreadsMap.get(partitionId).isAlive()) {							
+							if (partitionToWorkerMap.get(partitionId).isGracefulShutdown()) {
+								LOG.info("[{}] worker thead found to have been shutdown gracefully", partitionId);
+								config.getGracefulWorkerShutdownMeter().mark();
+								partitionToThreadsMap.remove(partitionId);
+								partitionToWorkerMap.remove(partitionId);
+							} else {
+								LOG.error("[{}] worker thead found dead (removed thread/worker objects)", partitionId);
+								config.getDeadWorkerMeter().mark();
+								partitionToThreadsMap.remove(partitionId);
+								partitionToWorkerMap.remove(partitionId);
+							}
 						} else {
-							LOG.debug("KaBoom clientId {} assigned to partitonId {} and worker is already working", 
+							LOG.debug("KaBoom clientId {} assigned to partitonId {} and worker is already working",
 								 config.getKaboomId(), partitionId);
 							validWorkingPartitions.put(partitionId, true);
 						}
 					} else {
-						LOG.info("KaBoom clientId {} assigned to partitonId {} and a worker doesn't exist", 
+						LOG.info("KaBoom clientId {} assigned to partitonId {} and a worker doesn't exist",
 							 config.getKaboomId(), partitionId);
 
 						Matcher m = topicPartitionPattern.matcher(partitionId);
@@ -247,7 +254,7 @@ public class KaBoom {
 							partitionToThreadsMap.put(partitionId, new Thread(worker));
 							partitionToThreadsMap.get(partitionId).start();
 
-							LOG.info("KaBoom clientId {} assigned to partitonId {} and a new worker has been started", 
+							LOG.info("KaBoom clientId {} assigned to partitonId {} and a new worker has been started",
 								 config.getKaboomId(), partitionId);
 
 							validWorkingPartitions.put(partitionId, true);
@@ -291,4 +298,5 @@ public class KaBoom {
 	public void shutdown() {
 		shutdown = true;
 	}
+
 }

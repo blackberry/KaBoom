@@ -74,6 +74,7 @@ public class Worker implements Runnable {
 	private long sprintCounter;
 	private WorkSprint previousSprint;
 	private WorkSprint currentSprint;
+	private boolean gracefulShutdown = false;
 
 	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
@@ -248,7 +249,7 @@ public class Worker implements Runnable {
 					LOG.info("[{}] topic configuration (version {}) was updated to version {}, shutting down worker...",
 						 partitionId, 
 						 topicConfig.getVersion(),
-						 newTopicConfig.getVersion());
+						 newTopicConfig.getVersion());					
 					stop();
 				}
 			}
@@ -558,6 +559,7 @@ public class Worker implements Runnable {
 				currentSprint.storeOffset();
 				currentSprint.storeOffsetTimestamp();
 			} catch (Exception e) {
+				gracefulShutdown = false;
 				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper",
 					 partitionId,
 					 currentSprint.offset,
@@ -599,6 +601,13 @@ public class Worker implements Runnable {
 			}
 			return zkOffset;
 		}
+	}
+
+	/**
+	 * @return the gracefulShutdown
+	 */
+	public boolean isGracefulShutdown() {
+		return gracefulShutdown;
 	}
 
 	private class WorkSprint {
@@ -687,7 +696,8 @@ public class Worker implements Runnable {
 	}
 
 	public void stop() {
-		LOG.info("[{}] Stop request received", partitionId);
+		LOG.info("[{}] Graceful shutdown request received", partitionId);
+		gracefulShutdown = true;
 		stopping = true;
 	}
 

@@ -75,6 +75,7 @@ public class StartupConfig {
 	private final RunningConfig runningConfig;
 	private final String runningConfigZkPath;
 	private final Meter deadWorkerMeter;
+	private final Meter gracefulWorkerShutdownMeter;
 
 	private final Map<String, String> topicToProxyUser = new HashMap<>();
 	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();	
@@ -135,6 +136,7 @@ public class StartupConfig {
 		runningConfigZkPath = propsParser.parseString("kaboom.runningConfig.zkPath", "/kaboom/config");
 		curator = buildCuratorFramework();		
 		deadWorkerMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:dead workers");
+		gracefulWorkerShutdownMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:gracefully shutdown workers");
 		
 		runningConfig = RunningConfig.get(RunningConfig.class, curator, runningConfigZkPath);		
 
@@ -483,6 +485,13 @@ public class StartupConfig {
 	 */
 	public Meter getDeadWorkerMeter() {
 		return deadWorkerMeter;
+	}
+
+	/**
+	 * @return the gracefulWorkerShutdownMeter
+	 */
+	public Meter getGracefulWorkerShutdownMeter() {
+		return gracefulWorkerShutdownMeter;
 	}
 
 }
