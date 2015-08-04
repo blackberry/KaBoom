@@ -10,8 +10,8 @@ KaBoom uses Krackle to consume from partitions of topics in Kafka and write them
 * Supports flagging timestamp template HDFS directories as 'Ready' when all a topic's partition's messages have been written for a given hour
 
 ## Author(s)
-* [Dave Ariens](<mailto:dariens@blackberry.com>) (current maintainer) [Github](https://github.com/ariens)
-* [Matthew Bruce](<mailto:mbruce@blackberry.com>) [Github](https://github.com/MatthewRBruce)
+* [Dave Ariens](<mailto:dariens@blackberry.com>) ([Github](https://github.com/ariens))
+* [Matthew Bruce](<mailto:mbruce@blackberry.com>) ([Github](https://github.com/MatthewRBruce))
 
 ## Building
 Performing a Maven install produces: 
@@ -50,6 +50,7 @@ Note: The empty filterSet array is reserved for future to-be-implemented  use-ca
 ### Startup Configuration
 
 Example startup configuration (property file based):
+
 ```
 ######################
 # KaBoom Configuration
