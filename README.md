@@ -22,7 +22,9 @@ Performing a Maven install produces:
 ## Major Changes in 0.8.x
 This release contains the most significant updates to KaBoom we have introduced in a single version bump.  The most significant change is the migration of all running configuration parameters and topic configurations to ZooKeeper. The remaining confiugration continues to be read in via a property file.  The running configuration and topic configuraiton is stored at at zk://<root>/kaboom/config
 
-Workers are now aligned to 
+## Worker Sprints
+
+Workers are now aligned to sprints lasting `workerSprintDurationSeconds` seconds.  A sprint is associated to a partition ID (topic-partition), and starting Kafka offset.  A KaBoom worker will associate the partition IDs largest offest and largest message timestamp for the duration of it's sprint.  Following `fileCloseGraceTimeAfterExpiredMs` milliseconds after the end of a sprint, KaBoom will then close off any open boom files and record the latest offset and largest observed timestamp during the sprint to ZooKeeper.  
 
 ## Startup versus Running Configurations
 Startup configuration changes require a KaBoom service restart to be loaded, whereas the running configuration is reloaded by KaBoom as changes are made in ZooKeeper.  Updated running configuration values are then used as they are accessed by KaBoom.  For example you can change the number of HDFS replicas to store for boom files in Hadoop however it will not affect any open or previously closed files only files that are created after the new configuration has been loaded (as replicas are specified when file creating files from a file system object only).
@@ -79,7 +81,7 @@ auto.offset.reset=smallest
 ```
 
 ## Running Configuration
-Here is an example running configuration stored at zk:///<root>/kaboom/config:
+Here is an example running configuration stored at zk://<root>/kaboom/config:
 
 ```
 {
@@ -108,8 +110,8 @@ Here is an example running configuration stored at zk:///<root>/kaboom/config:
 }
 ```
 
-## Example Configuration File: /opt/kaboom/config/kaboom-env.sh (defines runtime configuration and JVM properties)
-Here is an exmaple environemnt configuration file:
+## Example Configuration File: /opt/kaboom/config/kaboom-env.sh
+Here is an exmaple environemnt configuration file (defines runtime configuration and JVM properties):
 
 ```
 JAVA=`which java`
