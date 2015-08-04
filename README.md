@@ -106,6 +106,7 @@ Here is an example running configuration stored at zk:///<root>/kaboom/config:
         propagateReadyFlagFrequency: 600000,
         propateReadyFlagDelayBetweenPathsMs: 10
 }
+```
 
 ## Example Configuration File: /opt/kaboom/config/kaboom-env.sh (defines runtime configuration and JVM properties)
 Here is an exmaple environemnt configuration file:
