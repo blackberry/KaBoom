@@ -1,10 +1,21 @@
 Changes in 0.8.1:
 
-- Version bump
+- New metric, kaboom:total:gracefully restarted workers
 
 Changes in 0.8.0:
 
-- Major improvements to configuration
+- Refactored configuration into startup/running, running migrated to ZK
+- Introduction of worker sprints
+- Intended to be manage via Kontroller API and web interface
+
+Changes in 0.7.16-HF1
+
+- Improves exception handling and reduce file corruption when closing boom files to ensure that any problems closing the file result in the worker aborting the file.
+
+Changes in 0.7.16
+
+- Adds a new stand-alone utility to write a boom file for a specific partition, start offset and end offset to a specific destination
+- Adds a new meter metric: kaboom:total:dead workers
 
 Changes in 0.7.15 HF1
 

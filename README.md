@@ -19,7 +19,11 @@ Performing a Maven install produces:
 * An RPM package that currently installs RPM based Linux distributions
 * A Debian package for dpkg based Linux distributions
 
+## Major Changes in 0.8.x
+
 This release contains the most significant updates to KaBoom we have introduced in a single version bump.  The most significant change is the migration of all running configuration parameters and topic configurations to ZooKeeper. The remaining confiugration continues to be read in via a property file.  The running configuration and topic configuraiton is stored at at zk://<root>/kaboom/config
+
+Workers are now aligned to 
 
 ## Startup versus Running Configurations
 
@@ -47,7 +51,7 @@ The topic configurations are stored at zk://<root>/kaboom/topics/<id>, as:
 
 Note: The empty filterSet array is reserved for future to-be-implemented  use-cases.
 
-### Startup Configuration
+## Startup Configuration
 
 Example startup configuration (property file based):
 
@@ -80,7 +84,37 @@ auto.offset.reset=smallest
 #socket.timeout.seconds=30000 - this is the default
 ```
 
-### Example Configuration File: /opt/kaboom/config/kaboom-env.sh (defines runtime configuration and JVM properties)
+## Running Configuration
+
+Here is an example running configuration stored at zk:///<root>/kaboom/config:
+
+```
+{
+        version: 8,
+        allowOffsetOverrides: true,
+        sinkToHighWatermark: true,
+        useTempOpenFileDirectory: false,
+        useNativeCompression: false,
+        readyFlagPrevHoursCheck: 24,
+        leaderSleepDurationMs: 600001,
+        compressionLevel: 6,
+        boomFileBufferSize: 16384,
+        boomFileReplicas: 3,
+        boomFileBlocksize: 268435456,
+        boomFileTmpPrefix: "_tmp_",
+        periodicHdfsFlushInterval: 30000,
+        kaboomServerSleepDurationMs: 10000,
+        fileCloseGraceTimeAfterExpiredMs: 30000,
+        forcedZkOffsetTsUpdateMs: 600000,
+        kafkaReadyFlagFilename: "_READY",
+        maxOpenBoomFilesPerPartition: 5,
+        workerSprintDurationSeconds: 3600,
+        propagateReadyFlags: true,
+        propagateReadyFlagFrequency: 600000,
+        propateReadyFlagDelayBetweenPathsMs: 10
+}
+
+## Example Configuration File: /opt/kaboom/config/kaboom-env.sh (defines runtime configuration and JVM properties)
 ```
 JAVA=`which java`
 BASEDIR=/opt/kaboom
@@ -116,7 +150,7 @@ JAVA_OPTS="$JAVA_OPTS -Dkaboom.logs.dir=$LOGDIR"
 CLASSPATH=$CONFIGDIR:/etc/hadoop/conf:$LIBDIR/*
 ```
 
-### Example Configuration FIle: /opt/kaboom/config/log4j2.xml (logging)
+## Example Configuration FIle: /opt/kaboom/config/log4j2.xml (logging)
 ```
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- This status="$LEVEL" on the next line  is for the logging of log4j2 as it configured tself, don't adjust it for  your application logging -->
