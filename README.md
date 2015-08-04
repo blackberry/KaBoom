@@ -20,22 +20,17 @@ Performing a Maven install produces:
 * A Debian package for dpkg based Linux distributions
 
 ## Major Changes in 0.8.x
-
 This release contains the most significant updates to KaBoom we have introduced in a single version bump.  The most significant change is the migration of all running configuration parameters and topic configurations to ZooKeeper. The remaining confiugration continues to be read in via a property file.  The running configuration and topic configuraiton is stored at at zk://<root>/kaboom/config
 
 Workers are now aligned to 
 
 ## Startup versus Running Configurations
-
 Startup configuration changes require a KaBoom service restart to be loaded, whereas the running configuration is reloaded by KaBoom as changes are made in ZooKeeper.  Updated running configuration values are then used as they are accessed by KaBoom.  For example you can change the number of HDFS replicas to store for boom files in Hadoop however it will not affect any open or previously closed files only files that are created after the new configuration has been loaded (as replicas are specified when file creating files from a file system object only).
 
 ## Topic Configurations
-
 Unlike running configurations which are reloaded instantly topic configuration updates trigger all workers assigned to a partition of the topic to be gracefully shutdown (boom files closed, offsets, and offset timestamps  stored in ZK).  The KaBoom client will then detect and restart any gracefully shutdown workers.  Workers load their topic configuration when they are launched.
 
-
 ## Example Topic Configuration
-
 The topic configurations are stored at zk://<root>/kaboom/topics/<id>, as:
 
 ```
@@ -52,7 +47,6 @@ The topic configurations are stored at zk://<root>/kaboom/topics/<id>, as:
 Note: The empty filterSet array is reserved for future to-be-implemented  use-cases.
 
 ## Startup Configuration
-
 Example startup configuration (property file based):
 
 ```
@@ -85,7 +79,6 @@ auto.offset.reset=smallest
 ```
 
 ## Running Configuration
-
 Here is an example running configuration stored at zk:///<root>/kaboom/config:
 
 ```
@@ -115,6 +108,7 @@ Here is an example running configuration stored at zk:///<root>/kaboom/config:
 }
 
 ## Example Configuration File: /opt/kaboom/config/kaboom-env.sh (defines runtime configuration and JVM properties)
+Here is an exmaple environemnt configuration file:
 
 ```
 JAVA=`which java`
@@ -151,7 +145,7 @@ JAVA_OPTS="$JAVA_OPTS -Dkaboom.logs.dir=$LOGDIR"
 CLASSPATH=$CONFIGDIR:/etc/hadoop/conf:$LIBDIR/*
 ```
 
-## Example Configuration FIle: /opt/kaboom/config/log4j2.xml (logging)
+## Example Configuration File: /opt/kaboom/config/log4j2.xml (logging)
 ```
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- This status="$LEVEL" on the next line  is for the logging of log4j2 as it configured tself, don't adjust it for  your application logging -->
