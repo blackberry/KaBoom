@@ -24,7 +24,7 @@ This release contains the most significant updates to KaBoom we have introduced 
 
 ## Worker Sprints
 
-Workers are now aligned to sprints lasting `workerSprintDurationSeconds` seconds.  A sprint is associated to a partition ID (topic-partition), and starting Kafka offset.  A KaBoom worker will associate the partition IDs largest offest and largest message timestamp for the duration of it's sprint.  Following `fileCloseGraceTimeAfterExpiredMs` milliseconds after the end of a sprint, KaBoom will then close off any open boom files and record the latest offset and largest observed timestamp during the sprint to ZooKeeper.  
+Workers are now aligned to sprints lasting `workerSprintDurationSeconds` seconds.  A sprint is associated to a partition ID (topic-partition), and starting Kafka offset.  A KaBoom worker will keep track of the partition IDs latest offest and largest parsed message timestamp for the duration of it's sprint.  Following `fileCloseGraceTimeAfterExpiredMs` milliseconds after the end of a sprint, KaBoom will then close off any open boom files and record the sprint's latest offset and largest observed timestamp to ZooKeeper.  
 
 ## Startup versus Running Configurations
 Startup configuration changes require a KaBoom service restart to be loaded, whereas the running configuration is reloaded by KaBoom as changes are made in ZooKeeper.  Updated running configuration values are then used as they are accessed by KaBoom.  For example you can change the number of HDFS replicas to store for boom files in Hadoop however it will not affect any open or previously closed files only files that are created after the new configuration has been loaded (as replicas are specified when file creating files from a file system object only).
