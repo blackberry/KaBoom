@@ -33,7 +33,7 @@ Startup configuration changes require a KaBoom service restart to be loaded, whe
 Unlike running configurations which are reloaded instantly topic configuration updates trigger all workers assigned to a partition of the topic to be gracefully shutdown (boom files closed, offsets, and offset timestamps  stored in ZK).  The KaBoom client will then detect and restart any gracefully shutdown workers.  Workers load their topic configuration when they are launched.
 
 ## Example Topic Configuration
-The topic configurations are stored at zk://<root>/kaboom/topics/<id>, as:
+The topic configurations are stored at `zk://<root>/kaboom/topics/<id>`, as:
 
 ```
 {
@@ -81,7 +81,7 @@ auto.offset.reset=smallest
 ```
 
 ## Running Configuration
-Here is an example running configuration stored at zk://<root>/kaboom/config:
+Here is an example running configuration stored at `zk://<root>/kaboom/config`:
 
 ```
 {
