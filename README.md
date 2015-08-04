@@ -115,6 +115,7 @@ Here is an example running configuration stored at zk:///<root>/kaboom/config:
 }
 
 ## Example Configuration File: /opt/kaboom/config/kaboom-env.sh (defines runtime configuration and JVM properties)
+
 ```
 JAVA=`which java`
 BASEDIR=/opt/kaboom
