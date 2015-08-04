@@ -20,7 +20,7 @@ Performing a Maven install produces:
 * A Debian package for dpkg based Linux distributions
 
 ## Major Changes in 0.8.x
-This release contains the most significant updates to KaBoom we have introduced in a single version bump.  The most significant change is the migration of all running configuration parameters and topic configurations to ZooKeeper. The remaining confiugration continues to be read in via a property file.  The running configuration and topic configuraiton is stored at at zk://<root>/kaboom/config
+This release contains the most significant updates to KaBoom we have introduced in a single version bump.  The most significant changes include the migration of all running configuration parameters and topic configurations to ZooKeeper and the introduction of worker sprints.  The remaining confiugration continues to be read in via a property file and is now referred to as startup configuration.  
 
 ## Worker Sprints
 
