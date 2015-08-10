@@ -654,28 +654,32 @@ public class Worker implements Runnable {
 			} catch (Exception e) {
 				LOG.error("[{}] There was an error closing off a sprint: ", partitionId, e);
 			}
-
 		}
 
 		private void storeOffsetTimestamp() throws Exception {
-			if (maxMessageTimestamp == -1) {
-				LOG.info("[{}] -1 offsetTimestamp will not be written to ZK", partitionId);
-				return;
+			long zkTimestamp = maxMessageTimestamp;
+			if (zkTimestamp == -1) {
+				LOG.info("[{}] Sprint {} never recieved a message, using sprint end time {} ({}) for last offset timestamp",
+					 partitionId,
+					 sprintNumber,
+					 sprintEnd,
+					 dateString(sprintEnd));
+				zkTimestamp = sprintEnd;				
 			}
 
 			if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
 				curator.create().creatingParentsIfNeeded()
 					 .withMode(CreateMode.PERSISTENT)
-					 .forPath(zkPath_offSetTimestamp, Converter.getBytes(maxMessageTimestamp));
+					 .forPath(zkPath_offSetTimestamp, Converter.getBytes(zkTimestamp));
 			} else {
 				curator.setData().forPath(zkPath_offSetTimestamp,
-					 Converter.getBytes(maxMessageTimestamp));
+					 Converter.getBytes(zkTimestamp));
 			}
 
 			LOG.info("[{}] stored offset timestamp in ZK {} ({})",
 				 partitionId,
-				 maxMessageTimestamp,
-				 dateString(maxMessageTimestamp));
+				 zkTimestamp,
+				 dateString(zkTimestamp));
 		}
 
 		private void storeOffset() throws Exception {

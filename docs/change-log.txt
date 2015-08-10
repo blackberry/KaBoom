@@ -1,3 +1,7 @@
+Changes in 0.8.2:
+
+- Sprints that never receive a message previously (0.8.0, 0.8.1) didn't update ZK with a offset timestamp, now they will store the sprint end time 
+
 Changes in 0.8.1:
 
 - New metric, kaboom:total:gracefully restarted workers
