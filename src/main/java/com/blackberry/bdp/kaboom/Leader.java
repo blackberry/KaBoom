@@ -1,37 +1,42 @@
-/**
- * Copyright 2014 BlackBerry, Limited.
+/*
+ * Copyright 2015 BlackBerry Limited.
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you 
- * may not use this file except in compliance with the License. You may 
- * obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, 
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either 
- * express or implied. See the License for the specific language 
- * governing permissions and limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package com.blackberry.bdp.kaboom;
 
+import static com.blackberry.bdp.common.conversion.Converter.intFromBytes;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.leader.LeaderSelectorListenerAdapter;
 
-import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.blackberry.bdp.kaboom.api.KaBoomTopic;
+import com.blackberry.bdp.common.zk.ZkUtils;
 import com.blackberry.bdp.common.threads.NotifyingThread;
 import com.blackberry.bdp.common.threads.ThreadCompleteListener;
+import com.blackberry.bdp.kaboom.api.KaBoomClient;
 import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
+import com.blackberry.bdp.kaboom.api.KafkaTopic;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,17 +47,14 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	protected static final Random rand = new Random();
 
 	private ReadyFlagWriter readyFlagWriter;
+	private CuratorFramework curator;
 	private Thread readyFlagWriterThread;
-	final protected StartupConfig config;
-	CuratorFramework curator;
+	final protected StartupConfig config;	
+	private HashMap<String, KaBoomTopic> kaboomTopics;
+	private List<KafkaTopic> kafkaTopics;
+	private List<KaBoomClient> kaboomClients;
+	HashMap<Integer, KaBoomClient> kaboomClientMap;
 
-	protected Map<String, String> partitionToHost = new HashMap<>();
-	protected Map<String, List<String>> hostToPartition = new HashMap<>();
-	protected Map<String, KaBoomNodeInfo> clientIdToNodeInfo = new HashMap<>();
-	protected Map<String, String> hostnameToClientId = new HashMap<>();
-	protected Map<String, List<String>> clientToPartitions = new HashMap<>();
-	protected Map<String, String> partitionToClient = new HashMap<>();
-	protected List<String> topics = new ArrayList<>();
 	protected ReadyFlagController readyFlagController;
 
 	public Leader(StartupConfig config) {
@@ -64,54 +66,60 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	@Override
 	public void takeLeadership(CuratorFramework curator) throws Exception {
 		this.curator = curator;
-
-		/**
-		 * Chill for 30 seconds after the election, give whatever caused it a few moments to potentially subside
-		 */
+		ZkUtils.writeToPath(curator, config.getZkPathLeaderClientId(), config.getKaboomId(), true);
 		LOG.info("A new leader has been elected: kaboom.id={}", config.getKaboomId());
-
+		// Chill for 30 seconds after the election, give whatever caused it a few moments to potentially subside
 		Thread.sleep(30 * 1000);
 
 		while (true) {
-			// (Re-)build the data structures and maps that our leader needs to make balancing decisions
+			kafkaTopics = KafkaTopic.getAll(config.getKafkaSeedBrokers(), "leaderLookup");
+			kaboomClients = KaBoomClient.getAll(KaBoomClient.class, curator, config.getZkRootPathClients());						
+			kaboomTopics = KaBoomTopic.getAllMap(config.getCurator(), config.getZkRootPathTopicConfigs(),
+				 config.getZkRootPathPartitionAssignments());			
 
-			topics = new ArrayList<>();
-			StateUtils.readTopicsFromZooKeeper(config.getKafkaZkConnectionString(), topics, config.getTopicToSupportedStatus());
+			int totalPartitions = 0;			
+			for (KafkaTopic kafkaTopic : kafkaTopics) {
+				totalPartitions += kafkaTopic.getPartitions().size();
+			}
 
-			partitionToHost = new HashMap<>();
-			hostToPartition = new HashMap<>();
-			StateUtils.getPartitionHosts(config.getKafkaSeedBrokers(), topics, partitionToHost, hostToPartition);
-
-			clientIdToNodeInfo = new HashMap<>();
-			hostnameToClientId = new HashMap<>();
-			StateUtils.getActiveClients(curator, clientIdToNodeInfo, hostnameToClientId);
-
-			LOG.info("Found a total of {} supported topics in ZooKeeper", topics.size());
-
+			int totalWeight = 0;			
+			for (KaBoomClient kaboomClient : kaboomClients) {
+				kaboomClient.setPartitionLoad(0);
+				totalWeight += kaboomClient.getWeight();
+				kaboomClientMap.put(kaboomClient.getId(), kaboomClient);
+			}
+			
+			LOG.info("Found a total of {} configured topics in ZooKeeper", kaboomTopics.size());
 			/**
-			 * This an an abstract KaBoom leader that must be extended and 
-			 * implemented by an actual load balancer. There are, however, 
-			 * tasks that must always be performed regardless of a balancer 
-			 * implementation. Tasks such as removing assignments for 
-			 * non-existent clients and running the Kafka ready flag writer, 
+			 * This an an abstract KaBoom leader that must be extended and implemented 
+			 * by an actual load balancer. There are, however, tasks that must always be 
+			 * performed regardless of a balancer implementation. Tasks such as removing 
+			 * assignments for non-existent clients and running the Kafka ready flag writer,
 			 * etc. Let's do those, and then call the balancer...
 			 */
-			// Delete any assignments for topics that are not supported (configured) for KaBoom			
 			try {
-				for (String partitionId : curator.getChildren().forPath("/kaboom/assignments")) {
+				for (String partitionId : curator.getChildren().forPath(config.getZkRootPathPartitionAssignments())) {
 					try {
 						Pattern topicPartitionPattern = Pattern.compile("^(.*)-(\\d+)$");
 						Matcher m = topicPartitionPattern.matcher(partitionId);
-
 						if (m.matches()) {
 							String topic = m.group(1);
-							if (!config.getTopicToSupportedStatus().containsKey(topic)
-								 || config.getTopicToSupportedStatus().get(topic) == false) {
-								String assignedClient = new String(curator.getData().forPath(
-									 "/kaboom/assignments/" + partitionId), UTF8);
-								LOG.info("Deleted assignment for unsupported topic partiton {} previously assigned to {}",
-									 partitionId, assignedClient);
-								curator.delete().forPath("/kaboom/assignments/" + partitionId);
+							String assignmentZkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(), partitionId);
+							int assignedClientId = intFromBytes(curator.getData().forPath(assignmentZkPath));
+							String deletedReason = null;
+							if (!kaboomTopics.containsKey(topic)) {
+								deletedReason = "because of missing topic configuration";
+							} else {
+								if (!KaBoomClient.isConnected(curator, config.getZkRootPathClients(), assignedClientId)) {
+									deletedReason = String.format("because client %s is not connected", assignedClientId);
+								}
+							}
+							if (deletedReason != null) {
+								curator.delete().forPath(assignmentZkPath);
+								LOG.info("Assignment of {} to {} deleted from {} {}",
+									 partitionId, assignedClientId, assignmentZkPath, deletedReason);
+							} else {
+								kaboomClientMap.get(assignedClientId).incrementPartitionLoad(1);
 							}
 						}
 					} catch (Exception e) {
@@ -121,38 +129,19 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			} catch (Exception e) {
 				LOG.error("There was a problem pruning the assignments of unsupported topics", e);
 			}
-
-			// Build up our clientToPartitions and partitionsToClients, while 
-			// deleting any assignments for clientIdToNodeInfo that are not connected
-			partitionToClient = new HashMap<>();
-			clientToPartitions = new HashMap<>();
-
-			for (String partition : partitionToHost.keySet()) {
-				Stat stat = curator.checkExists().forPath("/kaboom/assignments/" + partition);
-
-				if (stat != null) {
-					String client = new String(curator.getData().forPath("/kaboom/assignments/" + partition), UTF8);
-
-					if (clientIdToNodeInfo.containsKey(client)) {
-						LOG.debug("Partition {} : client {} is connected", partition, client);
-
-						partitionToClient.put(partition, client);
-						List<String> parts = clientToPartitions.get(client);
-
-						if (parts == null) {
-							parts = new ArrayList<>();
-							clientToPartitions.put(client, parts);
-						}
-						parts.add(partition);
-					} else {
-						LOG.debug("Partition {} : client {} is not connected", partition, client);
-						curator.delete().forPath("/kaboom/assignments/" + partition);
-					}
-				}
+			
+			/**
+			 * By now we have cleaned up invalid partition assignments 
+			 * and we know our total weight and partition count as well
+			 * as how much work each client is currently being assigned
+			 * so we can calculate each client's target load
+			 */
+			
+			for (KaBoomClient kaboomClient : kaboomClients) {				
+				kaboomClient.calculateTargetLoad(totalPartitions, totalWeight);
 			}
-
-			// Calculate our existing load
-			StateUtils.calculateLoad(partitionToHost, clientIdToNodeInfo, clientToPartitions);
+			
+			// With that done then we can call the balance method...			
 
 			try {
 				run_balancer();
@@ -160,17 +149,13 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				LOG.error("The load balancer raised an exception: ", e);
 			}
 
-			try {				
-				ArrayList<KaBoomTopicConfig> topicConfigs = KaBoomTopicConfig.getAll(
-					 KaBoomTopicConfig.class, 
-					 curator, 
-					 "/kaboom/topics");
-				readyFlagController = new ReadyFlagController(config, clientIdToNodeInfo, topicConfigs);
-				readyFlagController.balance();
+			try {
+				readyFlagController = new ReadyFlagController(config);
+				readyFlagController.balance(totalWeight, kaboomClientMap);
 			} catch (Exception e) {
 				LOG.error("There was an error running the ready flag controller's balancer", e);
 			}
-			
+
 			/*
 			 *  Check to see if the kafka_ready flag writer thread exists and is alive:
 			 *  

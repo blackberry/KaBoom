@@ -51,6 +51,6 @@ public class KaBoomTopicConfig extends ZkVersioned{
 	 * @throws Exception
 	 */
 	public KaBoomTopicConfig(CuratorFramework curator, String zkPath) throws Exception {
-		super(curator, zkPath);		
-	}	
+		super(curator, zkPath);
+	}
 }

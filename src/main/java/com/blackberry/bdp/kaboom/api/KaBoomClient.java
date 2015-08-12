@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 dariens.
+ * Copyright 2015 BlackBerry Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,60 +15,62 @@
  */
 package com.blackberry.bdp.kaboom.api;
 
-import com.blackberry.bdp.common.versioned.Util;
-import com.blackberry.bdp.kaboom.KaBoomNodeInfo;
-import java.io.ByteArrayInputStream;
-import java.util.ArrayList;
-import java.util.List;
+import com.blackberry.bdp.common.versioned.ZkVersioned;
 import org.apache.curator.framework.CuratorFramework;
-import org.yaml.snakeyaml.Yaml;
 
-public class KaBoomClient {
+public class KaBoomClient extends ZkVersioned{
 
-	private final int id;
+	private int id;
 	private String hostname;
 	private int weight;
-	private int load;
-	private double targetLoad;
+	private int partitionLoad;
+	private double targetPartitionLoad;
+	private int flagPropagatorLoad = 0;
+	private double targetFlagPropagatorLoad = 0.0;
 	
-	//private final KaBoomNodeInfo nodeInfo;
-
-	public KaBoomClient(int id, KaBoomNodeInfo nodeInfo) {		
-		this(id,			 
-			 nodeInfo.getHostname(),
-			 nodeInfo.getWeight(),
-			 nodeInfo.getLoad(),
-			 nodeInfo.getTargetLoad());
-	}
-
-	public KaBoomClient(int id, 
-		 String hostname,
-		 int weight,
-		 int load,
-		 double targetLoad) {
-		
-		this.id = id;
-		this.hostname = hostname;
-		this.weight = weight;
-		this.load = load;
-		this.targetLoad = targetLoad;
-	}
-
-	public static List<KaBoomClient> getAll(CuratorFramework curator, String zkPath) throws Exception {
-		List<KaBoomClient> clients = new ArrayList<>();
-		List<String> clientNames = Util.childrenInZkPath(curator, zkPath);
-		for (String clientName : clientNames) {
-			byte[] bytes = curator.getData().forPath(zkPath + "/" + clientName);
-			clients.add(new KaBoomClient(Integer.parseInt(clientName), getNodeInfoFromBytes(bytes)));
-		}
-		return clients;
+	/**
+	 * Instantiates a default RunningConfig without any ZK interaction
+	 */
+	public KaBoomClient() { }
+	
+	/**
+	 * Instantiates a ZkVersioned KaBoomClient from ZK Path
+	 * @param curator
+	 * @param zkPath
+	 * @throws Exception
+	 */
+	public KaBoomClient(CuratorFramework curator, String zkPath) throws Exception {
+		super(curator, zkPath);
+	}	
+	
+	public boolean isConnected(CuratorFramework curator, String zkRootPathClients) 
+		 throws Exception {
+		String zkPath = String.format("%s/%d", zkRootPathClients, getId());
+		return curator.checkExists().forPath(zkPath) != null;
 	}
 	
-	public static KaBoomNodeInfo getNodeInfoFromBytes(byte[] bytes) {
-		Yaml yaml = new Yaml();
-		ByteArrayInputStream in = new ByteArrayInputStream(bytes);
-		KaBoomNodeInfo nodeInfo = new KaBoomNodeInfo();
-		return yaml.loadAs(in, KaBoomNodeInfo.class);	
+	public static boolean isConnected(CuratorFramework curator, String zkRootPathClients,  int clientId) 
+		 throws Exception {
+		String zkPath = String.format("%s/%d", zkRootPathClients, clientId);
+		return curator.checkExists().forPath(zkPath) != null;
+	}
+	
+	public void calculateTargetLoad(int totalPartitions, int totalWeight) {
+		targetPartitionLoad = (totalPartitions * (1.0 * weight/ totalWeight));
+	}
+	
+	public void calculateFlagPropagatorTargetLoad(int totalPaths, int totalWeight) {
+		targetFlagPropagatorLoad = (totalPaths * (1.0 * weight/ totalWeight));
+	}
+
+	public int incrementPartitionLoad(int amount) {
+		partitionLoad += amount;
+		return partitionLoad;
+	}
+
+	public int incrementFlagPropagatorLoad(int amount) {
+		flagPropagatorLoad += amount;
+		return flagPropagatorLoad;
 	}
 
 	/**
@@ -76,6 +78,13 @@ public class KaBoomClient {
 	 */
 	public int getId() {
 		return id;
+	}
+
+	/**
+	 * @param id the id to set
+	 */
+	public void setId(int id) {
+		this.id = id;
 	}
 
 	/**
@@ -107,30 +116,59 @@ public class KaBoomClient {
 	}
 
 	/**
-	 * @return the load
+	 * @return the partitionLoad
 	 */
-	public int getLoad() {
-		return load;
+	public int getPartitionLoad() {
+		return partitionLoad;
 	}
 
 	/**
-	 * @param load the load to set
+	 * @param load the partitionLoad to set
 	 */
-	public void setLoad(int load) {
-		this.load = load;
+	public void setPartitionLoad(int load) {
+		this.partitionLoad = load;
 	}
 
 	/**
-	 * @return the targetLoad
+	 * @return the targetPartitionLoad
 	 */
 	public double getTargetLoad() {
-		return targetLoad;
+		return targetPartitionLoad;
 	}
 
 	/**
-	 * @param targetLoad the targetLoad to set
+	 * @param targetLoad the targetPartitionLoad to set
 	 */
 	public void setTargetLoad(double targetLoad) {
-		this.targetLoad = targetLoad;
+		this.targetPartitionLoad = targetLoad;
 	}
+
+	/**
+	 * @return the flagPropagatorLoad
+	 */
+	public int getFlagPropagatorLoad() {
+		return flagPropagatorLoad;
+	}
+
+	/**
+	 * @param flagPropagatorLoad the flagPropagatorLoad to set
+	 */
+	public void setFlagPropagatorLoad(int flagPropagatorLoad) {
+		this.flagPropagatorLoad = flagPropagatorLoad;
+	}
+
+	/**
+	 * @return the targetFlagPropagatorLoad
+	 */
+	public double getFlagPropagatorTargetLoad() {
+		return targetFlagPropagatorLoad;
+	}
+
+	/**
+	 * @param flagPropagatorTargetLoad the targetFlagPropagatorLoad to set
+	 */
+	public void setFlagPropagatorTargetLoad(double flagPropagatorTargetLoad) {
+		this.targetFlagPropagatorLoad = flagPropagatorTargetLoad;
+	}
+
 }

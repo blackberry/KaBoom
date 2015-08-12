@@ -1,6 +1,30 @@
 Changes in 0.8.2:
 
+- Fixes some missing/improperly formatted license headers
+- The leader now writes their client ID to ZK
 - Sprints that never receive a message previously (0.8.0, 0.8.1) didn't update ZK with a offset timestamp, now they will store the sprint end time 
+- New startup configuration variable zkRootPath configured via property: kaboom.zk.root.path (default: "/kaboom")
+- New startup configuration variable zkRootPathClients configured via property: kaboom.zk.root.path.clients (default: zkRootPath + "/clients")
+- New startup configuration variable zkRootPathTopicConfigs configured via property: kaboom.zk.root.path.topic.configs (default: zkRootPath + "/topics")
+- New startup configuration variable zkRootPathPartitionAssignments configured via property: kaboom.zk.root.path.partition.assignments (default: zkRootPath + "/assignments")
+- New startup configuration variable zkRootPathFlagAssignments configured via property: kaboom.zk.root.path.flag.assignments (default: zkRootPath + "/flag-assignments")
+- New startup configuration variable zkPathRunningConfig configured via property: kaboom.zk.path.runningConfig (default: zkRootPath + "/config")
+- New startup configuration variable zkPathLeaderClientId configured via property: kaboom.zk.leader.clientId(default: zkRootPath + "/leader")
+- Refactored any zkPaths to refer to the paths above in StartupConfig
+- Removed StartupConfig.getTopicConfig(topicName)
+- Removed a slew of unneccessary getters from StartupConfig
+- ReadyFlagWriter now uses KaBoomTopic from the api package instead of StateUtils to get topics and their partition lists
+- Added public KaBoomTopicConfig getConfig() to KaBoomTopic in the API package making KaBoomTopic more authoritative
+- Added new class KaBoomPartitionDetails to replace the private inner class KaBoomTopic.PartitionDetails that was being exposed via the getter
+- Removed the ZK traversal public method to get the oldest partition timestamp for a topic name from ReadyFlagWriter
+- Added public long KaBoomTopic.oldestPartitionOffset() to replace above
+- Removed usage of the Kafka API in ReadyFlagWriter as above changes in KaBoomTopic now include all the info required
+- Removed StateUtils (now API usage is how  metadata and configurations are discovered)
+- Removed KaBoomNodeInfo in favor of the API KaBoomClient
+- Added KaBoomClient.calculateTargetLoad(int totalPartitions, int totalWeight)
+- KaBoomClient now extends ZkVersioned 
+- Migrated KaBoom's ephemeral node for client to be a persisted ephemeral mode KaBoomClient removing the yaml dependencies
+- KaBoom client ephemeral node serialization is now updated as the client's attributes change
 
 Changes in 0.8.1:
 

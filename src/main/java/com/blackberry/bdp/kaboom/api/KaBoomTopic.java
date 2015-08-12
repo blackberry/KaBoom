@@ -16,6 +16,7 @@ import org.apache.curator.framework.CuratorFramework;
 import com.blackberry.bdp.common.versioned.Util;
 import com.blackberry.bdp.common.conversion.Converter;
 import java.nio.charset.Charset;
+import java.util.HashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,8 +25,9 @@ public class KaBoomTopic {
 	private static final Logger LOG = LoggerFactory.getLogger(KaBoomTopic.class);
 	private static final Charset UTF8 = Charset.forName("UTF-8");
 	private final String topicName;
-	private final List<PartitionDetails> partitionDetails = new ArrayList<>();
-	
+	private final List<KaBoomPartitionDetails> partitionDetails = new ArrayList<>();
+	private KaBoomTopicConfig config;
+
 	public KaBoomTopic(String topicName) {
 		this.topicName = topicName;
 	}
@@ -40,21 +42,22 @@ public class KaBoomTopic {
 	public static List<KaBoomTopic> getAll(CuratorFramework curator,
 		 String zkPathTopics,
 		 String zkPathAssignments) throws Exception {
-		
+
 		List<KaBoomTopic> topics = new ArrayList<>();
-		
+
 		for (String topicName : Util.childrenInZkPath(curator, zkPathTopics)) {
 			KaBoomTopic topic = new KaBoomTopic(topicName);
 			topics.add(topic);
-			for (String partition :  Util.childrenInZkPath(curator, zkPathTopics + "/" + topicName)) {
+			String topicZkPath = String.format("%s/%s", zkPathTopics, topicName);
+			for (String partition : Util.childrenInZkPath(curator, topicZkPath)) {
 				int partitionId = Integer.parseInt(partition);
 				long offset = 0;
 				long offsetTimestamp = 0;
 				int assignedKaBoomClientId = 0;
-				String path = zkPathTopics + "/" + topicName + "/" + partition;
-				
+				String path = topicZkPath + "/" + partition;
+
 				offset = Converter.longFromBytes(curator.getData().forPath(path));
-				
+
 				if (curator.checkExists().forPath(path + "/offset_timestamp") != null) {
 					offsetTimestamp = Converter.longFromBytes(curator.getData().forPath(path + "/offset_timestamp"));
 				}
@@ -62,11 +65,35 @@ public class KaBoomTopic {
 				if (curator.checkExists().forPath(assignmentPath) != null) {
 					assignedKaBoomClientId = Integer.parseInt(new String(curator.getData().forPath(assignmentPath), UTF8));
 				}
-				
-				topic.partitionDetails.add(new PartitionDetails(partitionId, offset, offsetTimestamp, assignedKaBoomClientId));
+
+				topic.partitionDetails.add(new KaBoomPartitionDetails(partitionId, offset, offsetTimestamp, assignedKaBoomClientId));
+				topic.config = KaBoomTopicConfig.get(KaBoomTopicConfig.class, curator, topicZkPath);
 			}
 		}
 		return topics;
+	}
+
+	public static HashMap<String, KaBoomTopic> getAllMap(CuratorFramework curator,
+		 String zkPathTopics,
+		 String zkPathAssignments) throws Exception{		
+		HashMap<String, KaBoomTopic> map = new HashMap<>();
+		for (KaBoomTopic topic : getAll(curator, zkPathTopics, zkPathAssignments)) {
+			map.put(topic.topicName, topic);
+		}
+		return map;
+	}
+	
+	public long oldestPartitionOffset() throws Exception {
+		long oldestTimestamp = -1;
+		for (KaBoomPartitionDetails partitonDetail : partitionDetails) {
+			if (partitonDetail.getOffsetTimestamp() < oldestTimestamp || oldestTimestamp == -1) {
+				oldestTimestamp = partitonDetail.getOffsetTimestamp();
+			}
+		}
+		if (oldestTimestamp == -1) {
+			throw new Exception("Failed to get oldest partition timestamp for topic: " + topicName);
+		}
+		return oldestTimestamp;
 	}
 
 	/**
@@ -79,41 +106,15 @@ public class KaBoomTopic {
 	/**
 	 * @return the partitionDetails
 	 */
-	public List<PartitionDetails> getPartitionDetails() {
+	public List<KaBoomPartitionDetails> getPartitionDetails() {
 		return partitionDetails;
 	}
-	
-	private static class PartitionDetails
-	{
-		private final int partitionId;
-		private final long offset;
-		private final long offset_timestamp;
-		private final int assignedKaBoomClientId;
-		
-		private PartitionDetails(int partitionId,
-			 long offset,
-			 long offset_timestamp,
-			 int assignedKaBoomClientId) {
-			this.partitionId = partitionId;
-			this.offset = offset;
-			this.offset_timestamp = offset_timestamp;
-			this.assignedKaBoomClientId = assignedKaBoomClientId;
-		}
-			 		
-		public int getPartitionId() {			
-			return this.partitionId;
-		}
-		
-		public long getOffset() {
-			return this.offset;			
-		}
-		
-		public long getOffsetTimestamp() {
-			return this.offset_timestamp;
-		}
-		
-		public int getAssignedKaBoomClientId() {
-			return this.assignedKaBoomClientId;
-		}			  
+
+	/**
+	 * @return the config
+	 */
+	public KaBoomTopicConfig getConfig() {
+		return config;
 	}
+
 }

@@ -1,11 +1,17 @@
 /**
  * Copyright 2014 BlackBerry, Limited.
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package com.blackberry.bdp.kaboom;
 
@@ -34,6 +40,7 @@ import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.Meter;
 import org.apache.curator.framework.recipes.cache.NodeCache;
 import org.apache.curator.framework.recipes.cache.NodeCacheListener;
+import org.apache.zookeeper.data.Stat;
 
 public class Worker implements Runnable {
 
@@ -75,6 +82,8 @@ public class Worker implements Runnable {
 	private WorkSprint previousSprint;
 	private WorkSprint currentSprint;
 	private boolean gracefulShutdown = false;
+	private boolean persistMetadataOnShutdown = true;
+	private boolean finished = false;
 
 	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
@@ -231,28 +240,38 @@ public class Worker implements Runnable {
 		this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getCurator(), ZK_ROOT + "/topics/" + topic);
 		this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
 		this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
-
+		this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
 		this.hdfsOutputPath = new TimeBasedHdfsOutputPath(config, topicConfig, partition);
+
 		partitionId = String.format("%s-%d", topic, partition);
+
 		LOG.info("[{}] worker instantiated with topic configuration version {}", partitionId, topicConfig.getVersion());
 
-		this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
-
 		NodeCache nodeCache = new NodeCache(curator, topicConfig.getZkPath());
-
 		nodeCache.getListenable().addListener(new NodeCacheListener() {
 			@Override
 			public void nodeChanged() throws Exception {
-				KaBoomTopicConfig newTopicConfig = KaBoomTopicConfig.get(
-					 KaBoomTopicConfig.class, curator, ZK_ROOT + "/topics/" + topic);
-				if (!newTopicConfig.getVersion().equals(topicConfig.getVersion())) {
-					LOG.info("[{}] topic configuration (version {}) was updated to version {}, shutting down worker...",
-						 partitionId, 
-						 topicConfig.getVersion(),
-						 newTopicConfig.getVersion());					
+				Stat newZkStat = curator.checkExists().forPath(topicConfig.getZkPath());
+				if (newZkStat == null) {
+					LOG.info("[{}] topic configuration for {} has been deleted",
+						 partitionId,
+						 topicConfig.getId());
+					persistMetadataOnShutdown = false;
 					stop();
+				} else {
+					KaBoomTopicConfig newTopicConfig = KaBoomTopicConfig.get(
+						 KaBoomTopicConfig.class, curator, ZK_ROOT + "/topics/" + topic);
+					if (!newTopicConfig.getVersion().equals(topicConfig.getVersion())) {
+						LOG.info("[{}] topic {} configuration (version {}) was updated to version {}, shutting down worker...",
+							 partitionId,
+							 topicConfig.getId(),
+							 topicConfig.getVersion(),
+							 newTopicConfig.getVersion());
+						stop();
+					}
 				}
 			}
+
 		});
 		nodeCache.start();
 
@@ -329,7 +348,6 @@ public class Worker implements Runnable {
 	@Override
 	public void run() {
 		try {
-
 			zkPath = getZK_ROOT() + "/topics/" + getTopic() + "/" + getPartition();
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
 			zkPath_offSetOverride = zkPath + "/offset_override";
@@ -354,7 +372,7 @@ public class Worker implements Runnable {
 				 currentSprint.offset,
 				 MetricRegistrySingleton.getInstance().getMetricsRegistry());
 
-			LOG.info("[{}] Created worker with topic config version {} starting at offset {}.", 
+			LOG.info("[{}] Created worker with topic config version {} starting at offset {}.",
 				 getPartitionId(),
 				 topicConfig.getVersion(),
 				 currentSprint.offset);
@@ -392,10 +410,9 @@ public class Worker implements Runnable {
 					}
 
 					/**
-					 * offset always refers to the next offset we expect and
-					 * since we just called consumer.getMessage() let's see
-					 * if the offset of the last message is what we expected
-					 * and handle the fun edge cases when it's not
+					 * offset always refers to the next offset we expect and since we just 
+					 * called consumer.getMessage() let's see if the offset of the last message 
+					 * is what we expected and handle the fun edge cases when it's not
 					 */
 					if (currentSprint.offset != consumer.getLastOffset()) {
 						long highWatermark = consumer.getHighWaterMark();
@@ -492,9 +509,7 @@ public class Worker implements Runnable {
 						// Move position to the end of the timestamp						
 						pos += tsp.getLength();
 						/**
-						 * mbruce: occasionally we get a line that is truncated partway through the timestamp,
-						 * however we still have the rest of the last message in the byte buffer and parsing the 
-						 * timestamp will push us past then end of the line
+						 * mbruce: occasionally we get a line that is truncated partway through the timestamp, however we still have the rest of the last message in the byte buffer and parsing the timestamp will push us past then end of the line
 						 */
 						if (pos > length) {
 							LOG.error("Error: parsing timestamp has went beyond length of the message");
@@ -544,36 +559,43 @@ public class Worker implements Runnable {
 				}
 			}
 
-			LOG.info("[{}] KaBoom client shutting down and closing all output files.", getPartitionId());
+			shutdownProcedure();
 
-			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagGaugeName);
-			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagSecGaugeName);
-			MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(msgWrittenGaugeName);
-
-			try {
-				hdfsOutputPath.closeAll();
-				LOG.info("[{}] storing offset {} and max timestamp {} into ZooKeeper.",
-					 partitionId,
-					 currentSprint.offset,
-					 currentSprint.maxMessageTimestamp);
-				currentSprint.storeOffset();
-				currentSprint.storeOffsetTimestamp();
-			} catch (Exception e) {
-				gracefulShutdown = false;
-				LOG.error("[{}] Error storing offset {} and timestamp {} in ZooKeeper",
-					 partitionId,
-					 currentSprint.offset,
-					 currentSprint.maxMessageTimestamp,
-					 e);
-			}
-			LOG.info("[{}] Worker stopped. (Read {} lines.  Next offset is {})", partitionId, messagesWritten, currentSprint.offset);
 		} catch (Exception e) {
 			LOG.error("[{}] An exception occured while setting up this worker thread", getPartitionId(), e);
 		} finally {
 			synchronized (workersLock) {
 				workers.remove(this);
 			}
+			finished = true;
 		}
+	}
+
+	private void shutdownProcedure() {
+		LOG.info("[{}] Shutting down on sprint number {} with persistMetadata={}, offset={} and timestamp={} ({})",
+			 partitionId,
+			 currentSprint.sprintNumber,
+			 persistMetadataOnShutdown,
+			 currentSprint.offset,
+			 currentSprint.maxMessageTimestamp,
+			 dateString(currentSprint.maxMessageTimestamp));
+
+		MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagGaugeName);
+		MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagSecGaugeName);
+		MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(msgWrittenGaugeName);
+
+		try {
+			hdfsOutputPath.closeAll();
+			LOG.info("[{}] all output files have been closed", partitionId);
+			if (persistMetadataOnShutdown) {
+				currentSprint.storeOffset();
+				currentSprint.storeOffsetTimestamp();
+			}
+		} catch (Exception e) {
+			gracefulShutdown = false;
+			LOG.error("[{}] Exception raised during shutdown: ", e);
+		}
+		LOG.info("[{}] Worker stopped after having processed {} events", partitionId, messagesWritten);
 	}
 
 	private long getStoredOffsetFromZk() throws Exception {
@@ -582,12 +604,10 @@ public class Worker implements Runnable {
 			return 0L;
 		} else {
 			long zkOffset = Converter.longFromBytes(curator.getData().forPath(zkPath), 0);
-
 			LOG.info("[{}] offset {} found in path {}", partitionId, zkOffset, zkPath);
 
 			if (curator.checkExists().forPath(zkPath_offSetOverride) != null) {
 				long zkOffsetOverride = Converter.longFromBytes(curator.getData().forPath(zkPath_offSetOverride), 0);
-
 				if (config.getRunningConfig().getAllowOffsetOverrides()) {
 					LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}",
 						 this.getPartitionId(), zkOffset, zkOffsetOverride, config.getRunningConfig().getAllowOffsetOverrides());
@@ -608,6 +628,13 @@ public class Worker implements Runnable {
 	 */
 	public boolean isGracefulShutdown() {
 		return gracefulShutdown;
+	}
+
+	/**
+	 * @return the finished
+	 */
+	public boolean isFinished() {
+		return finished;
 	}
 
 	private class WorkSprint {
@@ -664,7 +691,7 @@ public class Worker implements Runnable {
 					 sprintNumber,
 					 sprintEnd,
 					 dateString(sprintEnd));
-				zkTimestamp = sprintEnd;				
+				zkTimestamp = sprintEnd;
 			}
 
 			if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {

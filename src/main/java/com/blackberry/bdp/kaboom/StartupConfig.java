@@ -1,11 +1,17 @@
 /**
  * Copyright 2014 BlackBerry, Limited.
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package com.blackberry.bdp.kaboom;
 
@@ -37,6 +43,7 @@ import com.blackberry.bdp.kaboom.api.RunningConfig;
 import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
 import com.codahale.metrics.Meter;
+import java.util.Iterator;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.cache.NodeCache;
 import org.apache.curator.framework.recipes.cache.NodeCacheListener;
@@ -45,6 +52,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.zookeeper.data.Stat;
 
 /**
  *
@@ -55,7 +63,6 @@ public class StartupConfig {
 	private static final Logger LOG = LoggerFactory.getLogger(StartupConfig.class);
 
 	private static final String defaultProperyFile = "kaboom.properties";
-	private final Properties props;
 	private final Parser propsParser;
 	private final Object fsLock = new Object();
 
@@ -71,17 +78,24 @@ public class StartupConfig {
 	private String hostname;
 	private String kaboomZkConnectionString;
 	private String kafkaZkConnectionString;
-	private final String loadBalancer;
+	private final String loadBalancerType;
 	private final RunningConfig runningConfig;
-	private final String runningConfigZkPath;
+	
 	private final Meter deadWorkerMeter;
 	private final Meter gracefulWorkerShutdownMeter;
+	
+	private String zkRootPath = "/kaboom";	
+	private String zkRootPathClients = String.format("%s/%s", zkRootPath, "clients");
+	private String zkRootPathTopicConfigs = String.format("%s/%s", zkRootPath, "topics");
+	private String zkRootPathPartitionAssignments = String.format("%s/%s", zkRootPath, "assignments");
+	private String zkRootPathFlagAssignments = String.format("%s/%s", zkRootPath, "flag-assignments");
+	private String zkPathRunningConfig = String.format("%s/%s", zkRootPath, "config");
+	private String zkPathLeaderClientId = String.format("%s/%s", zkRootPath, "leader");
 
 	private final Map<String, String> topicToProxyUser = new HashMap<>();
-	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();	
+	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
 	private final Map<String, Boolean> topicToSupportedStatus = new HashMap<>();
-	private final Map<String, KaBoomTopicConfig> topicConfigs = new HashMap<>();
-
+	
 	/**
 	 * POSIX style NONE("---"), EXECUTE("--x"), WRITE("-w-"), WRITE_EXECUTE("-wx"), READ("r--"), READ_EXECUTE("r-x"), READ_WRITE("rw-"), ALL("rwx");
 	 */
@@ -91,36 +105,32 @@ public class StartupConfig {
 		LOG.info(" *** start dumping configuration *** ");
 		LOG.info("kaboomId: {}", getKaboomId());
 		LOG.info("weight: {}", getWeight());
-		LOG.info("kerberosPrincipal: {}", getKerberosKeytab());
-		LOG.info("kerberosKeytab: {}", getKerberosKeytab());
+		LOG.info("kerberosPrincipal: {}", kerberosPrincipal);
+		LOG.info("kerberosKeytab: {}", kerberosKeytab);
 		LOG.info("hostname: {}", getHostname());
-		LOG.info("kaboomZkConnectionString: {}", getKaboomZkConnectionString());
-		LOG.info("kafkaZkConnectionString: {}", getKafkaSeedBrokers());
+		LOG.info("kaboomZkConnectionString: {}", kaboomZkConnectionString);
+		LOG.info("kafkaZkConnectionString: {}", kafkaZkConnectionString);
 		LOG.info("kafkaSeedBrokers: {}", getKafkaSeedBrokers());
-		LOG.info("loadBalancer: {}", getLoadBalancer());
+		LOG.info("loadBalancer: {}", loadBalancerType);
 		LOG.info("Using kerberos uthentication.");
-		LOG.info("Kerberos principal: {}", getKerberosPrincipal());
-		LOG.info("Kerberos keytab: {}", getKerberosKeytab());
-
-		for (Map.Entry<String, String> entry : getTopicToProxyUser().entrySet()) {
-			LOG.debug("topicToProxyUser: {} -> {}", entry.getKey(), entry.getValue());
-		}
-
+		LOG.info("Kerberos principal: {}", kerberosPrincipal);
+		LOG.info("Kerberos keytab: {}", kerberosKeytab);
+		LOG.info("zkRootPath: {}", getZkRootPath());
+		LOG.info("zkRootPathClients: {}", zkRootPathClients);
+		LOG.info("zkRootPathTopicConfigs: {}", getZkRootPathTopicConfigs());
+		LOG.info("zkRootPathPartitionAssignments: {}", zkRootPathPartitionAssignments);
+		LOG.info("zkPathRunningConfig: {}", zkPathRunningConfig);
+		LOG.info("zkPathLeaderClientId: {}", zkPathLeaderClientId);		
 		LOG.info(" *** end dumping configuration *** ");
 	}
 
 	public StartupConfig() throws Exception {
 		this(getProperties());
-	}	
-	
+	}
+
 	public StartupConfig(Properties props) throws Exception {
 		propsParser = new Parser(props);
 
-		this.props = props;
-
-		/**
-		 * Static configuration items: read once and remain fixed until Kaboom is restarted
-		 */
 		hadoopConfiguration = buildHadoopConfiguration();
 		consumerConfiguration = new ConsumerConfiguration(props);
 		kaboomId = propsParser.parseInteger("kaboom.id");
@@ -132,40 +142,70 @@ public class StartupConfig {
 		kaboomZkConnectionString = propsParser.parseString("zookeeper.connection.string");
 		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
-		loadBalancer = propsParser.parseString("kaboom.load.balancer.type", "even");
-		runningConfigZkPath = propsParser.parseString("kaboom.runningConfig.zkPath", "/kaboom/config");
-		curator = buildCuratorFramework();		
+		loadBalancerType = propsParser.parseString("kaboom.load.balancer.type", "even");
+		zkPathRunningConfig = propsParser.parseString("kaboom.zk.path.runningConfig", zkPathRunningConfig);
+		zkPathLeaderClientId = propsParser.parseString("kaboom.zk.path.leader.clientId", zkPathLeaderClientId);
+		zkRootPath = propsParser.parseString("kaboom.zk.root.path", zkRootPath);
+		zkRootPathTopicConfigs = propsParser.parseString("kaboom.zk.root.path.topic.configs", zkRootPathTopicConfigs);
+		zkRootPathClients = propsParser.parseString("kaboom.zk.root.path.clients", zkRootPathClients);
+		zkRootPathPartitionAssignments = propsParser.parseString("kaboom.zk.root.path.partition.assignments", zkRootPathPartitionAssignments);
+		zkRootPathFlagAssignments = propsParser.parseString("kaboom.zk.root.path.flag.assignments", zkRootPathFlagAssignments);
+		curator = buildCuratorFramework();
 		deadWorkerMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:dead workers");
 		gracefulWorkerShutdownMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:gracefully shutdown workers");
-		
-		runningConfig = RunningConfig.get(RunningConfig.class, curator, runningConfigZkPath);		
 
-		final NodeCache nodeCache = new NodeCache(curator, runningConfigZkPath);
+		runningConfig = RunningConfig.get(RunningConfig.class, curator, zkPathRunningConfig);
+
+		final NodeCache nodeCache = new NodeCache(curator, getZkPathRunningConfig());
 		nodeCache.getListenable().addListener(new NodeCacheListener() {
 			@Override
 			public void nodeChanged() throws Exception {
 				LOG.info("The running configuration has changed in ZooKeeper");
 				runningConfig.reload();
 			}
+
 		});
 		nodeCache.start();
-		
-		/** 
-		 * Get all the topic configurations and build the following maps while we're at it 
-		 *	- topicToProxyUser 
-		 *	- topicToSupportedStatus
+
+		/**
+		 * Get all the topic configurations and build the following maps while we're at it
+		 *  - topicConfigs
+		 *  - topicToProxyUser 
+		 *  - topicToSupportedStatus
 		 */
-		for(final KaBoomTopicConfig topicConfig : KaBoomTopicConfig.getAll(KaBoomTopicConfig.class, curator, "/kaboom/topics")) {
-			topicConfigs.put(topicConfig.getId(), topicConfig);
-			topicToProxyUser.put(topicConfig.getId(), topicConfig.getProxyUser());			
+		Iterator<KaBoomTopicConfig> iter = KaBoomTopicConfig.getAll(
+			 KaBoomTopicConfig.class, curator, "/kaboom/topics").iterator();
+
+		while (iter.hasNext()) {
+			final KaBoomTopicConfig topicConfig = iter.next();
+			topicToProxyUser.put(topicConfig.getId(), topicConfig.getProxyUser());
 			topicToSupportedStatus.put(topicConfig.getId(), true);
 			authenticatedFsForProxyUser(topicConfig.getProxyUser());
 			final NodeCache nodeCacheTopic = new NodeCache(curator, "/kaboom/topics/" + topicConfig.getId());
 			nodeCacheTopic.getListenable().addListener(new NodeCacheListener() {
 				@Override
 				public void nodeChanged() throws Exception {
-					LOG.info("The topic configuration has changed in ZooKeeper");
-					topicConfig.reload();
+					Stat newZkStat = curator.checkExists().forPath(topicConfig.getZkPath());
+					if (newZkStat == null) {
+						topicToProxyUser.remove(topicConfig.getId());
+						topicToSupportedStatus.remove(topicConfig.getId());
+						LOG.info("The topic configuration for {} has been deleted", topicConfig.getId());
+					} else {
+						LOG.info("The topic configuration has changed in ZooKeeper");
+						String oldTopicId = topicConfig.getId();
+						topicConfig.reload();
+						if (!topicConfig.getId().equals(oldTopicId)) {
+							// Remove all references from old topic name
+							topicToProxyUser.remove(oldTopicId);
+							topicToSupportedStatus.remove(oldTopicId);
+							// Add references to new topic name
+							topicToProxyUser.put(topicConfig.getId(), topicConfig.getProxyUser());
+							topicToSupportedStatus.put(topicConfig.getId(), true);
+							authenticatedFsForProxyUser(topicConfig.getProxyUser());
+							LOG.info("the topic {} was renamed to {} deleted old topic references",
+								 oldTopicId, topicConfig.getId());
+						}
+					}
 				}
 			});
 			nodeCacheTopic.start();
@@ -174,25 +214,26 @@ public class StartupConfig {
 
 	/**
 	 * Builds the proxyUserToFileSystem mapping
+	 *
 	 * @param proxyUser
-	 * @return 
+	 * @return
 	 */
 	public final FileSystem authenticatedFsForProxyUser(final String proxyUser) {
-		Authenticator.getInstance().setKerbConfPrincipal(getKerberosPrincipal());
-		Authenticator.getInstance().setKerbKeytab(getKerberosKeytab());
+		Authenticator.getInstance().setKerbConfPrincipal(kerberosPrincipal);
+		Authenticator.getInstance().setKerbKeytab(kerberosKeytab);
 		if (proxyUserToFileSystem.containsKey(proxyUser)) {
 			return proxyUserToFileSystem.get(proxyUser);
 		} else {
-			try {				
+			try {
 				LOG.info("Attempting to create file system {} for {}", hadoopUrlPath, proxyUser);
-				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>() {					
-					@Override					
+				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>() {
+					@Override
 					public Void run() throws Exception {
 						synchronized (fsLock) {
 							try {
 								FileSystem fs = hadoopUrlPath.getFileSystem(hadoopConfiguration);
 								proxyUserToFileSystem.put(proxyUser, fs);
-								LOG.debug("Opening {} for proxy user {}", hadoopUrlPath, proxyUser);								
+								LOG.debug("Opening {} for proxy user {}", hadoopUrlPath, proxyUser);
 							} catch (IOException ioe) {
 								LOG.error("Error getting file system {} for proxy user {}", hadoopUrlPath, proxyUser, ioe);
 								throw ioe;
@@ -200,12 +241,13 @@ public class StartupConfig {
 						}
 						return null;
 					}
+
 				});
 			} catch (IOException | InterruptedException e) {
 				LOG.error("Error creating file.", e);
-			}			
+			}
 			return proxyUserToFileSystem.get(proxyUser);
-		}		
+		}
 	}
 
 	/**
@@ -273,7 +315,7 @@ public class StartupConfig {
 	private CuratorFramework buildCuratorFramework() {
 		RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
 		LOG.info("attempting to connect to ZK with connection string {}", kaboomZkConnectionString);
-		String[] connStringAndPrefix = getKaboomZkConnectionString().split("/", 2);
+		String[] connStringAndPrefix = kaboomZkConnectionString.split("/", 2);
 		CuratorFramework newCurator;
 		if (connStringAndPrefix.length == 1) {
 			newCurator = CuratorFrameworkFactory.newClient(kaboomZkConnectionString, retryPolicy);
@@ -295,13 +337,6 @@ public class StartupConfig {
 	}
 
 	/**
-	 * @param kaboomId the kaboomId to set
-	 */
-	public void setKaboomId(int kaboomId) {
-		this.kaboomId = kaboomId;
-	}
-
-	/**
 	 * @return the weight
 	 */
 	public int getWeight() {
@@ -309,129 +344,10 @@ public class StartupConfig {
 	}
 
 	/**
-	 * @param weight the weight to set
-	 */
-	public void setWeight(int weight) {
-		this.weight = weight;
-	}
-
-	/**
-	 * @return the topicToProxyUser
-	 */
-	public Map<String, String> getTopicToProxyUser() {
-		return topicToProxyUser;
-	}
-
-	/**
-	 * @return the kerberosPrincipal
-	 */
-	public String getKerberosPrincipal() {
-		return kerberosPrincipal;
-	}
-
-	/**
-	 * @param kerberosPrincipal the kerberosPrincipal to set
-	 */
-	public void setKerberosPrincipal(String kerberosPrincipal) {
-		this.kerberosPrincipal = kerberosPrincipal;
-	}
-
-	/**
-	 * @return the kerberosKeytab
-	 */
-	public String getKerberosKeytab() {
-		return kerberosKeytab;
-	}
-
-	/**
-	 * @param kerberosKeytab the kerberosKeytab to set
-	 */
-	public void setKerberosKeytab(String kerberosKeytab) {
-		this.kerberosKeytab = kerberosKeytab;
-	}
-
-	/**
-	 * @return the hostname
-	 */
-	public String getHostname() {
-		return hostname;
-	}
-
-	/**
-	 * @param hostname the hostname to set
-	 */
-	public void setHostname(String hostname) {
-		this.hostname = hostname;
-	}
-
-	/**
-	 * @return the kaboomZkConnectionString
-	 */
-	public String getKaboomZkConnectionString() {
-		return kaboomZkConnectionString;
-	}
-
-	/**
-	 * @param kaboomZkConnectionString the kaboomZkConnectionString to set
-	 */
-	public void setKaboomZkConnectionString(String kaboomZkConnectionString) {
-		this.kaboomZkConnectionString = kaboomZkConnectionString;
-	}
-
-	/**
 	 * @return the hadoopConfiguration
 	 */
 	public Configuration getHadoopConfiguration() {
 		return hadoopConfiguration;
-	}
-
-	/**
-	 * @param hadoopConfiguration the hadoopConfiguration to set
-	 */
-	public void setHadoopConfiguration(Configuration hadoopConfiguration) {
-		this.hadoopConfiguration = hadoopConfiguration;
-	}
-
-	/**
-	 * @return the kafkaSeedBrokers
-	 */
-	public String getKafkaSeedBrokers() {
-		return kafkaSeedBrokers;
-	}
-
-	/**
-	 * @param kafkaSeedBrokers the kafkaSeedBrokers to set
-	 */
-	public void setKafkaSeedBrokers(String kafkaSeedBrokers) {
-		this.kafkaSeedBrokers = kafkaSeedBrokers;
-	}
-
-	/**
-	 * @return the kafkaZkConnectionString
-	 */
-	public String getKafkaZkConnectionString() {
-		return kafkaZkConnectionString;
-	}
-
-	/**
-	 * @param kafkaZkConnectionString the kafkaZkConnectionString to set
-	 */
-	public void setKafkaZkConnectionString(String kafkaZkConnectionString) {
-		this.kafkaZkConnectionString = kafkaZkConnectionString;
-	}
-
-	/**
-	 * @return the hadoopUrlPath
-	 */
-	public Path getHadoopUrlPath() {
-		return hadoopUrlPath;
-	}
-
-	/**
-	 * @return the topicToSupportedStatus
-	 */
-	public Map<String, Boolean> getTopicToSupportedStatus() {
-		return topicToSupportedStatus;
 	}
 
 	/**
@@ -449,10 +365,10 @@ public class StartupConfig {
 	}
 
 	/**
-	 * @return the loadBalancer
+	 * @return the loadBalancerType
 	 */
-	public String getLoadBalancer() {
-		return loadBalancer;
+	public String getLoadBalancerType() {
+		return loadBalancerType;
 	}
 
 	/**
@@ -470,17 +386,6 @@ public class StartupConfig {
 	}
 
 	/**
-	 * @return the runningConfigZkPath
-	 */
-	public String getRunningConfigZkPath() {
-		return runningConfigZkPath;
-	}
-	
-	public KaBoomTopicConfig getTopicConfig(String topicName) {
-		return topicConfigs.get(topicName);
-	}
-
-	/**
 	 * @return the deadWorkerMeter
 	 */
 	public Meter getDeadWorkerMeter() {
@@ -492,6 +397,69 @@ public class StartupConfig {
 	 */
 	public Meter getGracefulWorkerShutdownMeter() {
 		return gracefulWorkerShutdownMeter;
+	}
+
+	/**
+	 * @return the zkRootPath
+	 */
+	public String getZkRootPath() {
+		return zkRootPath;
+	}
+
+	/**
+	 * @return the zkRootPathTopicConfigs
+	 */
+	public String getZkRootPathTopicConfigs() {
+		return zkRootPathTopicConfigs;
+	}
+
+	/**
+	 * @return the zkRootPathPartitionAssignments
+	 */
+	public String getZkRootPathPartitionAssignments() {
+		return zkRootPathPartitionAssignments;
+	}
+
+	/**
+	 * @return the hostname
+	 */
+	public String getHostname() {
+		return hostname;
+	}
+
+	/**
+	 * @return the zkPathRunningConfig
+	 */
+	public String getZkPathRunningConfig() {
+		return zkPathRunningConfig;
+	}
+
+	/**
+	 * @return the zkRootPathClients
+	 */
+	public String getZkRootPathClients() {
+		return zkRootPathClients;
+	}
+
+	/**
+	 * @return the zkPathLeaderClientId
+	 */
+	public String getZkPathLeaderClientId() {
+		return zkPathLeaderClientId;
+	}
+
+	/**
+	 * @return the zkRootPathFlagAssignments
+	 */
+	public String getZkRootPathFlagAssignments() {
+		return zkRootPathFlagAssignments;
+	}
+
+	/**
+	 * @return the kafkaSeedBrokers
+	 */
+	public String getKafkaSeedBrokers() {
+		return kafkaSeedBrokers;
 	}
 
 }
