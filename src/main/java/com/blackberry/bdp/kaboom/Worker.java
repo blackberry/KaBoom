@@ -232,12 +232,12 @@ public class Worker implements Runnable {
 	public Worker(StartupConfig config, String topicName, int partition) throws Exception {
 		this.sprintCounter = 0;
 		this.config = config;
-		this.curator = config.getCurator();
+		this.curator = config.getKaBoomCurator();
 		this.topic = topicName;
 		this.partition = partition;
 		this.startTime = System.currentTimeMillis();
 		this.messagesWritten = 0;
-		this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getCurator(), ZK_ROOT + "/topics/" + topic);
+		this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getKaBoomCurator(), ZK_ROOT + "/topics/" + topic);
 		this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
 		this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 		this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");

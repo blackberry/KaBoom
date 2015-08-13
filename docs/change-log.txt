@@ -3,7 +3,8 @@ Changes in 0.8.2:
 - Fixes some missing/improperly formatted license headers
 - The leader now writes their client ID to ZK
 - Sprints that never receive a message previously (0.8.0, 0.8.1) didn't update ZK with a offset timestamp, now they will store the sprint end time 
-- New startup configuration variable zkRootPath configured via property: kaboom.zk.root.path (default: "/kaboom")
+- New startup configuration variable zkRootPathKaBoom configured via property: kaboom.zk.root.path (default: "/kaboom")
+- New startup configuration variable zkRootPathKafka configured via property: kafka.zk.root.path (default: "/")
 - New startup configuration variable zkRootPathClients configured via property: kaboom.zk.root.path.clients (default: zkRootPath + "/clients")
 - New startup configuration variable zkRootPathTopicConfigs configured via property: kaboom.zk.root.path.topic.configs (default: zkRootPath + "/topics")
 - New startup configuration variable zkRootPathPartitionAssignments configured via property: kaboom.zk.root.path.partition.assignments (default: zkRootPath + "/assignments")
@@ -25,6 +26,8 @@ Changes in 0.8.2:
 - KaBoomClient now extends ZkVersioned 
 - Migrated KaBoom's ephemeral node for client to be a persisted ephemeral mode KaBoomClient removing the yaml dependencies
 - KaBoom client ephemeral node serialization is now updated as the client's attributes change
+- Improved how the leader removes assignments from disconnected clients
+- Improved how the ReadyFlagController balances flag propagator paths
 
 Changes in 0.8.1:
 

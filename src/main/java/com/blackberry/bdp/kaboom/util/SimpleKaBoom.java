@@ -124,7 +124,7 @@ public class SimpleKaBoom {
 				} catch (Throwable t) {
 					LOG.error("Error closing Hadoop filesystem", t);
 				}
-				startupConfig.getCurator().close();
+				startupConfig.getKaBoomCurator().close();
 			}
 
 		}));

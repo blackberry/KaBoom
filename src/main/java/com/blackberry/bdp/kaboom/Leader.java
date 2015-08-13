@@ -17,7 +17,6 @@ package com.blackberry.bdp.kaboom;
 
 import static com.blackberry.bdp.common.conversion.Converter.intFromBytes;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
 
@@ -32,11 +31,9 @@ import com.blackberry.bdp.common.zk.ZkUtils;
 import com.blackberry.bdp.common.threads.NotifyingThread;
 import com.blackberry.bdp.common.threads.ThreadCompleteListener;
 import com.blackberry.bdp.kaboom.api.KaBoomClient;
-import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
+import com.blackberry.bdp.kaboom.api.KafkaBroker;
 import com.blackberry.bdp.kaboom.api.KafkaTopic;
 import java.util.List;
-import java.util.Map.Entry;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,14 +43,18 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	protected static final Charset UTF8 = Charset.forName("UTF-8");
 	protected static final Random rand = new Random();
 
+	final protected StartupConfig config;	
 	private ReadyFlagWriter readyFlagWriter;
 	private CuratorFramework curator;
-	private Thread readyFlagWriterThread;
-	final protected StartupConfig config;	
-	private HashMap<String, KaBoomTopic> kaboomTopics;
+	private Thread readyFlagWriterThread;	
+	
+	private List<KafkaBroker> kafkaBrokers;
+	private List<KaBoomTopic> kaboomTopics;
 	private List<KafkaTopic> kafkaTopics;
 	private List<KaBoomClient> kaboomClients;
-	HashMap<Integer, KaBoomClient> kaboomClientMap;
+	
+	private HashMap<Integer, KaBoomClient> kaboomClientMap;
+	private HashMap<String, KaBoomTopic> kaboomTopicMap;
 
 	protected ReadyFlagController readyFlagController;
 
@@ -61,20 +62,25 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 		this.config = config;
 	}
 
-	protected abstract void run_balancer() throws Exception;
+	protected abstract void run_balancer(
+		 List<KafkaBroker> kafkaBrokers, 
+		 List<KaBoomClient> kaboomClients, 
+		 List<KaBoomTopic> kaboomTopics, 
+		 List<KafkaTopic> kafkaTopics) 
+		 throws Exception;
 
 	@Override
 	public void takeLeadership(CuratorFramework curator) throws Exception {
 		this.curator = curator;
 		ZkUtils.writeToPath(curator, config.getZkPathLeaderClientId(), config.getKaboomId(), true);
-		LOG.info("A new leader has been elected: kaboom.id={}", config.getKaboomId());
-		// Chill for 30 seconds after the election, give whatever caused it a few moments to potentially subside
+		LOG.info("KaBoom client ID {} is the new leader, entering the 30s calm down", config.getKaboomId());		
 		Thread.sleep(30 * 1000);
 
 		while (true) {
+			kafkaBrokers = KafkaBroker.getAll(config.getKafkaCurator(), config.getZkRootPathKafkaBrokers());
 			kafkaTopics = KafkaTopic.getAll(config.getKafkaSeedBrokers(), "leaderLookup");
 			kaboomClients = KaBoomClient.getAll(KaBoomClient.class, curator, config.getZkRootPathClients());						
-			kaboomTopics = KaBoomTopic.getAllMap(config.getCurator(), config.getZkRootPathTopicConfigs(),
+			kaboomTopics = KaBoomTopic.getAll(config.getKaBoomCurator(), config.getZkRootPathTopicConfigs(),
 				 config.getZkRootPathPartitionAssignments());			
 
 			int totalPartitions = 0;			
@@ -84,12 +90,15 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 
 			int totalWeight = 0;			
 			for (KaBoomClient kaboomClient : kaboomClients) {
-				kaboomClient.setPartitionLoad(0);
+				kaboomClient.getAssignedPartitionIds().clear();
 				totalWeight += kaboomClient.getWeight();
 				kaboomClientMap.put(kaboomClient.getId(), kaboomClient);
 			}
 			
-			LOG.info("Found a total of {} configured topics in ZooKeeper", kaboomTopics.size());
+			for (KaBoomTopic kaboomTopic : kaboomTopics) {
+				kaboomTopicMap.put(kaboomTopic.getTopicName(), kaboomTopic);
+			}
+			
 			/**
 			 * This an an abstract KaBoom leader that must be extended and implemented 
 			 * by an actual load balancer. There are, however, tasks that must always be 
@@ -107,7 +116,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 							String assignmentZkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(), partitionId);
 							int assignedClientId = intFromBytes(curator.getData().forPath(assignmentZkPath));
 							String deletedReason = null;
-							if (!kaboomTopics.containsKey(topic)) {
+							if (!kaboomTopicMap.containsKey(topic)) {
 								deletedReason = "because of missing topic configuration";
 							} else {
 								if (!KaBoomClient.isConnected(curator, config.getZkRootPathClients(), assignedClientId)) {
@@ -119,7 +128,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 								LOG.info("Assignment of {} to {} deleted from {} {}",
 									 partitionId, assignedClientId, assignmentZkPath, deletedReason);
 							} else {
-								kaboomClientMap.get(assignedClientId).incrementPartitionLoad(1);
+								kaboomClientMap.get(assignedClientId).getAssignedPartitionIds().add(partitionId);
 							}
 						}
 					} catch (Exception e) {
@@ -138,13 +147,13 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			 */
 			
 			for (KaBoomClient kaboomClient : kaboomClients) {				
-				kaboomClient.calculateTargetLoad(totalPartitions, totalWeight);
+				kaboomClient.calculateTargetPartitionLoad(totalPartitions, totalWeight);
 			}
 			
 			// With that done then we can call the balance method...			
 
 			try {
-				run_balancer();
+				run_balancer(kafkaBrokers, kaboomClients, kaboomTopics, kafkaTopics);
 			} catch (Exception e) {
 				LOG.error("The load balancer raised an exception: ", e);
 			}
@@ -155,6 +164,13 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			} catch (Exception e) {
 				LOG.error("There was an error running the ready flag controller's balancer", e);
 			}
+			
+			/*
+			 * All the operations that the leader performs that involve modifications 
+			 * to the KaBoomClient objects should now be completed.  Let's iterate 
+			 * over them and save() to persist their attributes in Zk
+			 */
+			
 
 			/*
 			 *  Check to see if the kafka_ready flag writer thread exists and is alive:

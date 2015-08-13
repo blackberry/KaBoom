@@ -20,8 +20,6 @@ import com.blackberry.bdp.common.logger.InstrumentedLoggerSingleton;
 import com.blackberry.bdp.common.props.Parser;
 import com.blackberry.bdp.kaboom.api.KaBoomClient;
 import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
-import java.io.ByteArrayOutputStream;
-import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -30,7 +28,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.yaml.snakeyaml.Yaml;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -86,10 +83,10 @@ public class KaBoom {
 			config.getZkRootPathClients(), 
 			config.getZkRootPathPartitionAssignments(), 
 			config.getZkRootPathFlagAssignments()}) {
-			if (config.getCurator().checkExists().forPath(path) == null) {
+			if (config.getKaBoomCurator().checkExists().forPath(path) == null) {
 				try {
 					LOG.warn("the path {} was not found in ZK and needs to be created", path);
-					config.getCurator().create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT).forPath(path);
+					config.getKaBoomCurator().create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT).forPath(path);
 					LOG.warn("path {} created in ZK", path);
 				} catch (Exception e) {
 					LOG.error("Error creating ZooKeeper node {} ", path, e);
@@ -101,7 +98,7 @@ public class KaBoom {
 
 		// Register our existence
 		{			
-			KaBoomClient kaboom = new KaBoomClient(config.getCurator(), 
+			KaBoomClient kaboom = new KaBoomClient(config.getKaBoomCurator(), 
 				 String.format("%s/%s", config.getZkRootPathClients(), config.getKaboomId()));			
 			kaboom.setMode(CreateMode.EPHEMERAL);
 			kaboom.setHostname(config.getHostname());
@@ -120,7 +117,7 @@ public class KaBoom {
 		}
 
 		// Start leader election thread
-		final LeaderSelector leaderSelector = new LeaderSelector(config.getCurator(), "/kaboom/leader", loadBalancer);
+		final LeaderSelector leaderSelector = new LeaderSelector(config.getKaBoomCurator(), "/kaboom/leader", loadBalancer);
 		leaderSelector.autoRequeue();
 		leaderSelector.start();
 
@@ -150,12 +147,12 @@ public class KaBoom {
 					LOG.error("Error closing Hadoop filesystem", t);
 				}
 				try {
-					config.getCurator().delete().forPath("/kaboom/clients/" + config.getKaboomId());
+					config.getKaBoomCurator().delete().forPath("/kaboom/clients/" + config.getKaboomId());
 				} catch (Exception e) {
 					LOG.error("Error deleting /kaboom/clients/{}", config.getKaboomId(), e);
 				}
 				leaderSelector.close();
-				config.getCurator().close();
+				config.getKaBoomCurator().close();
 			}
 
 		}));
@@ -180,7 +177,7 @@ public class KaBoom {
 						ReadyFlagPropagator flagPropagator = topicToFlagPropagator.get(topic);
 						if (flagPropagator == null) {
 							KaBoomTopicConfig topicConfig = KaBoomTopicConfig.get(
-								 KaBoomTopicConfig.class, config.getCurator(), String.format("/kaboom/topics/%s", topic));
+								 KaBoomTopicConfig.class, config.getKaBoomCurator(), String.format("/kaboom/topics/%s", topic));
 							flagPropagator = new ReadyFlagPropagator(topicConfig, config);
 							topicToFlagPropagator.put(topic, flagPropagator);
 						}
@@ -201,10 +198,10 @@ public class KaBoom {
 			// Get all my assignments and create a worker if there's anything not already being worked
 			Map<String, Boolean> validWorkingPartitions = new HashMap<>();
 
-			for (String partitionId : config.getCurator().getChildren().forPath("/kaboom/assignments")) {
+			for (String partitionId : config.getKaBoomCurator().getChildren().forPath("/kaboom/assignments")) {
 				String assignee;
 				try {
-					assignee = new String(config.getCurator().getData().forPath("/kaboom/assignments/"
+					assignee = new String(config.getKaBoomCurator().getData().forPath("/kaboom/assignments/"
 						 + partitionId), UTF8);
 				} catch (NoNodeException nne) {
 					LOG.warn("The weird 'NoNodeException' has been raised, let's just continue and it'll retry");

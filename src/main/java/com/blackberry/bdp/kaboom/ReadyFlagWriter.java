@@ -43,7 +43,7 @@ public class ReadyFlagWriter extends NotifyingThread {
 
 	public ReadyFlagWriter(StartupConfig config) throws Exception {
 		this.config = config;
-		this.curator = config.getCurator();
+		this.curator = config.getKaBoomCurator();
 		this.KAFKA_READY_FLAG = config.getRunningConfig().getKafkaReadyFlagFilename();
 	}
 
@@ -93,7 +93,7 @@ public class ReadyFlagWriter extends NotifyingThread {
 		long startOfHourTimestamp = currentTimestamp - currentTimestamp % (60 * 60 * 1000);
 
 		List<KaBoomTopic> kaboomTopics = KaBoomTopic.getAll(
-			 config.getCurator(), 
+			 config.getKaBoomCurator(), 
 			 config.getZkRootPathTopicConfigs(), 
 			 config.getZkRootPathPartitionAssignments());
 		

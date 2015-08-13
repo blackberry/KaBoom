@@ -27,7 +27,6 @@ import java.io.IOException;
 
 import java.util.HashMap;
 import java.util.Properties;
-import java.util.Map;
 
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
@@ -72,7 +71,8 @@ public class StartupConfig {
 	private final Path hadoopUrlPath;
 	private int kaboomId;
 	private int weight;
-	private final CuratorFramework curator;
+	private final CuratorFramework kaboomCurator;
+	private final CuratorFramework kafkaCurator;
 	private String kerberosPrincipal;
 	private String kerberosKeytab;
 	private String hostname;
@@ -84,18 +84,18 @@ public class StartupConfig {
 	private final Meter deadWorkerMeter;
 	private final Meter gracefulWorkerShutdownMeter;
 	
-	private String zkRootPath = "/kaboom";	
-	private String zkRootPathClients = String.format("%s/%s", zkRootPath, "clients");
-	private String zkRootPathTopicConfigs = String.format("%s/%s", zkRootPath, "topics");
-	private String zkRootPathPartitionAssignments = String.format("%s/%s", zkRootPath, "assignments");
-	private String zkRootPathFlagAssignments = String.format("%s/%s", zkRootPath, "flag-assignments");
-	private String zkPathRunningConfig = String.format("%s/%s", zkRootPath, "config");
-	private String zkPathLeaderClientId = String.format("%s/%s", zkRootPath, "leader");
-
-	private final Map<String, String> topicToProxyUser = new HashMap<>();
-	private final Map<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
-	private final Map<String, Boolean> topicToSupportedStatus = new HashMap<>();
+	private String zkRootPathKafka = "/";	
+	private String zkRootPathKafkaBrokers = String.format("%s/%s", zkRootPathKafka, "brokers/ids");	
+	private String zkRootPathKaBoom = "/kaboom";	
+	private String zkRootPathClients = String.format("%s/%s", zkRootPathKaBoom, "clients");
+	private String zkRootPathTopicConfigs = String.format("%s/%s", zkRootPathKaBoom, "topics");
+	private String zkRootPathPartitionAssignments = String.format("%s/%s", zkRootPathKaBoom, "assignments");
+	private String zkRootPathFlagAssignments = String.format("%s/%s", zkRootPathKaBoom, "flag-assignments");
+	private String zkPathRunningConfig = String.format("%s/%s", zkRootPathKaBoom, "config");
+	private String zkPathLeaderClientId = String.format("%s/%s", zkRootPathKaBoom, "leader");
 	
+	private final HashMap<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
+
 	/**
 	 * POSIX style NONE("---"), EXECUTE("--x"), WRITE("-w-"), WRITE_EXECUTE("-wx"), READ("r--"), READ_EXECUTE("r-x"), READ_WRITE("rw-"), ALL("rwx");
 	 */
@@ -110,14 +110,15 @@ public class StartupConfig {
 		LOG.info("hostname: {}", getHostname());
 		LOG.info("kaboomZkConnectionString: {}", kaboomZkConnectionString);
 		LOG.info("kafkaZkConnectionString: {}", kafkaZkConnectionString);
-		LOG.info("kafkaSeedBrokers: {}", getKafkaSeedBrokers());
-		LOG.info("loadBalancer: {}", loadBalancerType);
-		LOG.info("Using kerberos uthentication.");
-		LOG.info("Kerberos principal: {}", kerberosPrincipal);
-		LOG.info("Kerberos keytab: {}", kerberosKeytab);
-		LOG.info("zkRootPath: {}", getZkRootPath());
+		LOG.info("kafkaSeedBrokers: {}", kafkaSeedBrokers);
+		LOG.info("loadBalancerType: {}", loadBalancerType);		
+		LOG.info("kerberosPrincipal: {}", kerberosPrincipal);
+		LOG.info("kerberosKeytab: {}", kerberosKeytab);
+		LOG.info("zkRootPathKaBoom: {}", zkRootPathKaBoom);		
+		LOG.info("zkRootPathKafkaBrokers: {}", zkRootPathKafkaBrokers);
+		LOG.info("zkRootPathKafka: {}", zkRootPathKafka);
 		LOG.info("zkRootPathClients: {}", zkRootPathClients);
-		LOG.info("zkRootPathTopicConfigs: {}", getZkRootPathTopicConfigs());
+		LOG.info("zkRootPathTopicConfigs: {}", zkRootPathTopicConfigs);
 		LOG.info("zkRootPathPartitionAssignments: {}", zkRootPathPartitionAssignments);
 		LOG.info("zkPathRunningConfig: {}", zkPathRunningConfig);
 		LOG.info("zkPathLeaderClientId: {}", zkPathLeaderClientId);		
@@ -143,20 +144,25 @@ public class StartupConfig {
 		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		loadBalancerType = propsParser.parseString("kaboom.load.balancer.type", "even");
+		zkRootPathKafka = propsParser.parseString("kafka.zk.root.path", zkRootPathKafka);
+		zkRootPathKafkaBrokers = propsParser.parseString("kafka.zk.root.path.brokers", zkRootPathKafkaBrokers);
+		zkRootPathKaBoom = propsParser.parseString("kaboom.zk.root.path", zkRootPathKaBoom);
 		zkPathRunningConfig = propsParser.parseString("kaboom.zk.path.runningConfig", zkPathRunningConfig);
 		zkPathLeaderClientId = propsParser.parseString("kaboom.zk.path.leader.clientId", zkPathLeaderClientId);
-		zkRootPath = propsParser.parseString("kaboom.zk.root.path", zkRootPath);
 		zkRootPathTopicConfigs = propsParser.parseString("kaboom.zk.root.path.topic.configs", zkRootPathTopicConfigs);
 		zkRootPathClients = propsParser.parseString("kaboom.zk.root.path.clients", zkRootPathClients);
 		zkRootPathPartitionAssignments = propsParser.parseString("kaboom.zk.root.path.partition.assignments", zkRootPathPartitionAssignments);
 		zkRootPathFlagAssignments = propsParser.parseString("kaboom.zk.root.path.flag.assignments", zkRootPathFlagAssignments);
-		curator = buildCuratorFramework();
+		
 		deadWorkerMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:dead workers");
 		gracefulWorkerShutdownMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:gracefully shutdown workers");
+		
+		kaboomCurator = buildCuratorFramework(kaboomZkConnectionString);
+		kafkaCurator = buildCuratorFramework(kafkaZkConnectionString);
 
-		runningConfig = RunningConfig.get(RunningConfig.class, curator, zkPathRunningConfig);
+		runningConfig = RunningConfig.get(RunningConfig.class, kaboomCurator, zkPathRunningConfig);
 
-		final NodeCache nodeCache = new NodeCache(curator, getZkPathRunningConfig());
+		final NodeCache nodeCache = new NodeCache(kaboomCurator, zkPathRunningConfig);
 		nodeCache.getListenable().addListener(new NodeCacheListener() {
 			@Override
 			public void nodeChanged() throws Exception {
@@ -173,22 +179,16 @@ public class StartupConfig {
 		 *  - topicToProxyUser 
 		 *  - topicToSupportedStatus
 		 */
-		Iterator<KaBoomTopicConfig> iter = KaBoomTopicConfig.getAll(
-			 KaBoomTopicConfig.class, curator, "/kaboom/topics").iterator();
+		Iterator<KaBoomTopicConfig> iter = KaBoomTopicConfig.getAll(KaBoomTopicConfig.class, kaboomCurator, "/kaboom/topics").iterator();
 
 		while (iter.hasNext()) {
 			final KaBoomTopicConfig topicConfig = iter.next();
-			topicToProxyUser.put(topicConfig.getId(), topicConfig.getProxyUser());
-			topicToSupportedStatus.put(topicConfig.getId(), true);
-			authenticatedFsForProxyUser(topicConfig.getProxyUser());
-			final NodeCache nodeCacheTopic = new NodeCache(curator, "/kaboom/topics/" + topicConfig.getId());
+			final NodeCache nodeCacheTopic = new NodeCache(kaboomCurator, "/kaboom/topics/" + topicConfig.getId());
 			nodeCacheTopic.getListenable().addListener(new NodeCacheListener() {
 				@Override
 				public void nodeChanged() throws Exception {
-					Stat newZkStat = curator.checkExists().forPath(topicConfig.getZkPath());
+					Stat newZkStat = kaboomCurator.checkExists().forPath(topicConfig.getZkPath());
 					if (newZkStat == null) {
-						topicToProxyUser.remove(topicConfig.getId());
-						topicToSupportedStatus.remove(topicConfig.getId());
 						LOG.info("The topic configuration for {} has been deleted", topicConfig.getId());
 					} else {
 						LOG.info("The topic configuration has changed in ZooKeeper");
@@ -196,11 +196,7 @@ public class StartupConfig {
 						topicConfig.reload();
 						if (!topicConfig.getId().equals(oldTopicId)) {
 							// Remove all references from old topic name
-							topicToProxyUser.remove(oldTopicId);
-							topicToSupportedStatus.remove(oldTopicId);
 							// Add references to new topic name
-							topicToProxyUser.put(topicConfig.getId(), topicConfig.getProxyUser());
-							topicToSupportedStatus.put(topicConfig.getId(), true);
 							authenticatedFsForProxyUser(topicConfig.getProxyUser());
 							LOG.info("the topic {} was renamed to {} deleted old topic references",
 								 oldTopicId, topicConfig.getId());
@@ -308,17 +304,17 @@ public class StartupConfig {
 	}
 
 	/**
-	 * Returns an instantiated curator framework object
+	 * Returns an instantiated kaboomCurator framework object
 	 *
 	 * @return CuratorFramework
 	 */
-	private CuratorFramework buildCuratorFramework() {
+	private CuratorFramework buildCuratorFramework(String connectionString) {
 		RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
-		LOG.info("attempting to connect to ZK with connection string {}", kaboomZkConnectionString);
-		String[] connStringAndPrefix = kaboomZkConnectionString.split("/", 2);
+		LOG.info("attempting to connect to ZK with connection string {}", connectionString);
+		String[] connStringAndPrefix = connectionString.split("/", 2);
 		CuratorFramework newCurator;
 		if (connStringAndPrefix.length == 1) {
-			newCurator = CuratorFrameworkFactory.newClient(kaboomZkConnectionString, retryPolicy);
+			newCurator = CuratorFrameworkFactory.newClient(connectionString, retryPolicy);
 		} else {
 			newCurator = CuratorFrameworkFactory.builder()
 				 .namespace(connStringAndPrefix[1])
@@ -351,10 +347,10 @@ public class StartupConfig {
 	}
 
 	/**
-	 * @return the curator
+	 * @return the kaboomCurator
 	 */
-	public CuratorFramework getCurator() {
-		return curator;
+	public CuratorFramework getKaBoomCurator() {
+		return kaboomCurator;
 	}
 
 	/**
@@ -400,10 +396,10 @@ public class StartupConfig {
 	}
 
 	/**
-	 * @return the zkRootPath
+	 * @return the zkRootPathKaBoom
 	 */
-	public String getZkRootPath() {
-		return zkRootPath;
+	public String getZkRootPathKaBoom() {
+		return zkRootPathKaBoom;
 	}
 
 	/**
@@ -460,6 +456,27 @@ public class StartupConfig {
 	 */
 	public String getKafkaSeedBrokers() {
 		return kafkaSeedBrokers;
+	}
+
+	/**
+	 * @return the zkRootPathKafka
+	 */
+	public String getZkRootPathKafka() {
+		return zkRootPathKafka;
+	}
+
+	/**
+	 * @return the kafkaCurator
+	 */
+	public CuratorFramework getKafkaCurator() {
+		return kafkaCurator;
+	}
+
+	/**
+	 * @return the zkRootPathKafkaBrokers
+	 */
+	public String getZkRootPathKafkaBrokers() {
+		return zkRootPathKafkaBrokers;
 	}
 
 }

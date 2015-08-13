@@ -54,6 +54,6 @@ public class RunningConfig extends ZkVersioned {
 	 * @throws Exception
 	 */
 	public RunningConfig(StartupConfig startupConfig) throws Exception {
-		super(startupConfig.getCurator(), startupConfig.getZkPathRunningConfig());		
+		super(startupConfig.getKaBoomCurator(), startupConfig.getZkPathRunningConfig());		
 	}
 }
