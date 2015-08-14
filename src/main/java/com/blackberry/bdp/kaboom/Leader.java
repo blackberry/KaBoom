@@ -32,6 +32,7 @@ import com.blackberry.bdp.common.threads.NotifyingThread;
 import com.blackberry.bdp.common.threads.ThreadCompleteListener;
 import com.blackberry.bdp.kaboom.api.KaBoomClient;
 import com.blackberry.bdp.kaboom.api.KafkaBroker;
+
 import com.blackberry.bdp.kaboom.api.KafkaTopic;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -43,18 +44,18 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	protected static final Charset UTF8 = Charset.forName("UTF-8");
 	protected static final Random rand = new Random();
 
-	final protected StartupConfig config;	
+	final protected StartupConfig config;
 	private ReadyFlagWriter readyFlagWriter;
-	private CuratorFramework curator;
-	private Thread readyFlagWriterThread;	
-	
+	protected CuratorFramework curator;
+	private Thread readyFlagWriterThread;
+
 	private List<KafkaBroker> kafkaBrokers;
 	private List<KaBoomTopic> kaboomTopics;
 	private List<KafkaTopic> kafkaTopics;
 	private List<KaBoomClient> kaboomClients;
-	
-	private HashMap<Integer, KaBoomClient> kaboomClientMap;
-	private HashMap<String, KaBoomTopic> kaboomTopicMap;
+
+	private HashMap<Integer, KaBoomClient> idToKaBoomClient;
+	private HashMap<String, KaBoomTopic> nameToKaBoomTopic;
 
 	protected ReadyFlagController readyFlagController;
 
@@ -63,73 +64,62 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	}
 
 	protected abstract void run_balancer(
-		 List<KafkaBroker> kafkaBrokers, 
-		 List<KaBoomClient> kaboomClients, 
-		 List<KaBoomTopic> kaboomTopics, 
-		 List<KafkaTopic> kafkaTopics) 
+		 List<KafkaBroker> kafkaBrokers,
+		 List<KaBoomClient> kaboomClients,
+		 List<KaBoomTopic> kaboomTopics,
+		 List<KafkaTopic> kafkaTopics)
 		 throws Exception;
 
 	@Override
 	public void takeLeadership(CuratorFramework curator) throws Exception {
 		this.curator = curator;
 		ZkUtils.writeToPath(curator, config.getZkPathLeaderClientId(), config.getKaboomId(), true);
-		LOG.info("KaBoom client ID {} is the new leader, entering the 30s calm down", config.getKaboomId());		
+		LOG.info("KaBoom client ID {} is the new leader, entering the 30s calm down", config.getKaboomId());
 		Thread.sleep(30 * 1000);
 
 		while (true) {
 			kafkaBrokers = KafkaBroker.getAll(config.getKafkaCurator(), config.getZkRootPathKafkaBrokers());
-			kafkaTopics = KafkaTopic.getAll(config.getKafkaSeedBrokers(), "leaderLookup");
-			kaboomClients = KaBoomClient.getAll(KaBoomClient.class, curator, config.getZkRootPathClients());						
-			kaboomTopics = KaBoomTopic.getAll(config.getKaBoomCurator(), config.getZkRootPathTopicConfigs(),
-				 config.getZkRootPathPartitionAssignments());			
-
-			int totalPartitions = 0;			
-			for (KafkaTopic kafkaTopic : kafkaTopics) {
-				totalPartitions += kafkaTopic.getPartitions().size();
-			}
-
-			int totalWeight = 0;			
-			for (KaBoomClient kaboomClient : kaboomClients) {
-				kaboomClient.getAssignedPartitionIds().clear();
+			kafkaTopics = KafkaTopic.getAll(config.getKafkaSeedBrokers(), "leaderLookup", kafkaBrokers);
+			kaboomClients = KaBoomClient.getAll(KaBoomClient.class, curator, config.getZkRootPathClients());
+			kaboomTopics = KaBoomTopic.getAll(kaboomClients, kafkaTopics,
+				 config.getKaBoomCurator(),
+				 config.getZkRootPathTopicConfigs(),
+				 config.getZkRootPathPartitionAssignments(),
+				 config.getZkRootPathFlagAssignments());
+			
+			int totalPartitions = KaBoomTopic.getTotalPartitonCount(kaboomTopics);
+			
+			int totalWeight = 0;
+			for (KaBoomClient kaboomClient : kaboomClients) {				
 				totalWeight += kaboomClient.getWeight();
-				kaboomClientMap.put(kaboomClient.getId(), kaboomClient);
+				idToKaBoomClient.put(kaboomClient.getId(), kaboomClient);
 			}
-			
+
 			for (KaBoomTopic kaboomTopic : kaboomTopics) {
-				kaboomTopicMap.put(kaboomTopic.getTopicName(), kaboomTopic);
+				nameToKaBoomTopic.put(kaboomTopic.getKafkaTopic().getName(), kaboomTopic);
 			}
-			
-			/**
-			 * This an an abstract KaBoom leader that must be extended and implemented 
-			 * by an actual load balancer. There are, however, tasks that must always be 
-			 * performed regardless of a balancer implementation. Tasks such as removing 
-			 * assignments for non-existent clients and running the Kafka ready flag writer,
-			 * etc. Let's do those, and then call the balancer...
-			 */
+
+			// Delete an assignemnts if the kaboom client isn't connected or the topic is not configured
 			try {
 				for (String partitionId : curator.getChildren().forPath(config.getZkRootPathPartitionAssignments())) {
 					try {
 						Pattern topicPartitionPattern = Pattern.compile("^(.*)-(\\d+)$");
 						Matcher m = topicPartitionPattern.matcher(partitionId);
 						if (m.matches()) {
-							String topic = m.group(1);
 							String assignmentZkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(), partitionId);
-							int assignedClientId = intFromBytes(curator.getData().forPath(assignmentZkPath));
-							String deletedReason = null;
-							if (!kaboomTopicMap.containsKey(topic)) {
+							String deletedReason = null;								 
+							if (!nameToKaBoomTopic.containsKey(m.group(1))) {
 								deletedReason = "because of missing topic configuration";
 							} else {
-								if (!KaBoomClient.isConnected(curator, config.getZkRootPathClients(), assignedClientId)) {
+								int assignedClientId = intFromBytes(curator.getData().forPath(assignmentZkPath));
+								if (!idToKaBoomClient.containsKey(assignedClientId)) {
 									deletedReason = String.format("because client %s is not connected", assignedClientId);
 								}
 							}
 							if (deletedReason != null) {
 								curator.delete().forPath(assignmentZkPath);
-								LOG.info("Assignment of {} to {} deleted from {} {}",
-									 partitionId, assignedClientId, assignmentZkPath, deletedReason);
-							} else {
-								kaboomClientMap.get(assignedClientId).getAssignedPartitionIds().add(partitionId);
-							}
+								LOG.info("Assignment {} deleted {}", assignmentZkPath, deletedReason);
+							} 
 						}
 					} catch (Exception e) {
 						LOG.error("There was a problem pruning the assignments of unsupported topic {}", partitionId, e);
@@ -138,20 +128,18 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			} catch (Exception e) {
 				LOG.error("There was a problem pruning the assignments of unsupported topics", e);
 			}
-			
+
 			/**
 			 * By now we have cleaned up invalid partition assignments 
 			 * and we know our total weight and partition count as well
 			 * as how much work each client is currently being assigned
 			 * so we can calculate each client's target load
 			 */
-			
-			for (KaBoomClient kaboomClient : kaboomClients) {				
+			for (KaBoomClient kaboomClient : kaboomClients) {
 				kaboomClient.calculateTargetPartitionLoad(totalPartitions, totalWeight);
 			}
-			
-			// With that done then we can call the balance method...			
 
+			// With that done then we can call the balance method...			
 			try {
 				run_balancer(kafkaBrokers, kaboomClients, kaboomTopics, kafkaTopics);
 			} catch (Exception e) {
@@ -160,18 +148,16 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 
 			try {
 				readyFlagController = new ReadyFlagController(config);
-				readyFlagController.balance(totalWeight, kaboomClientMap);
+				readyFlagController.balance(totalWeight, idToKaBoomClient);
 			} catch (Exception e) {
 				LOG.error("There was an error running the ready flag controller's balancer", e);
 			}
-			
+
 			/*
 			 * All the operations that the leader performs that involve modifications 
 			 * to the KaBoomClient objects should now be completed.  Let's iterate 
 			 * over them and save() to persist their attributes in Zk
 			 */
-			
-
 			/*
 			 *  Check to see if the kafka_ready flag writer thread exists and is alive:
 			 *  

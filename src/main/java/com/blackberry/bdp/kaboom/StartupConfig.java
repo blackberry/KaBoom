@@ -119,7 +119,7 @@ public class StartupConfig {
 		LOG.info("zkRootPathKafka: {}", zkRootPathKafka);
 		LOG.info("zkRootPathClients: {}", zkRootPathClients);
 		LOG.info("zkRootPathTopicConfigs: {}", zkRootPathTopicConfigs);
-		LOG.info("zkRootPathPartitionAssignments: {}", zkRootPathPartitionAssignments);
+		LOG.info("zkRootPathPartitionAssignments: {}", getZkRootPathPartitionAssignments());
 		LOG.info("zkPathRunningConfig: {}", zkPathRunningConfig);
 		LOG.info("zkPathLeaderClientId: {}", zkPathLeaderClientId);		
 		LOG.info(" *** end dumping configuration *** ");
@@ -324,6 +324,10 @@ public class StartupConfig {
 		newCurator.start();
 		return newCurator;
 	}
+	
+	public String zkPathPartitionAssignment(String partitionId) {
+		return String.format("%s/%s", getZkRootPathPartitionAssignments(),  partitionId); 
+	}
 
 	/**
 	 * @return the kaboomId
@@ -410,13 +414,6 @@ public class StartupConfig {
 	}
 
 	/**
-	 * @return the zkRootPathPartitionAssignments
-	 */
-	public String getZkRootPathPartitionAssignments() {
-		return zkRootPathPartitionAssignments;
-	}
-
-	/**
 	 * @return the hostname
 	 */
 	public String getHostname() {
@@ -477,6 +474,13 @@ public class StartupConfig {
 	 */
 	public String getZkRootPathKafkaBrokers() {
 		return zkRootPathKafkaBrokers;
+	}
+
+	/**
+	 * @return the zkRootPathPartitionAssignments
+	 */
+	public String getZkRootPathPartitionAssignments() {
+		return zkRootPathPartitionAssignments;
 	}
 
 }

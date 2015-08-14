@@ -17,7 +17,6 @@ package com.blackberry.bdp.kaboom.api;
 
 import com.blackberry.bdp.common.versioned.ZkVersioned;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import org.apache.curator.framework.CuratorFramework;
 
@@ -30,7 +29,7 @@ public class KaBoomClient extends ZkVersioned{
 	private double targetPartitionLoad;
 	private double targetFlagPropagatorLoad = 0.0;
 	private final List<String> assignedFlagPropagatorTopics = new ArrayList<>();
-	private final List<String> assignedPartitionIds = new ArrayList<>();
+	private final List<KaBoomPartition> assignedPartitions = new ArrayList<>();
 	
 	/**
 	 * Instantiates a default RunningConfig without any ZK interaction
@@ -45,18 +44,6 @@ public class KaBoomClient extends ZkVersioned{
 	 */
 	public KaBoomClient(CuratorFramework curator, String zkPath) throws Exception {
 		super(curator, zkPath);
-	}	
-	
-	public boolean isConnected(CuratorFramework curator, String zkRootPathClients) 
-		 throws Exception {
-		String zkPath = String.format("%s/%d", zkRootPathClients, getId());
-		return curator.checkExists().forPath(zkPath) != null;
-	}
-	
-	public static boolean isConnected(CuratorFramework curator, String zkRootPathClients,  int clientId) 
-		 throws Exception {
-		String zkPath = String.format("%s/%d", zkRootPathClients, clientId);
-		return curator.checkExists().forPath(zkPath) != null;
 	}
 	
 	public void calculateTargetPartitionLoad(int totalPartitions, int totalWeight) {
@@ -65,6 +52,10 @@ public class KaBoomClient extends ZkVersioned{
 	
 	public void calculateFlagPropagatorTargetLoad(int totalPaths, int totalWeight) {
 		targetFlagPropagatorLoad = (totalPaths * (1.0 * weight/ totalWeight));
+	}
+	
+	public boolean overloaded() {
+		return assignedPartitions.size() > targetPartitionLoad + 1;
 	}
 	
 	/**
@@ -126,28 +117,21 @@ public class KaBoomClient extends ZkVersioned{
 	/**
 	 * @return the targetPartitionLoad
 	 */
-	public double getTargetLoad() {
+	public double getTargetPartitionLoad() {
 		return targetPartitionLoad;
-	}
-
-	/**
-	 * @param targetLoad the targetPartitionLoad to set
-	 */
-	public void setTargetLoad(double targetLoad) {
-		this.targetPartitionLoad = targetLoad;
 	}
 
 	/**
 	 * @return the targetFlagPropagatorLoad
 	 */
-	public double getFlagPropagatorTargetLoad() {
+	public double getTargetFlagPropagatorLoad() {
 		return targetFlagPropagatorLoad;
 	}
 
 	/**
 	 * @param flagPropagatorTargetLoad the targetFlagPropagatorLoad to set
 	 */
-	public void setFlagPropagatorTargetLoad(double flagPropagatorTargetLoad) {
+	public void setTargetFlagPropagatorLoad(double flagPropagatorTargetLoad) {
 		this.targetFlagPropagatorLoad = flagPropagatorTargetLoad;
 	}
 
@@ -159,10 +143,10 @@ public class KaBoomClient extends ZkVersioned{
 	}
 
 	/**
-	 * @return the assignedPartitionIds
+	 * @return the assignedPartitions
 	 */
-	public List<String> getAssignedPartitionIds() {
-		return assignedPartitionIds;
+	public List<KaBoomPartition> getAssignedPartitions() {
+		return assignedPartitions;
 	}
 
 }

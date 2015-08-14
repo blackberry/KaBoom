@@ -9,8 +9,6 @@
  */
 package com.blackberry.bdp.kaboom.api;
 
-
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import kafka.javaapi.PartitionMetadata;
@@ -37,33 +35,53 @@ public class KafkaTopic {
 	private final List<KafkaPartition> partitions = new ArrayList<>();
 	private final short errorCode;
 	private final int sizeInBytes;
+	private final HashMap<Integer, KafkaPartition> idToPartition = new HashMap<>();
 
 	public KafkaTopic(TopicMetadata metadata) {
 		this.name = metadata.topic();
 		this.errorCode = metadata.errorCode();
 		this.sizeInBytes = metadata.sizeInBytes();
 		for (PartitionMetadata partitionMetadata : metadata.partitionsMetadata()) {
-			this.partitions.add(new KafkaPartition(partitionMetadata));
+			KafkaPartition newPartition = new KafkaPartition(partitionMetadata);
+			this.partitions.add(newPartition);
+			this.idToPartition.put(newPartition.getPartitionId(), newPartition);
 		}
 	}
-
+	
+	/**
+	 * Get the partition ID for the topic
+	 * @param id
+	 * @return
+	 */
+	public KafkaPartition getPartition(int id) {
+		return idToPartition.get(id);
+	}
+	
 	/**
 	 * Fetches all topics from Kafka including their partition metadata 
 	 * Also includes as well as each partitions latest and earliest offset
 	 *
 	 * @param kafkaSeedBrokers
 	 * @param kafkaConsumerName
+	 * @param kafkaBrokers
 	 * @return
 	 * @throws java.lang.Exception
 	 */
-	public static List<KafkaTopic> getAll(String kafkaSeedBrokers,
-		 String kafkaConsumerName) throws Exception {
+	public static List<KafkaTopic> getAll(
+		 String kafkaSeedBrokers,
+		 String kafkaConsumerName,
+		 List<KafkaBroker> kafkaBrokers) throws Exception {
+		
+		HashMap<Integer, KafkaBroker> idToKafkaBroker = new HashMap<>();
+		for (KafkaBroker broker : kafkaBrokers) idToKafkaBroker.put(broker.getId(), broker);
 
 		List<String> topicStrings = new ArrayList<>();
 		List<KafkaTopic> topics = new ArrayList<>();
 		
 		long[] offsetTypes = {-2l, -1l};
+		
 		Map<Long, Map<Integer, Map<TopicAndPartition, PartitionOffsetRequestInfo>>> offsetReqs = new HashMap<>();
+		
 		Map<Integer, Broker> brokers = new HashMap<>();
 
 		/**
@@ -97,8 +115,17 @@ public class KafkaTopic {
 				offsetReqs.put(-1l, new HashMap<Integer, Map<TopicAndPartition, PartitionOffsetRequestInfo>>());
 				offsetReqs.put(-2l, new HashMap<Integer, Map<TopicAndPartition, PartitionOffsetRequestInfo>>());
 
+				// For each of the topics we discovered in Kafka
 				for (TopicMetadata topicMetadata : resp.topicsMetadata()) {
-					topics.add(new KafkaTopic(topicMetadata));
+					// Create the object to store in the list we'll eventually be returning
+					KafkaTopic newTopic = new KafkaTopic(topicMetadata);
+					topics.add(newTopic);
+					// Populate the leader KafkaBroker attribute for each partition
+					for (KafkaPartition partition : newTopic.getPartitions()) {
+						partition.setLeader(idToKafkaBroker.get(partition.getLeaderBrokerId()));
+						partition.setTopic(newTopic);
+					}
+					// Now build up the requests we'll need to fetch the earliest/latest offsets
 					for (PartitionMetadata pmd : topicMetadata.partitionsMetadata()) {
 						TopicAndPartition tap = new TopicAndPartition(topicMetadata.topic(), pmd.partitionId());
 						for (long offsetType : offsetTypes) {
@@ -123,8 +150,11 @@ public class KafkaTopic {
 			}
 		}
 
+		// For each of the types of offsets that we need (-2 earliest, -1 latest)
 		for (long offsetType : offsetTypes) {
+			// For each of the brokers we need to submit the offset request to
 			for (int brokerId : offsetReqs.get(offsetType).keySet()) {
+				// Get the broker
 				Broker broker = brokers.get(brokerId);
 				try {
 					SimpleConsumer sc = new SimpleConsumer(broker.host(),
@@ -132,22 +162,28 @@ public class KafkaTopic {
 						 100000,
 						 64 * 1024,
 						 kafkaConsumerName);
+					// Get the request (this single request is for multiple TopicAndParitions) for the broker
 					OffsetRequest offsetRequest = new OffsetRequest(offsetReqs.get(offsetType).get(brokerId),
 						 kafka.api.OffsetRequest.CurrentVersion(),
 						 kafkaConsumerName);
+					// Get the response using our simple consumer
 					OffsetResponse offsetRespose = sc.getOffsetsBefore(offsetRequest);
 					if (offsetRespose.hasError()) {
 						LOG.error("Failed to get offset type {} from broker {}", offsetType, brokerId);
 						continue;
-					}
+					}					
+					// Go through all our topics
 					for (KafkaTopic topic : topics) {
+						// and get their partitions
 						for (KafkaPartition partition : topic.getPartitions()) {
-							if (partition.getLeader() != brokerId) {
+							// Ignoring if the partition if it's leader isn't the same as where the response came from
+							if (partition.getLeader().getId() != brokerId) {
 								continue;
 							}
+							// Now finally set the earliest/latest attribute accordingly
 							if (offsetType == -2l) {
 								partition.setEarliestOffset(offsetRespose.offsets(topic.getName(), partition.getPartitionId())[0]);
-							} else {
+							} else if (offsetType == -1l) {
 								partition.setLatestOffset(offsetRespose.offsets(topic.getName(), partition.getPartitionId())[0]);
 							}
 						}
@@ -160,7 +196,7 @@ public class KafkaTopic {
 		}
 		return topics;
 	}
-
+	
 	/**
 	* @return the name
 	*/

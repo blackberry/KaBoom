@@ -24,90 +24,127 @@ public class KaBoomTopic {
 
 	private static final Logger LOG = LoggerFactory.getLogger(KaBoomTopic.class);
 	private static final Charset UTF8 = Charset.forName("UTF-8");
-	private final String topicName;
-	private final List<KaBoomPartitionDetails> partitionDetails = new ArrayList<>();
+	
+	private final KafkaTopic kafkaTopic;
+	private final List<KaBoomPartition> partitions = new ArrayList<>();
+	private KaBoomClient  assignedFlagPropagator;
 	private KaBoomTopicConfig config;
 
-	public KaBoomTopic(String topicName) {
-		this.topicName = topicName;
+	public KaBoomTopic(KafkaTopic kafkaTopic) {
+		this.kafkaTopic = kafkaTopic;
 	}
 
 	/**
+	 * @param kaboomClients	 
+	 * @param kafkaTopics
 	 * @param curator
 	 * @param zkPathTopics
-	 * @param zkPathAssignments
+	 * @param zkPathPartitionAssignments
+	 * @param zkPathFlagAssignments
 	 * @return
 	 * @throws java.lang.Exception
 	 */
-	public static List<KaBoomTopic> getAll(CuratorFramework curator,
+	public static List<KaBoomTopic> getAll(
+		 List<KaBoomClient> kaboomClients,
+		 List<KafkaTopic> kafkaTopics,
+		 CuratorFramework curator,
 		 String zkPathTopics,
-		 String zkPathAssignments) throws Exception {
-
-		List<KaBoomTopic> topics = new ArrayList<>();
+		 String zkPathPartitionAssignments,
+		 String zkPathFlagAssignments) throws Exception {
+		
+		HashMap<Integer, KaBoomClient> idToKaBoomClient = new HashMap<>();
+		for (KaBoomClient client : kaboomClients)  idToKaBoomClient.put(client.getId(), client); 
+		
+		HashMap<String, KafkaTopic> nameToKafkaTopics = new HashMap<>();
+		
+		//HashMap<String, KafkaPartition> partitionIdToKafkaPartiton = new HashMap<>();		
+		
+		for (KafkaTopic topic : kafkaTopics) {
+			nameToKafkaTopics.put(topic.getName(), topic);
+			//for (KafkaPartition kafkaPartition : topic.getPartitions()) {
+			//	String partitionId = String.format("%s-%d", topic.getName(), kafkaPartition.getPartitionId());
+			//	partitionIdToKafkaPartiton.put(partitionId, kafkaPartition);
+			//}
+		}
+				
+		// The list we'll eventually be returning
+		List<KaBoomTopic> kaboomTopics = new ArrayList<>();
 
 		for (String topicName : Util.childrenInZkPath(curator, zkPathTopics)) {
-			KaBoomTopic topic = new KaBoomTopic(topicName);
-			topics.add(topic);
+			// The initla KaBoomTopic is built from a KafkaTopic
+			KaBoomTopic topic = new KaBoomTopic(nameToKafkaTopics.get(topicName));
+			kaboomTopics.add(topic);
+			
+			// Let's figure out whom is propagating ready flags for this topic
+			String flagPath = String.format("%s/%s", zkPathFlagAssignments, topicName);
+			if (curator.checkExists().forPath(flagPath) != null) {
+				topic.assignedFlagPropagator = idToKaBoomClient.get(
+					 Converter.intFromBytes(curator.getData().forPath(flagPath)));
+			}
+			
+			// Now we create all the partitions
 			String topicZkPath = String.format("%s/%s", zkPathTopics, topicName);
-			for (String partition : Util.childrenInZkPath(curator, topicZkPath)) {
-				int partitionId = Integer.parseInt(partition);
-				long offset = 0;
-				long offsetTimestamp = 0;
-				int assignedKaBoomClientId = 0;
-				String path = topicZkPath + "/" + partition;
-
-				offset = Converter.longFromBytes(curator.getData().forPath(path));
-
-				if (curator.checkExists().forPath(path + "/offset_timestamp") != null) {
-					offsetTimestamp = Converter.longFromBytes(curator.getData().forPath(path + "/offset_timestamp"));
+			for (String partitionId : Util.childrenInZkPath(curator, topicZkPath)) {				
+				
+				KaBoomPartition partition = new KaBoomPartition(
+					 nameToKafkaTopics.get(topicName).getPartition(Integer.parseInt(partitionId)));
+				
+				partition.setTopic(topic);
+				
+				// Set the offset if there's one stored in ZK
+				String offsetPath = String.format("%s/%s", topicZkPath, partitionId);								
+				if (curator.checkExists().forPath(offsetPath) != null) {
+					partition.setOffset(Converter.longFromBytes(curator.getData().forPath(offsetPath)));
+				}				
+				
+				// Set the offset timestamp if there's one stored in ZK
+				String offsetTsPath = String.format("%s/%s", topicZkPath, "/offset_timestamp");
+				if (curator.checkExists().forPath(offsetTsPath) != null) {
+					partition.setOffsetTimestamp(Converter.longFromBytes(curator.getData().forPath(offsetTsPath)));
 				}
-				String assignmentPath = String.format("%s/%s-%s", zkPathAssignments, topicName, partition);
-				if (curator.checkExists().forPath(assignmentPath) != null) {
-					assignedKaBoomClientId = Integer.parseInt(new String(curator.getData().forPath(assignmentPath), UTF8));
+				
+				// Set the partition assignee if there's one stored in ZK
+				String partitionAssignmentPath = String.format("%s/%s-%s", 
+					 zkPathPartitionAssignments, topicName, partitionId);
+				if (curator.checkExists().forPath(partitionAssignmentPath) != null) {
+					// Why we stored the them as  strings and not Ints as bytes is before my time
+					partition.setAssignedClient(idToKaBoomClient.get(Integer.parseInt(
+						 new String(curator.getData().forPath(partitionAssignmentPath), UTF8))));
 				}
-
-				topic.partitionDetails.add(new KaBoomPartitionDetails(partitionId, offset, offsetTimestamp, assignedKaBoomClientId));
+				
+				topic.partitions.add(partition);
 				topic.config = KaBoomTopicConfig.get(KaBoomTopicConfig.class, curator, topicZkPath);
 			}
 		}
-		return topics;
+		return kaboomTopics;
 	}
 
-	public static HashMap<String, KaBoomTopic> getAllMap(CuratorFramework curator,
-		 String zkPathTopics,
-		 String zkPathAssignments) throws Exception{		
-		HashMap<String, KaBoomTopic> map = new HashMap<>();
-		for (KaBoomTopic topic : getAll(curator, zkPathTopics, zkPathAssignments)) {
-			map.put(topic.topicName, topic);
-		}
-		return map;
-	}
-	
 	public long oldestPartitionOffset() throws Exception {
 		long oldestTimestamp = -1;
-		for (KaBoomPartitionDetails partitonDetail : partitionDetails) {
-			if (partitonDetail.getOffsetTimestamp() < oldestTimestamp || oldestTimestamp == -1) {
-				oldestTimestamp = partitonDetail.getOffsetTimestamp();
+		for (KaBoomPartition partiton : partitions) {
+			if (partiton.getOffsetTimestamp()< oldestTimestamp || oldestTimestamp == -1) {
+				oldestTimestamp = partiton.getOffsetTimestamp();
 			}
 		}
 		if (oldestTimestamp == -1) {
-			throw new Exception("Failed to get oldest partition timestamp for topic: " + topicName);
+			throw new Exception("Failed to get oldest partition timestamp for topic: " + kafkaTopic.getName());
 		}
 		return oldestTimestamp;
 	}
 
-	/**
-	 * @return the topicName
-	 */
-	public String getTopicName() {
-		return topicName;
+	public static int getTotalPartitonCount(List<KaBoomTopic> kaboomTopics) {
+		int totalPartitions = 0;
+		for (KaBoomTopic kaboomTopic : kaboomTopics) {
+			totalPartitions += kaboomTopic.getKafkaTopic().getPartitions().size();
+		}
+		return totalPartitions;
 	}
-
+		
 	/**
-	 * @return the partitionDetails
+	 * @return the partitions
 	 */
-	public List<KaBoomPartitionDetails> getPartitionDetails() {
-		return partitionDetails;
+	public List<KaBoomPartition> getPartitions() {
+		return partitions;
 	}
 
 	/**
@@ -115,6 +152,20 @@ public class KaBoomTopic {
 	 */
 	public KaBoomTopicConfig getConfig() {
 		return config;
+	}
+
+	/**
+	 * @return the kafkaTopic
+	 */
+	public KafkaTopic getKafkaTopic() {
+		return kafkaTopic;
+	}
+
+	/**
+	 * @return the assignedFlagPropagator
+	 */
+	public KaBoomClient getAssignedFlagPropagator() {
+		return assignedFlagPropagator;
 	}
 
 }

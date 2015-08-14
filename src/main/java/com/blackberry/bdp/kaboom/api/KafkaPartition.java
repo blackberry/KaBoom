@@ -22,8 +22,10 @@ import kafka.javaapi.PartitionMetadata;
 
 public class KafkaPartition {
 
+	private KafkaTopic topic;
 	private final int partitionId;
 	private final int leaderBrokerId;
+	private KafkaBroker leader;
 	private final short errorCode;
 	private final int sizeInBytes;	
 	private final List<Integer> replicas = new ArrayList<>();
@@ -31,7 +33,7 @@ public class KafkaPartition {
 	private Long earliestOffset = null;
 	private Long latestOffset = null;
 
-	public KafkaPartition(PartitionMetadata metadata) {
+	public KafkaPartition(PartitionMetadata metadata) {		
 		this.partitionId = metadata.partitionId();
 		this.leaderBrokerId = metadata.leader().id();
 		this.errorCode = metadata.errorCode();
@@ -46,18 +48,15 @@ public class KafkaPartition {
 		}
 	}
 
+	public String getTopicPartitionString() {
+		return String.format("%s-%s", topic.getName(), partitionId);
+	}
+	
 	/**
 	 * @return the partitionId
 	 */
 	public int getPartitionId() {
 		return partitionId;
-	}
-
-	/**
-	 * @return the leader
-	 */
-	public int getLeader() {
-		return leaderBrokerId;
 	}
 
 	/**
@@ -114,6 +113,41 @@ public class KafkaPartition {
 	 */
 	public void setLatestOffset(Long latestOffset) {
 		this.latestOffset = latestOffset;
+	}
+
+	/**
+	 * @return the leaderBrokerId
+	 */
+	public int getLeaderBrokerId() {
+		return leaderBrokerId;
+	}
+
+	/**
+	 * @return the leader
+	 */
+	public KafkaBroker getLeader() {
+		return leader;
+	}
+
+	/**
+	 * @param leader the leader to set
+	 */
+	public void setLeader(KafkaBroker leader) {
+		this.leader = leader;
+	}
+
+	/**
+	 * @return the topic
+	 */
+	public KafkaTopic getTopic() {
+		return topic;
+	}
+
+	/**
+	 * @param topic the topic to set
+	 */
+	public void setTopic(KafkaTopic topic) {
+		this.topic = topic;
 	}
 	
 }

@@ -125,12 +125,12 @@ public class ReadyFlagController {
 			int clientId = e.getKey();
 			KaBoomClient client = e.getValue();
 			// delete assignments for clients that are over-assigned their target load 
-			if (client.getAssignedFlagPropagatorTopics().size() >= client.getFlagPropagatorTargetLoad() + 1) {
+			if (client.getAssignedFlagPropagatorTopics().size() >= client.getTargetFlagPropagatorLoad() + 1) {
 				LOG.info("Client {}'s flag propagator load is {} and target load is {}, need to  unassign topics",
-					 clientId, client.getAssignedFlagPropagatorTopics().size(), client.getFlagPropagatorTargetLoad());
+					 clientId, client.getAssignedFlagPropagatorTopics().size(), client.getTargetFlagPropagatorLoad());
 				int numAssignedTopics = client.getAssignedFlagPropagatorTopics().size();
 				int numTotalFails = 0;
-				while (numAssignedTopics > client.getFlagPropagatorTargetLoad()) {
+				while (numAssignedTopics > client.getTargetFlagPropagatorLoad()) {
 					// Find a random topic in the assigned unassignedTopics and delete it					
 					String topicToDelete = client.getAssignedFlagPropagatorTopics().get(rand.nextInt(numAssignedTopics));
 					String deletePath = String.format("%s/%s", flagAssignmentsPath, topicToDelete);
@@ -156,8 +156,8 @@ public class ReadyFlagController {
 		Comparator<KaBoomClient> comparator = new Comparator<KaBoomClient>() {
 			@Override
 			public int compare(KaBoomClient clientA, KaBoomClient clientB) {
-				double valA = clientA.getAssignedFlagPropagatorTopics().size() / clientA.getFlagPropagatorTargetLoad();
-				double valB = clientB.getAssignedFlagPropagatorTopics().size() / clientB.getFlagPropagatorTargetLoad();
+				double valA = clientA.getAssignedFlagPropagatorTopics().size() / clientA.getTargetFlagPropagatorLoad();
+				double valB = clientB.getAssignedFlagPropagatorTopics().size() / clientB.getTargetFlagPropagatorLoad();
 				if (valA == valB) {
 					return 0;
 				} else {

@@ -16,8 +16,10 @@
 package com.blackberry.bdp.kaboom.api;
 
 import com.blackberry.bdp.common.versioned.Util;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import org.apache.curator.framework.CuratorFramework;
 import org.codehaus.jackson.map.ObjectMapper;
@@ -32,7 +34,7 @@ public class KafkaBroker {
 	private int id;
 	private int jmx_port;
 	private long timestamp;
-	private String host;
+	private String hostname;
 	private int version;
 	private int port;
 	
@@ -46,12 +48,14 @@ public class KafkaBroker {
 		
 		this.jmx_port= jmxPort;
 		this.timestamp = timestamp;
-		this.host = host;
+		this.hostname = host;
 		this.version = version;
 		this.port = port;
 	}
 
-	public static List<KafkaBroker> getAll(CuratorFramework curator, String zkPath) throws Exception {
+	public static List<KafkaBroker> getAll(CuratorFramework curator, 
+		 String zkPath) throws Exception {
+		
 		List<KafkaBroker> brokers = new ArrayList<>();
 		List<String> brokerIds = Util.childrenInZkPath(curator, zkPath);
 		for (String brokerId : brokerIds) {
@@ -64,13 +68,36 @@ public class KafkaBroker {
 				broker.id = Integer.parseInt(brokerId);
 				brokers.add(broker);				
 			}
-			catch (Exception e) {
+			catch (IOException | NumberFormatException e) {
 				LOG.error("Failed to convert {}", brokerJson);
 				throw e;
 			}
 		}
 		return brokers;
 	}
+	
+	public static HashMap<String, KafkaPartition> getUsefulMappings(
+		 List<KafkaTopic> topics,
+		 List<KafkaBroker>  brokers,
+		 HashMap<Integer, KafkaBroker> brokerIdToBroker,
+		 HashMap<String, KafkaPartition> leaderIdToKafkaPartition,
+		 HashMap<String, KafkaPartition> partitionIdToKafkaPartition) {
+		
+		for (KafkaBroker broker : brokers) {
+			brokerIdToBroker.put(broker.getId(), broker);
+		}
+		// Build the leader hostname to Kafka partition map
+		HashMap<String, KafkaPartition> leaderToPart = new HashMap<>();
+		for (KafkaTopic topic : topics) {
+			for (KafkaPartition partition : topic.getPartitions()) {
+				leaderToPart.put(brokerIdToBroker.get(partition.getLeader()).getHostname(), partition);				
+				String partitionId = String.format("%s-%d", topic, partition.getPartitionId());				
+				partitionIdToKafkaPartition.put(partitionId, partition);
+			}				
+		}
+		return leaderToPart;
+	}
+	
 
 	/**
 	 * @return the id
@@ -115,17 +142,17 @@ public class KafkaBroker {
 	}
 
 	/**
-	 * @return the host
+	 * @return the hostname
 	 */
-	public String getHost() {
-		return host;
+	public String getHostname() {
+		return hostname;
 	}
 
 	/**
-	 * @param host the host to set
+	 * @param host the hostname to set
 	 */
-	public void setHost(String host) {
-		this.host = host;
+	public void setHostname(String host) {
+		this.hostname = host;
 	}
 
 	/**
