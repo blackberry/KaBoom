@@ -16,11 +16,16 @@
 package com.blackberry.bdp.kaboom.api;
 
 import com.blackberry.bdp.common.versioned.ZkVersioned;
+import com.blackberry.bdp.kaboom.StartupConfig;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.curator.framework.CuratorFramework;
+import org.apache.zookeeper.KeeperException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class KaBoomClient extends ZkVersioned{
+public class KaBoomClient extends ZkVersioned {
 
 	private int id;
 	private String hostname;
@@ -30,12 +35,15 @@ public class KaBoomClient extends ZkVersioned{
 	private double targetFlagPropagatorLoad = 0.0;
 	private final List<String> assignedFlagPropagatorTopics = new ArrayList<>();
 	private final List<KaBoomPartition> assignedPartitions = new ArrayList<>();
-	
+	private static final Charset UTF8 = Charset.forName("UTF-8");
+	private static final Logger LOG = LoggerFactory.getLogger(KaBoomClient.class);
+
 	/**
 	 * Instantiates a default RunningConfig without any ZK interaction
 	 */
-	public KaBoomClient() { }
-	
+	public KaBoomClient() {
+	}
+
 	/**
 	 * Instantiates a ZkVersioned KaBoomClient from ZK Path
 	 * @param curator
@@ -45,17 +53,34 @@ public class KaBoomClient extends ZkVersioned{
 	public KaBoomClient(CuratorFramework curator, String zkPath) throws Exception {
 		super(curator, zkPath);
 	}
-	
+
 	public void calculateTargetPartitionLoad(int totalPartitions, int totalWeight) {
-		targetPartitionLoad = (totalPartitions * (1.0 * weight/ totalWeight));
+		targetPartitionLoad = (totalPartitions * (1.0 * weight / totalWeight));
 	}
-	
+
 	public void calculateFlagPropagatorTargetLoad(int totalPaths, int totalWeight) {
-		targetFlagPropagatorLoad = (totalPaths * (1.0 * weight/ totalWeight));
+		targetFlagPropagatorLoad = (totalPaths * (1.0 * weight / totalWeight));
 	}
-	
+
 	public boolean overloaded() {
 		return assignedPartitions.size() > targetPartitionLoad + 1;
+	}
+
+	public List<String> getAssignments(StartupConfig config, String zkRootPath) throws Exception {
+		List<String> assignments = new ArrayList<>();
+		for (String assignment : config.getKaBoomCurator().getChildren().forPath(zkRootPath)) {
+			String assignee;
+			try {
+				assignee = new String(config.getKaBoomCurator().getData().forPath(config.zkPathPartitionAssignment(assignment)), UTF8);
+				if (assignee.equals(Integer.toString(id))) {
+					assignments.add(assignment);
+				}
+			} catch (KeeperException.NoNodeException nne) {
+				LOG.warn("The weird 'NoNodeException' has been raised, let's just continue and it'll retry");
+				continue;
+			}
+		}
+		return assignments;
 	}
 	
 	/**

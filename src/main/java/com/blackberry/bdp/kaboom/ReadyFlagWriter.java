@@ -34,15 +34,17 @@ public class ReadyFlagWriter extends NotifyingThread {
 	private FileSystem fs;
 	private final CuratorFramework curator;
 	private final StartupConfig config;
+	private final List<KaBoomTopic> kaboomTopics;
 
-	private static final String ZK_ROOT = "/kaboom";
-	public static String KAFKA_READY_FLAG;
-	public static final String DATA_DIR = "data";
-	public static final String WORKING_DIR = "working";
-	public static final String LOG_TAG = "[ready flag writer] ";
+	private final String KAFKA_READY_FLAG;
+	
+	public final String WORKING_DIR = "working";
+	private static final String LOG_TAG = "[ready flag writer] ";
 
-	public ReadyFlagWriter(StartupConfig config) throws Exception {
+	public ReadyFlagWriter(StartupConfig config, 
+		 List<KaBoomTopic> kaboomTopics) throws Exception {
 		this.config = config;
+		this.kaboomTopics = kaboomTopics;
 		this.curator = config.getKaBoomCurator();
 		this.KAFKA_READY_FLAG = config.getRunningConfig().getKafkaReadyFlagFilename();
 	}
@@ -92,15 +94,10 @@ public class ReadyFlagWriter extends NotifyingThread {
 		long currentTimestamp = cal.getTimeInMillis();
 		long startOfHourTimestamp = currentTimestamp - currentTimestamp % (60 * 60 * 1000);
 
-		List<KaBoomTopic> kaboomTopics = KaBoomTopic.getAll(
-			 config.getKaBoomCurator(), 
-			 config.getZkRootPathTopicConfigs(), 
-			 config.getZkRootPathPartitionAssignments());
-		
 		for (KaBoomTopic topic : kaboomTopics) {			
 			
 			String hdfsTemplate = topic.getConfig().getHdfsRootDir();
-			String topicName = topic.getTopicName();
+			String topicName = topic.getKafkaTopic().getName();
 
 			if (hdfsTemplate == null) {
 				LOG.error(LOG_TAG + "HDFS path property for topic={} is not defined in configuraiton, skipping topic", topicName);
@@ -143,7 +140,7 @@ public class ReadyFlagWriter extends NotifyingThread {
 				try {
 					final Path topicRoot = new Path(Converter.timestampTemplateBuilder(prevHourStartTimestmap, hdfsTemplate));
 
-					final Path dataDirectory = new Path(topicRoot + "/" + DATA_DIR);
+					final Path dataDirectory = new Path(topicRoot + "/" + topic.getConfig().getDefaultDirectory());
 					final Path workingDirectory = new Path(topicRoot + "/" + WORKING_DIR);
 
 					final Path kafkaReadyFlag1 = new Path(dataDirectory.toString() + "/" + KAFKA_READY_FLAG);

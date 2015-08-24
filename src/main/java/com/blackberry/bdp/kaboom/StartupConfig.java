@@ -144,15 +144,17 @@ public class StartupConfig {
 		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		loadBalancerType = propsParser.parseString("kaboom.load.balancer.type", "even");
+		
 		zkRootPathKafka = propsParser.parseString("kafka.zk.root.path", zkRootPathKafka);
 		zkRootPathKafkaBrokers = propsParser.parseString("kafka.zk.root.path.brokers", zkRootPathKafkaBrokers);
 		zkRootPathKaBoom = propsParser.parseString("kaboom.zk.root.path", zkRootPathKaBoom);
-		zkPathRunningConfig = propsParser.parseString("kaboom.zk.path.runningConfig", zkPathRunningConfig);
-		zkPathLeaderClientId = propsParser.parseString("kaboom.zk.path.leader.clientId", zkPathLeaderClientId);
 		zkRootPathTopicConfigs = propsParser.parseString("kaboom.zk.root.path.topic.configs", zkRootPathTopicConfigs);
 		zkRootPathClients = propsParser.parseString("kaboom.zk.root.path.clients", zkRootPathClients);
 		zkRootPathPartitionAssignments = propsParser.parseString("kaboom.zk.root.path.partition.assignments", zkRootPathPartitionAssignments);
 		zkRootPathFlagAssignments = propsParser.parseString("kaboom.zk.root.path.flag.assignments", zkRootPathFlagAssignments);
+		zkPathRunningConfig = propsParser.parseString("kaboom.zk.path.runningConfig", zkPathRunningConfig);
+		zkPathLeaderClientId = propsParser.parseString("kaboom.zk.path.leader.clientId", zkPathLeaderClientId);
+
 		
 		deadWorkerMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:dead workers");
 		gracefulWorkerShutdownMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:gracefully shutdown workers");
@@ -221,17 +223,17 @@ public class StartupConfig {
 			return proxyUserToFileSystem.get(proxyUser);
 		} else {
 			try {
-				LOG.info("Attempting to create file system {} for {}", hadoopUrlPath, proxyUser);
+				LOG.info("Attempting to create file system {} for {}", getHadoopUrlPath(), proxyUser);
 				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>() {
 					@Override
 					public Void run() throws Exception {
 						synchronized (fsLock) {
 							try {
-								FileSystem fs = hadoopUrlPath.getFileSystem(hadoopConfiguration);
+								FileSystem fs = getHadoopUrlPath().getFileSystem(hadoopConfiguration);
 								proxyUserToFileSystem.put(proxyUser, fs);
-								LOG.debug("Opening {} for proxy user {}", hadoopUrlPath, proxyUser);
+								LOG.debug("Opening {} for proxy user {}", getHadoopUrlPath(), proxyUser);
 							} catch (IOException ioe) {
-								LOG.error("Error getting file system {} for proxy user {}", hadoopUrlPath, proxyUser, ioe);
+								LOG.error("Error getting file system {} for proxy user {}", getHadoopUrlPath(), proxyUser, ioe);
 								throw ioe;
 							}
 						}
@@ -481,6 +483,13 @@ public class StartupConfig {
 	 */
 	public String getZkRootPathPartitionAssignments() {
 		return zkRootPathPartitionAssignments;
+	}
+
+	/**
+	 * @return the hadoopUrlPath
+	 */
+	public Path getHadoopUrlPath() {
+		return hadoopUrlPath;
 	}
 
 }

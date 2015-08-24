@@ -168,7 +168,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			 */
 			if (readyFlagWriterThread == null || !readyFlagWriterThread.isAlive()) {
 				LOG.info("[ready flag writer] thread doesn't exist or is not running");
-				readyFlagWriter = new ReadyFlagWriter(config);
+				readyFlagWriter = new ReadyFlagWriter(config, kaboomTopics);
 				readyFlagWriter.addListener(this);
 				readyFlagWriterThread = new Thread(readyFlagWriter);
 				readyFlagWriterThread.start();

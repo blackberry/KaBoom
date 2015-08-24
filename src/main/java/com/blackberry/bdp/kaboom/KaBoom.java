@@ -30,7 +30,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import org.apache.zookeeper.KeeperException.NoNodeException;
@@ -41,6 +40,7 @@ public class KaBoom {
 	private static final Charset UTF8 = Charset.forName("UTF-8");
 	boolean shutdown = false;
 	private StartupConfig config;
+	private KaBoomClient client;
 
 	public static void main(String[] args) throws Exception {
 		InstrumentedLoggerSingleton.getInstance();
@@ -98,12 +98,12 @@ public class KaBoom {
 
 		// Register our existence
 		{			
-			KaBoomClient kaboom = new KaBoomClient(config.getKaBoomCurator(), 
+			client = new KaBoomClient(config.getKaBoomCurator(), 
 				 String.format("%s/%s", config.getZkRootPathClients(), config.getKaboomId()));			
-			kaboom.setMode(CreateMode.EPHEMERAL);
-			kaboom.setHostname(config.getHostname());
-			kaboom.setWeight(config.getWeight());
-			kaboom.save();
+			client.setMode(CreateMode.EPHEMERAL);
+			client.setHostname(config.getHostname());
+			client.setWeight(config.getWeight());
+			client.save();
 		}
 		
 		// Instantiate our load balancer
@@ -117,7 +117,8 @@ public class KaBoom {
 		}
 
 		// Start leader election thread
-		final LeaderSelector leaderSelector = new LeaderSelector(config.getKaBoomCurator(), "/kaboom/leader", loadBalancer);
+		final LeaderSelector leaderSelector = new LeaderSelector(config.getKaBoomCurator(), 
+			 config.getZkPathLeaderClientId(), loadBalancer);
 		leaderSelector.autoRequeue();
 		leaderSelector.start();
 
@@ -168,9 +169,7 @@ public class KaBoom {
 			// Propagate any flags that we have been assigned to
 			if (config.getRunningConfig().isPropagateReadyFlags() && System.currentTimeMillis()
 				 > (lastFlagPropagationTs + config.getRunningConfig().getPropagateReadyFlagFrequency())) {
-				List<String> topics = ReadyFlagController.getAssignments(config);
-				LOG.info("Found a total of {} topics that we are assigned to propagate ready flags for", topics.size());
-				for (String topic : topics) {
+				for (String topic : client.getAssignments(config, config.getZkRootPathFlagAssignments())) {
 					if (topicToFlagPropThread.get(topic) != null && topicToFlagPropThread.get(topic).isAlive()) {
 						LOG.warn("[{}] Flag propagator thread is still running", topic);
 					} else {
@@ -198,47 +197,36 @@ public class KaBoom {
 			// Get all my assignments and create a worker if there's anything not already being worked
 			Map<String, Boolean> validWorkingPartitions = new HashMap<>();
 
-			for (String partitionId : config.getKaBoomCurator().getChildren().forPath("/kaboom/assignments")) {
-				String assignee;
-				try {
-					assignee = new String(config.getKaBoomCurator().getData().forPath("/kaboom/assignments/"
-						 + partitionId), UTF8);
-				} catch (NoNodeException nne) {
-					LOG.warn("The weird 'NoNodeException' has been raised, let's just continue and it'll retry");
-					continue;
-				}
-				
-				if (assignee.equals(Integer.toString(config.getKaboomId()))) {
-					if (partitionToWorkerMap.containsKey(partitionId)) {
-						if (false == partitionToThreadsMap.get(partitionId).isAlive()) {
-							partitionToThreadsMap.remove(partitionId);
-							partitionToWorkerMap.remove(partitionId);
-							if (partitionToWorkerMap.get(partitionId).isGracefulShutdown()) {
-								LOG.info("worker thead for {} found to have been shutdown gracefully", partitionId);
-								config.getGracefulWorkerShutdownMeter().mark();
-							} else {
-								LOG.error("worker thead for {} found dead (removed thread/worker objects)", partitionId);
-								config.getDeadWorkerMeter().mark();
-							}
+			for (String partitionId : client.getAssignments(config, config.getZkRootPathPartitionAssignments())) {
+				if (partitionToWorkerMap.containsKey(partitionId)) {
+					if (false == partitionToThreadsMap.get(partitionId).isAlive()) {
+						partitionToThreadsMap.remove(partitionId);
+						partitionToWorkerMap.remove(partitionId);
+						if (partitionToWorkerMap.get(partitionId).isGracefulShutdown()) {
+							LOG.info("worker thead for {} found to have been shutdown gracefully", partitionId);
+							config.getGracefulWorkerShutdownMeter().mark();
 						} else {
-							validWorkingPartitions.put(partitionId, true);
+							LOG.error("worker thead for {} found dead (removed thread/worker objects)", partitionId);
+							config.getDeadWorkerMeter().mark();
 						}
 					} else {
-						LOG.info("KaBoom clientId {} assigned to partitonId {} and a worker doesn't exist", config.getKaboomId(), partitionId);
-						Matcher m = topicPartitionPattern.matcher(partitionId);
-						if (m.matches()) {							
-							String topic = m.group(1);
-							int partition = Integer.parseInt(m.group(2));
-							Worker worker = new Worker(config, topic, partition);
-							partitionToWorkerMap.put(partitionId, worker);
-							partitionToThreadsMap.put(partitionId, new Thread(worker));
-							partitionToThreadsMap.get(partitionId).start();
-							LOG.info("KaBoom clientId {} assigned to partitonId {} and a new worker has been started",
-								 config.getKaboomId(), partitionId);
-							validWorkingPartitions.put(partitionId, true);
-						} else {
-							LOG.error("Could not get topic and partition from node name. ({})", partitionId);
-						}
+						validWorkingPartitions.put(partitionId, true);
+					}
+				} else {
+					LOG.info("KaBoom clientId {} assigned to partitonId {} and a worker doesn't exist", config.getKaboomId(), partitionId);
+					Matcher m = topicPartitionPattern.matcher(partitionId);
+					if (m.matches()) {
+						String topic = m.group(1);
+						int partition = Integer.parseInt(m.group(2));
+						Worker worker = new Worker(config, topic, partition);
+						partitionToWorkerMap.put(partitionId, worker);
+						partitionToThreadsMap.put(partitionId, new Thread(worker));
+						partitionToThreadsMap.get(partitionId).start();
+						LOG.info("KaBoom clientId {} assigned to partitonId {} and a new worker has been started",
+							 config.getKaboomId(), partitionId);
+						validWorkingPartitions.put(partitionId, true);
+					} else {
+						LOG.error("Could not get topic and partition from node name. ({})", partitionId);
 					}
 				}
 			}
