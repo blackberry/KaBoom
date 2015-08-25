@@ -15,43 +15,46 @@
  */
 package com.blackberry.bdp.kaboom.api;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class KaBoomPartition {
 
-	private KaBoomTopic topic;
+	@JsonIgnore private KaBoomTopic topic;
 	private KafkaPartition kafkaPartition;
-	private KaBoomClient  assignedClient;
+	private KaBoomClient assignedClient;
 	private long offset;
-	private long offsetTimestamp;	
+	private long offsetTimestamp;
+	private static final Logger LOG = LoggerFactory.getLogger(KaBoomPartition.class);
 
 	public KaBoomPartition(KafkaPartition kafkaPartition) {
-		this.kafkaPartition = kafkaPartition;			 
+		this.kafkaPartition = kafkaPartition;
 	}
-	
+
 	public static List<KaBoomPartition> unassignedPartitions(List<KaBoomTopic> kaboomTopics) {
-		// Build a list of all the KafkaPartiton's we have assigned already
-		List<KafkaPartition> assignedPartitions = new ArrayList<>();
-		// For all KaBoomTopic's
+		LOG.info("There are {} configured KaBoom topics", kaboomTopics.size());
+		List<KaBoomPartition> unassignedPartitions = new ArrayList<>();
+		// For all KaBoomTopic's		
 		for (KaBoomTopic kaboomTopic : kaboomTopics) {
 			// For all the KaBoomPartition's
-			for (KaBoomPartition kaboomPartition :  kaboomTopic.getPartitions()) {
-				// Add the corresponding KafkaPartition
-				assignedPartitions.add(kaboomPartition.getKafkaPartition());
-			}
-		}
-		
-		// Now build a list of KaBoomPartition that are not already assigned
-		List<KaBoomPartition> unassignedPartitions = new ArrayList<>();		
-		// For every KaBoomTopic
-		for (KaBoomTopic kaboomTopic : kaboomTopics) {
-			// For every KafkaPartition (note: we switch to iteating from the KafkaTopic)
-			for (KafkaPartition kafkaPartition : kaboomTopic.getKafkaTopic().getPartitions()) {
-				// That isn't already assigned
-				if (assignedPartitions.contains(kafkaPartition)) continue;
-				KaBoomPartition unassignedPartition = new KaBoomPartition(kafkaPartition);
-				unassignedPartition.setTopic(kaboomTopic);				
+			LOG.info("KaBoom topic {} has {} partitons", kaboomTopic.getKafkaTopic().getName(),
+				 kaboomTopic.getPartitions().size());
+			for (KaBoomPartition kaboomPartition : kaboomTopic.getPartitions()) {
+				// Add the corresponding KafkaPartition if not assigned
+				if (kaboomPartition.assignedClient != null) {
+					LOG.info("Topic {} partition {} is assigned to {}",
+						 kaboomTopic.getKafkaTopic().getName(),
+						 kaboomPartition.getKafkaPartition().getPartitionId(),
+						 kaboomPartition.getAssignedClient().getId());
+				} else {
+					unassignedPartitions.add(kaboomPartition);
+					LOG.info("Topic {} partition {} is not assigned",
+						 kaboomTopic.getKafkaTopic().getName(),
+						 kaboomPartition.getKafkaPartition().getPartitionId());
+				}
 			}
 		}
 		return unassignedPartitions;
@@ -60,7 +63,7 @@ public class KaBoomPartition {
 	public String getTopicPartitionString() {
 		return String.format("%s-%s", topic.getKafkaTopic().getName(), kafkaPartition.getPartitionId());
 	}
-	
+
 	/**
 	 * @return the kafkaPartition
 	 */
@@ -130,4 +133,5 @@ public class KaBoomPartition {
 	public void setTopic(KaBoomTopic kaboomTopic) {
 		this.topic = kaboomTopic;
 	}
+
 }

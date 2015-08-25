@@ -37,6 +37,7 @@ import com.blackberry.bdp.kaboom.api.KafkaTopic;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.zookeeper.CreateMode;
 
 public abstract class Leader extends LeaderSelectorListenerAdapter implements ThreadCompleteListener {
 
@@ -54,8 +55,8 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	private List<KafkaTopic> kafkaTopics;
 	private List<KaBoomClient> kaboomClients;
 
-	private HashMap<Integer, KaBoomClient> idToKaBoomClient;
-	private HashMap<String, KaBoomTopic> nameToKaBoomTopic;
+	private final HashMap<Integer, KaBoomClient> idToKaBoomClient = new HashMap<>();
+	private final HashMap<String, KaBoomTopic> nameToKaBoomTopic = new HashMap<>();
 
 	protected ReadyFlagController readyFlagController;
 
@@ -73,7 +74,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	@Override
 	public void takeLeadership(CuratorFramework curator) throws Exception {
 		this.curator = curator;
-		ZkUtils.writeToPath(curator, config.getZkPathLeaderClientId(), config.getKaboomId(), true);
+		ZkUtils.writeToPath(curator, config.getZkPathLeaderClientId(), config.getKaboomId(), true, CreateMode.EPHEMERAL);
 		LOG.info("KaBoom client ID {} is the new leader, entering the 30s calm down", config.getKaboomId());
 		Thread.sleep(30 * 1000);
 
@@ -94,6 +95,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				totalWeight += kaboomClient.getWeight();
 				idToKaBoomClient.put(kaboomClient.getId(), kaboomClient);
 			}
+			LOG.info("The total weight of the KaBoom cluster is {}", totalWeight);
 
 			for (KaBoomTopic kaboomTopic : kaboomTopics) {
 				nameToKaBoomTopic.put(kaboomTopic.getKafkaTopic().getName(), kaboomTopic);
@@ -111,7 +113,9 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 							if (!nameToKaBoomTopic.containsKey(m.group(1))) {
 								deletedReason = "because of missing topic configuration";
 							} else {
-								int assignedClientId = intFromBytes(curator.getData().forPath(assignmentZkPath));
+								String clientId = new String(curator.getData().forPath(assignmentZkPath), UTF8);
+								LOG.info("Found client ID string {} at {}", clientId, assignmentZkPath);
+								int assignedClientId = new Integer(clientId);
 								if (!idToKaBoomClient.containsKey(assignedClientId)) {
 									deletedReason = String.format("because client %s is not connected", assignedClientId);
 								}

@@ -64,10 +64,10 @@ public class LocalLoadBalancer extends Leader {
 				String assignmentZkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(), partitionId);
 				KaBoomClient assignedClient = idToKaBoomClient.get(intFromBytes(curator.getData().forPath(assignmentZkPath)));
 				KafkaBroker leader = idToPartition.get(partitionId).getKafkaPartition().getLeader();				
-				if (!leader.getHostname().equals(assignedClient.getHostname())) {
+				if (!leader.getHost().equals(assignedClient.getHostname())) {
 					curator.delete().forPath(assignmentZkPath);
 					LOG.info("Non-local assignment {} to client {} (hostname: {}) deleted because leader's  hostname is{}",
-						 assignmentZkPath, assignedClient.getId(), assignedClient.getHostname(), leader.getHostname());
+						 assignmentZkPath, assignedClient.getId(), assignedClient.getHostname(), leader.getHost());
 				}
 			}
 		} catch (Exception e) {
@@ -75,7 +75,7 @@ public class LocalLoadBalancer extends Leader {
 		}
 		
 		for (KaBoomPartition partition : KaBoomPartition.unassignedPartitions(kaboomTopics)) {
-			String leaderHostname = partition.getKafkaPartition().getLeader().getHostname();
+			String leaderHostname = partition.getKafkaPartition().getLeader().getHost();
 			KaBoomClient localClient = hostToKaBoomClient.get(leaderHostname);
 			if (localClient != null) {
 				String zkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(), 

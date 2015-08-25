@@ -106,7 +106,12 @@ public class ReadyFlagWriter extends NotifyingThread {
 
 			fs = config.authenticatedFsForProxyUser(topic.getConfig().proxyUser);
 
-			long oldestTimestamp = topic.oldestPartitionOffset();
+			Long oldestTimestamp = topic.oldestPartitionOffset();			
+			if (oldestTimestamp == null) {
+				LOG.info(LOG_TAG + "failed to get the oldest partition timestamp for {}", topic);
+				continue;
+			}
+				 
 			long oldestTimestampMillisAgo = System.currentTimeMillis() - oldestTimestamp;
 
 			LOG.info(LOG_TAG + "oldest partition for topic {} is {}", topicName,

@@ -180,8 +180,12 @@ public class ReadyFlagController {
 			KaBoomClient leastLoadedClient = kaboomClientList.get(0);
 			String assignmentPath = String.format("%s/%s", flagAssignmentsPath, topic);
 			try {
-				curator.create().withMode(CreateMode.PERSISTENT)
-					 .forPath(assignmentPath, getBytes(leastLoadedClient.getId()));
+				if (curator.checkExists().forPath(assignmentPath) != null) {
+					curator.setData().forPath(assignmentPath, getBytes(leastLoadedClient.getId()));
+				} else {
+					curator.create().withMode(CreateMode.PERSISTENT)
+						 .forPath(assignmentPath, getBytes(leastLoadedClient.getId()));
+				}
 				leastLoadedClient.getAssignedFlagPropagatorTopics().add(topic);
 				LOG.info("Flag propagation assigned {} to {}", topic, leastLoadedClient.getId());
 				iter.remove();

@@ -56,10 +56,12 @@ public class KaBoomClient extends ZkVersioned {
 
 	public void calculateTargetPartitionLoad(int totalPartitions, int totalWeight) {
 		targetPartitionLoad = (totalPartitions * (1.0 * weight / totalWeight));
+		LOG.info("Client ID {} target partition load is {}", id, targetPartitionLoad);
 	}
 
-	public void calculateFlagPropagatorTargetLoad(int totalPaths, int totalWeight) {
+	public void calculateFlagPropagatorTargetLoad(int totalPaths, int totalWeight) {		
 		targetFlagPropagatorLoad = (totalPaths * (1.0 * weight / totalWeight));
+		LOG.info("Client ID {} target flag propagator load is {}", id, targetFlagPropagatorLoad);
 	}
 
 	public boolean overloaded() {

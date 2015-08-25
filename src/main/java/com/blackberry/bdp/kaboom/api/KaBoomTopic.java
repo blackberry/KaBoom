@@ -55,23 +55,14 @@ public class KaBoomTopic {
 		HashMap<Integer, KaBoomClient> idToKaBoomClient = new HashMap<>();
 		for (KaBoomClient client : kaboomClients)  idToKaBoomClient.put(client.getId(), client); 
 		
-		HashMap<String, KafkaTopic> nameToKafkaTopics = new HashMap<>();
-		
-		//HashMap<String, KafkaPartition> partitionIdToKafkaPartiton = new HashMap<>();		
-		
-		for (KafkaTopic topic : kafkaTopics) {
-			nameToKafkaTopics.put(topic.getName(), topic);
-			//for (KafkaPartition kafkaPartition : topic.getPartitions()) {
-			//	String partitionId = String.format("%s-%d", topic.getName(), kafkaPartition.getPartitionId());
-			//	partitionIdToKafkaPartiton.put(partitionId, kafkaPartition);
-			//}
-		}
+		HashMap<String, KafkaTopic> nameToKafkaTopics = new HashMap<>();		
+		for (KafkaTopic topic : kafkaTopics) nameToKafkaTopics.put(topic.getName(), topic);
 				
 		// The list we'll eventually be returning
 		List<KaBoomTopic> kaboomTopics = new ArrayList<>();
 
 		for (String topicName : Util.childrenInZkPath(curator, zkPathTopics)) {
-			// The initla KaBoomTopic is built from a KafkaTopic
+			// The initial KaBoomTopic is built with a KafkaTopic
 			KaBoomTopic topic = new KaBoomTopic(nameToKafkaTopics.get(topicName));
 			kaboomTopics.add(topic);
 			
@@ -80,54 +71,49 @@ public class KaBoomTopic {
 			if (curator.checkExists().forPath(flagPath) != null) {
 				topic.assignedFlagPropagator = idToKaBoomClient.get(
 					 Converter.intFromBytes(curator.getData().forPath(flagPath)));
-			}
+			}			
 			
-			// Now we create all the partitions
 			String topicZkPath = String.format("%s/%s", zkPathTopics, topicName);
-			for (String partitionId : Util.childrenInZkPath(curator, topicZkPath)) {				
-				
-				KaBoomPartition partition = new KaBoomPartition(
-					 nameToKafkaTopics.get(topicName).getPartition(Integer.parseInt(partitionId)));
-				
+			topic.config = KaBoomTopicConfig.get(KaBoomTopicConfig.class, curator, topicZkPath);
+			
+			// With a configured KaBoom topic, we then look in Kafka for the partitions			
+			for (KafkaPartition kafkaPartition : nameToKafkaTopics.get(topicName).getPartitions()) {
+				//The initial KaBoom Partition is built with a Kafka Partitons
+				KaBoomPartition partition = new KaBoomPartition(kafkaPartition);
 				partition.setTopic(topic);
-				
 				// Set the offset if there's one stored in ZK
-				String offsetPath = String.format("%s/%s", topicZkPath, partitionId);								
+				String offsetPath = String.format("%s/%d", topicZkPath, kafkaPartition.getPartitionId());								
 				if (curator.checkExists().forPath(offsetPath) != null) {
 					partition.setOffset(Converter.longFromBytes(curator.getData().forPath(offsetPath)));
 				}				
 				
 				// Set the offset timestamp if there's one stored in ZK
-				String offsetTsPath = String.format("%s/%s", topicZkPath, "/offset_timestamp");
+				String offsetTsPath = String.format("%s/%s", offsetPath, "offset_timestamp");
 				if (curator.checkExists().forPath(offsetTsPath) != null) {
 					partition.setOffsetTimestamp(Converter.longFromBytes(curator.getData().forPath(offsetTsPath)));
 				}
 				
 				// Set the partition assignee if there's one stored in ZK
-				String partitionAssignmentPath = String.format("%s/%s-%s", 
-					 zkPathPartitionAssignments, topicName, partitionId);
+				String partitionAssignmentPath = String.format("%s/%s-%d", 
+					 zkPathPartitionAssignments, topicName, kafkaPartition.getPartitionId());
 				if (curator.checkExists().forPath(partitionAssignmentPath) != null) {
-					// Why we stored the them as  strings and not Ints as bytes is before my time
+					// Why we stored them as  strings and not Ints as bytes is before my time
 					partition.setAssignedClient(idToKaBoomClient.get(Integer.parseInt(
 						 new String(curator.getData().forPath(partitionAssignmentPath), UTF8))));
-				}
-				
-				topic.partitions.add(partition);
-				topic.config = KaBoomTopicConfig.get(KaBoomTopicConfig.class, curator, topicZkPath);
+				}				
+				topic.partitions.add(partition);	
 			}
 		}
+		
 		return kaboomTopics;
 	}
 
-	public long oldestPartitionOffset() throws Exception {
-		long oldestTimestamp = -1;
+	public Long oldestPartitionOffset() throws Exception {
+		Long oldestTimestamp = null;
 		for (KaBoomPartition partiton : partitions) {
-			if (partiton.getOffsetTimestamp()< oldestTimestamp || oldestTimestamp == -1) {
+			if (oldestTimestamp == null || partiton.getOffsetTimestamp() < oldestTimestamp) {
 				oldestTimestamp = partiton.getOffsetTimestamp();
 			}
-		}
-		if (oldestTimestamp == -1) {
-			throw new Exception("Failed to get oldest partition timestamp for topic: " + kafkaTopic.getName());
 		}
 		return oldestTimestamp;
 	}

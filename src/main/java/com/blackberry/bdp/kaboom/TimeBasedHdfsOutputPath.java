@@ -55,10 +55,10 @@ public class TimeBasedHdfsOutputPath {
 	private long reusableRequestedStartTime;
 	private OutputFile reusableRequestedOutputFile;
 
-	public TimeBasedHdfsOutputPath(StartupConfig kaboomConfig, KaBoomTopicConfig topicConfig, int partition) {		
+	public TimeBasedHdfsOutputPath(StartupConfig kaboomConfig, KaBoomTopicConfig topicConfig, int partition) {
 		this.config = kaboomConfig;
 		this.topicConfig = topicConfig;
-		this.partition = partition;		
+		this.partition = partition;
 		this.topic = topicConfig.getId();
 		this.fileSystem = config.authenticatedFsForProxyUser(topicConfig.getProxyUser());
 		this.partitionId = String.format("%s-%d", topic, partition);
@@ -84,13 +84,12 @@ public class TimeBasedHdfsOutputPath {
 						throw new Exception("Attempt at finding LRU output file returned null");
 					}
 					oldestOutputFile.close();
-					LOG.info("[{}]  over max open boom file limit ({}/{}) closing oldest last used boom file: {}",
+					LOG.info("[{}] Over max open boom file limit ({}/{}) closing LRU boom file: {}",
 						 partitionId,
 						 outputFileMap.size(),
 						 config.getRunningConfig().getMaxOpenBoomFilesPerPartition(),
 						 oldestOutputFile.openFilePath);
-					outputFileMap.remove(oldestTs);
-					LOG.info("[{}] oldest last used boom file with starting hour {} removed from mapping", partitionId, dateString(oldestTs));
+					outputFileMap.remove(oldestTs);					
 				} catch (Exception e) {
 					LOG.error("[{}] Failed to close off oldest boom writer: ", partitionId, e);
 				}
@@ -124,29 +123,28 @@ public class TimeBasedHdfsOutputPath {
 			entry.getValue().close();
 		}
 	}
-	
-	public void closeOffSprint(long sprintNumber) throws Exception
-	{
-		Iterator<Map. Entry<Long,OutputFile>> iter = outputFileMap.entrySet().iterator();
+
+	public void closeOffSprint(long sprintNumber) throws Exception {
+		Iterator<Map.Entry<Long, OutputFile>> iter = outputFileMap.entrySet().iterator();
 		while (iter.hasNext()) {
 			Map.Entry<Long, OutputFile> entry = iter.next();
 			if (entry.getValue().sprintNumber == sprintNumber) {
-				try {					
+				try {
 					entry.getValue().close();
-					LOG.info("[{}] Sprint {} file closed: {}  ({} files still open", 
-						 partitionId, 
-						 sprintNumber, 
-						 entry.getValue().openFilePath, 
+					LOG.info("[{}] Sprint {} file closed: {}  ({} files still open",
+						 partitionId,
+						 sprintNumber,
+						 entry.getValue().openFilePath,
 						 outputFileMap.size());
 					iter.remove();
 				} catch (Exception e) {
 					LOG.error("Error closing output path {}", this, e);
 					throw e;
 				}
-			}			
-		}		
+			}
+		}
 	}
-	
+
 	/**
 	 * @return the partition
 	 */
@@ -155,6 +153,7 @@ public class TimeBasedHdfsOutputPath {
 	}
 
 	private class OutputFile {
+
 		private String dir;
 		private String openFileDirectory;
 		private String filename;
@@ -167,21 +166,21 @@ public class TimeBasedHdfsOutputPath {
 		private long lastUsedTimestmap;
 		private final long sprintNumber;
 
-		public OutputFile(long sprintNumber, String filename, Long startTime) {			
+		public OutputFile(long sprintNumber, String filename, Long startTime) {
 			this.sprintNumber = sprintNumber;
 			this.filename = filename;
 			this.startTime = startTime;
-			this.useTempOpenFileDir = config.getRunningConfig().getUseTempOpenFileDirectory();			
-			
-			dir = Converter.timestampTemplateBuilder(startTime, 
-				 String.format("%s/%s", topicConfig.getHdfsRootDir(), topicConfig.getDefaultDirectory()));			
+			this.useTempOpenFileDir = config.getRunningConfig().getUseTempOpenFileDirectory();
+
+			dir = Converter.timestampTemplateBuilder(startTime,
+				 String.format("%s/%s", topicConfig.getHdfsRootDir(), topicConfig.getDefaultDirectory()));
 			finalPath = new Path(dir + "/" + filename);
 			openFilePath = finalPath;
 
 			if (useTempOpenFileDir) {
 				openFileDirectory = dir;
 				openFileDirectory = String.format("%s/%s%s", dir, config.getRunningConfig().getBoomFileTmpPrefix(), this.filename);
-				openFilePath = new Path(openFileDirectory + "/" + filename);				
+				openFilePath = new Path(openFileDirectory + "/" + filename);
 			}
 
 			try {
@@ -198,7 +197,7 @@ public class TimeBasedHdfsOutputPath {
 					 config.getRunningConfig().getBoomFileReplicas(),
 					 config.getRunningConfig().getBoomFileBlocksize(),
 					 null);
-				
+
 				boomWriter = new FastBoomWriter(
 					 hdfsDataOut,
 					 topic,
@@ -213,7 +212,7 @@ public class TimeBasedHdfsOutputPath {
 				LOG.error("[{}] Error creating file {}", partitionId, openFilePath, e);
 			}
 		}
-	
+
 		public void abort() {
 			LOG.info("Aborting output file: {}", openFilePath);
 
@@ -231,7 +230,7 @@ public class TimeBasedHdfsOutputPath {
 
 			try {
 				if (useTempOpenFileDir) {
-					fileSystem.delete(new Path(openFileDirectory), true);					
+					fileSystem.delete(new Path(openFileDirectory), true);
 					LOG.info("[{}] Deleted temp open file directory: {}", partitionId, openFileDirectory);
 				} else {
 					fileSystem.delete(openFilePath, true);
@@ -244,7 +243,7 @@ public class TimeBasedHdfsOutputPath {
 
 		public void close() {
 			LOG.info("[{}] Closing {}", partitionId, openFilePath);
-			
+
 			try {
 				boomWriter.close();
 				LOG.info("[{}] Boom writer closed for {}", partitionId, openFilePath);
@@ -279,5 +278,7 @@ public class TimeBasedHdfsOutputPath {
 		public FastBoomWriter getBoomWriter() {
 			return boomWriter;
 		}
+
 	}
+
 }

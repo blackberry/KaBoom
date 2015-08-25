@@ -84,7 +84,7 @@ public class StartupConfig {
 	private final Meter deadWorkerMeter;
 	private final Meter gracefulWorkerShutdownMeter;
 	
-	private String zkRootPathKafka = "/";	
+	private String zkRootPathKafka = "";
 	private String zkRootPathKafkaBrokers = String.format("%s/%s", zkRootPathKafka, "brokers/ids");	
 	private String zkRootPathKaBoom = "/kaboom";	
 	private String zkRootPathClients = String.format("%s/%s", zkRootPathKaBoom, "clients");

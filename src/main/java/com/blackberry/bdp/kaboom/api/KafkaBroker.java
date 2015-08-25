@@ -34,7 +34,7 @@ public class KafkaBroker {
 	private int id;
 	private int jmx_port;
 	private long timestamp;
-	private String hostname;
+	private String host;
 	private int version;
 	private int port;
 	
@@ -48,7 +48,7 @@ public class KafkaBroker {
 		
 		this.jmx_port= jmxPort;
 		this.timestamp = timestamp;
-		this.hostname = host;
+		this.host = host;
 		this.version = version;
 		this.port = port;
 	}
@@ -86,11 +86,11 @@ public class KafkaBroker {
 		for (KafkaBroker broker : brokers) {
 			brokerIdToBroker.put(broker.getId(), broker);
 		}
-		// Build the leader hostname to Kafka partition map
+		// Build the leader host to Kafka partition map
 		HashMap<String, KafkaPartition> leaderToPart = new HashMap<>();
 		for (KafkaTopic topic : topics) {
 			for (KafkaPartition partition : topic.getPartitions()) {
-				leaderToPart.put(brokerIdToBroker.get(partition.getLeader()).getHostname(), partition);				
+				leaderToPart.put(brokerIdToBroker.get(partition.getLeader()).getHost(), partition);				
 				String partitionId = String.format("%s-%d", topic, partition.getPartitionId());				
 				partitionIdToKafkaPartition.put(partitionId, partition);
 			}				
@@ -142,17 +142,17 @@ public class KafkaBroker {
 	}
 
 	/**
-	 * @return the hostname
+	 * @return the host
 	 */
-	public String getHostname() {
-		return hostname;
+	public String getHost() {
+		return host;
 	}
 
 	/**
-	 * @param host the hostname to set
+	 * @param host the host to set
 	 */
-	public void setHostname(String host) {
-		this.hostname = host;
+	public void setHost(String host) {
+		this.host = host;
 	}
 
 	/**
@@ -182,6 +182,5 @@ public class KafkaBroker {
 	public void setPort(int port) {
 		this.port = port;
 	}
-	
 	
 }

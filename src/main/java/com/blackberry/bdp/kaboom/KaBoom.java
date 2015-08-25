@@ -100,6 +100,7 @@ public class KaBoom {
 		{			
 			client = new KaBoomClient(config.getKaBoomCurator(), 
 				 String.format("%s/%s", config.getZkRootPathClients(), config.getKaboomId()));			
+			client.setId(config.getKaboomId());
 			client.setMode(CreateMode.EPHEMERAL);
 			client.setHostname(config.getHostname());
 			client.setWeight(config.getWeight());

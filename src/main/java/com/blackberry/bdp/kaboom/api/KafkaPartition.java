@@ -15,6 +15,7 @@
  */
 package com.blackberry.bdp.kaboom.api;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.ArrayList;
 import java.util.List;
 import kafka.cluster.Broker;
@@ -22,7 +23,7 @@ import kafka.javaapi.PartitionMetadata;
 
 public class KafkaPartition {
 
-	private KafkaTopic topic;
+	@JsonIgnore private KafkaTopic topic;
 	private final int partitionId;
 	private final int leaderBrokerId;
 	private KafkaBroker leader;

@@ -56,11 +56,12 @@ public class EvenLoadBalancer extends Leader {
 			if (client.overloaded() == false) {
 				continue;
 			}
+			LOG.info("KaBoom client is overloaded and needs to shed assignments", client.getId());
 			// Build up our lists of local and remote partitions...
 			List<KaBoomPartition> localPartitions = new ArrayList<>();
 			List<KaBoomPartition> remotePartitions = new ArrayList<>();
 			for (KaBoomPartition partition : client.getAssignedPartitions()) {
-				if (partition.getKafkaPartition().getLeader().getHostname().equals(
+				if (partition.getKafkaPartition().getLeader().getHost().equals(
 					 client.getHostname())) {
 					localPartitions.add(partition);
 				} else {
@@ -81,10 +82,10 @@ public class EvenLoadBalancer extends Leader {
 				try {
 					curator.delete().forPath(deletePath);
 					client.getAssignedPartitions().remove(partitionToDelete);
-					LOG.info("Deleted assignment {} to relieve overloaded client {}", 
+					LOG.info("Deleted assignment {} to relieve overloaded client {}",
 						 deletePath, client.getId());
 				} catch (Exception e) {
-					LOG.error("Failed to delete assignment {} to relieve overloaded client {}", 
+					LOG.error("Failed to delete assignment {} to relieve overloaded client {}",
 						 deletePath, client.getId(), e);
 				}
 			}
@@ -108,23 +109,30 @@ public class EvenLoadBalancer extends Leader {
 			}
 
 		};
-				
+
 		// Find clients for any unassigned partitions
-		for (KaBoomPartition partition : KaBoomPartition.unassignedPartitions(kaboomTopics)) {
+		List<KaBoomPartition> unassignedPartitions = KaBoomPartition.unassignedPartitions(kaboomTopics);
+		LOG.info("[even load balancer] there are {} unassigned partitons", unassignedPartitions.size());
+		for (KaBoomPartition partition : unassignedPartitions) {
 			Collections.sort(kaboomClients, leastLoadedSorter);
 			// Grab the least loaded client  in case we  cannot find an underloaded local client
 			KaBoomClient chosenClient = kaboomClients.get(0);
 			for (KaBoomClient client : kaboomClients) {
 				if (!client.overloaded() && client.getHostname().equals(
-					 partition.getKafkaPartition().getLeader().getHostname())) {
-						chosenClient = client;
-						break;
+					 partition.getKafkaPartition().getLeader().getHost())) {
+					chosenClient = client;
+					break;
 				}
 			}
 			String zkPath = config.zkPathPartitionAssignment(partition.getTopicPartitionString());			
-			try {
-				curator.create().withMode(CreateMode.PERSISTENT).forPath(zkPath, 
-					 String.valueOf(chosenClient.getId()).getBytes(UTF8));
+			try {				
+				if (curator.checkExists().forPath(zkPath) != null) {
+					curator.setData().forPath(zkPath, 
+						 String.valueOf(chosenClient.getId()).getBytes(UTF8));
+				} else {
+					curator.create().withMode(CreateMode.PERSISTENT).forPath(zkPath,
+						 String.valueOf(chosenClient.getId()).getBytes(UTF8));
+				}
 				partition.setAssignedClient(chosenClient);
 				chosenClient.getAssignedPartitions().add(partition);
 			} catch (Exception e) {
@@ -132,4 +140,5 @@ public class EvenLoadBalancer extends Leader {
 			}
 		}
 	}
+
 }
