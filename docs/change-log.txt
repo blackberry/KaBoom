@@ -28,6 +28,8 @@ Changes in 0.8.2:
 - KaBoom client ephemeral node serialization is now updated as the client's attributes change
 - Improved how the leader removes assignments from disconnected clients
 - Improved how the ReadyFlagController balances flag propagator paths
+- New running configuration option newLeaderCalmDownDelay (milliseconds, default 30 * 1000) The amount of time to wait after a new leader is elected before it starts leading
+- Prefixes the KaBoom Client ID to all boom files to ensure that race conditions over partition re-assignments don't lead to lease conflicts or missing leases
 
 Changes in 0.8.1:
 

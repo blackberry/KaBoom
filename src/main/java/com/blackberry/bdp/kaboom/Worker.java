@@ -544,7 +544,7 @@ public class Worker implements Runnable {
 					hdfsOutputPath.getBoomWriter(
 						 currentSprint.sprintNumber,
 						 timestamp,
-						 partitionId + "-" + currentSprint.offset + ".bm").writeLine(timestamp, bytes, pos, length - pos);
+						 config.getKaboomId() + "-" + partitionId + "-" + currentSprint.offset + ".bm").writeLine(timestamp, bytes, pos, length - pos);
 
 					boomWritesMeter.mark();
 					boomWritesMeterTopic.mark();

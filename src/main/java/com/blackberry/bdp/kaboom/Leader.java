@@ -75,8 +75,9 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	public void takeLeadership(CuratorFramework curator) throws Exception {
 		this.curator = curator;
 		ZkUtils.writeToPath(curator, config.getZkPathLeaderClientId(), config.getKaboomId(), true, CreateMode.EPHEMERAL);
-		LOG.info("KaBoom client ID {} is the new leader, entering the 30s calm down", config.getKaboomId());
-		Thread.sleep(30 * 1000);
+		LOG.info("KaBoom client ID {} is the new leader, entering the {} calm down", 
+			 config.getKaboomId(), config.getRunningConfig().getNewLeaderCalmDownDelay());
+		Thread.sleep(config.getRunningConfig().getNewLeaderCalmDownDelay());
 
 		while (true) {
 			kafkaBrokers = KafkaBroker.getAll(config.getKafkaCurator(), config.getZkRootPathKafkaBrokers());
