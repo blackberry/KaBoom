@@ -40,12 +40,12 @@ public class KaBoomPartition {
 		// For all KaBoomTopic's		
 		for (KaBoomTopic kaboomTopic : kaboomTopics) {
 			// For all the KaBoomPartition's
-			LOG.info("KaBoom topic {} has {} partitons", kaboomTopic.getKafkaTopic().getName(),
+			LOG.debug("KaBoom topic {} has {} partitons", kaboomTopic.getKafkaTopic().getName(),
 				 kaboomTopic.getPartitions().size());
 			for (KaBoomPartition kaboomPartition : kaboomTopic.getPartitions()) {
 				// Add the corresponding KafkaPartition if not assigned
 				if (kaboomPartition.assignedClient != null) {
-					LOG.info("Topic {} partition {} is assigned to {}",
+					LOG.debug("Topic {} partition {} is assigned to {}",
 						 kaboomTopic.getKafkaTopic().getName(),
 						 kaboomPartition.getKafkaPartition().getPartitionId(),
 						 kaboomPartition.getAssignedClient().getId());

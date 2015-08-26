@@ -32,7 +32,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
-import org.apache.zookeeper.KeeperException.NoNodeException;
 
 public class KaBoom {
 
@@ -203,6 +202,7 @@ public class KaBoom {
 					if (false == partitionToThreadsMap.get(partitionId).isAlive()) {
 						partitionToThreadsMap.remove(partitionId);
 						partitionToWorkerMap.remove(partitionId);
+						validWorkingPartitions.remove(partitionId);
 						if (partitionToWorkerMap.get(partitionId).isGracefulShutdown()) {
 							LOG.info("worker thead for {} found to have been shutdown gracefully", partitionId);
 							config.getGracefulWorkerShutdownMeter().mark();

@@ -54,7 +54,7 @@ public class Worker implements Runnable {
 	private String hostname;
 	private final StartupConfig config;
 	private final CuratorFramework curator;
-	private static final String ZK_ROOT = "/kaboom";
+	private final String zkRoot;
 	private String zkPath;
 	private String zkPath_offSetTimestamp;
 	private String zkPath_offSetOverride;
@@ -237,13 +237,14 @@ public class Worker implements Runnable {
 		this.partition = partition;
 		this.startTime = System.currentTimeMillis();
 		this.messagesWritten = 0;
-		this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getKaBoomCurator(), ZK_ROOT + "/topics/" + topic);
+		
+		this.zkRoot = config.getZkRootPathKaBoom();		
+		this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getKaBoomCurator(), zkRoot + "/topics/" + topic);
+		partitionId = String.format("%s-%d", topic, partition);
 		this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
 		this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 		this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
-		this.hdfsOutputPath = new TimeBasedHdfsOutputPath(config, topicConfig, partition);
-
-		partitionId = String.format("%s-%d", topic, partition);
+		this.hdfsOutputPath = new TimeBasedHdfsOutputPath(config, topicConfig, partition);		
 
 		LOG.info("[{}] worker instantiated with topic configuration version {}", partitionId, topicConfig.getVersion());
 
@@ -260,7 +261,7 @@ public class Worker implements Runnable {
 					stop();
 				} else {
 					KaBoomTopicConfig newTopicConfig = KaBoomTopicConfig.get(
-						 KaBoomTopicConfig.class, curator, ZK_ROOT + "/topics/" + topic);
+						 KaBoomTopicConfig.class, curator, zkRoot + "/topics/" + topic);
 					if (!newTopicConfig.getVersion().equals(topicConfig.getVersion())) {
 						LOG.info("[{}] topic {} configuration (version {}) was updated to version {}, shutting down worker...",
 							 partitionId,
@@ -348,7 +349,7 @@ public class Worker implements Runnable {
 	@Override
 	public void run() {
 		try {
-			zkPath = getZK_ROOT() + "/topics/" + getTopic() + "/" + getPartition();
+			zkPath = zkRoot + "/topics/" + getTopic() + "/" + getPartition();
 			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
 			zkPath_offSetOverride = zkPath + "/offset_override";
 
@@ -720,10 +721,6 @@ public class Worker implements Runnable {
 			}
 		}
 
-	}
-
-	public static String getZK_ROOT() {
-		return ZK_ROOT;
 	}
 
 	public void stop() {

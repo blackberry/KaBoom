@@ -133,8 +133,6 @@ public class FastBoomWriter
 		this.periodicHdfsFlushInterval = runningConfig.getPeriodicHdfsFlushInterval();
 		this.useNativeCompression = runningConfig.getUseNativeCompression();
 		
-		LOG.info("[{}] FastBoomWriter instantiated with compression level {}", partitionId, compressionLevel);
-		
 		Random rand = new Random();
 		syncMarker = new byte[16];
 		rand.nextBytes(syncMarker);

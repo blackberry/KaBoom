@@ -63,7 +63,7 @@ public class ReadyFlagController {
 		for (KaBoomTopicConfig topicConfig : topicConfigs) {
 			Path tempPath = getRootFromPathTemplate(topicConfig.getHdfsRootDir());
 			if (!tempHdfsPathToTopic.containsKey(tempPath)) {
-				LOG.info("Topic {} is the first instance with a unique HDFS root path {}", topicConfig.getId(), tempPath);
+				LOG.debug("Topic {} is the first instance with a unique HDFS root path {}", topicConfig.getId(), tempPath);
 				tempHdfsPathToTopic.put(tempPath, topicConfig.getId());
 				unassignedTopics.add(topicConfig.getId());
 			}

@@ -129,16 +129,8 @@ public class ReadyFlagWriter extends NotifyingThread {
 				long prevHourStartTimestmap = startOfHourTimestamp - (60 * 60 * 1000) * hourNum;
 				previousHourCal.setTimeInMillis(prevHourStartTimestmap);
 
-				if (oldestTimestamp < prevHourStartTimestmap) {
-					long kaboomBehindMillisForHour = prevHourStartTimestmap - oldestTimestamp;
-
-					LOG.info(LOG_TAG + "[{}] skipping flags for {} hour(s) ago because furthest ahead partition is still {} before the top of that hour",
-						 topicName,
-						 hourNum,
-						 String.format("%d minutes and  %d seconds",
-							  TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour),
-							  TimeUnit.MILLISECONDS.toSeconds(kaboomBehindMillisForHour) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(kaboomBehindMillisForHour))));
-
+				if (oldestTimestamp < prevHourStartTimestmap) {					
+					// Skip as the oldest partiton is still before the top of this hour
 					continue;
 				}
 

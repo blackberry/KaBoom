@@ -56,12 +56,12 @@ public class KaBoomClient extends ZkVersioned {
 
 	public void calculateTargetPartitionLoad(int totalPartitions, int totalWeight) {
 		targetPartitionLoad = (totalPartitions * (1.0 * weight / totalWeight));
-		LOG.info("Client ID {} target partition load is {}", id, targetPartitionLoad);
+		LOG.debug("Client ID {} target partition load is {}", id, targetPartitionLoad);
 	}
 
 	public void calculateFlagPropagatorTargetLoad(int totalPaths, int totalWeight) {		
 		targetFlagPropagatorLoad = (totalPaths * (1.0 * weight / totalWeight));
-		LOG.info("Client ID {} target flag propagator load is {}", id, targetFlagPropagatorLoad);
+		LOG.debug("Client ID {} target flag propagator load is {}", id, targetFlagPropagatorLoad);
 	}
 
 	public boolean overloaded() {
@@ -78,7 +78,10 @@ public class KaBoomClient extends ZkVersioned {
 					assignments.add(assignment);
 				}
 			} catch (KeeperException.NoNodeException nne) {
-				LOG.warn("The weird 'NoNodeException' has been raised, let's just continue and it'll retry");
+				if (assignment == null) {
+					assignment = "null";
+				}					
+				LOG.warn("The weird 'NoNodeException' has been raised for {}, let's just continue and it'll retry", assignment);
 				continue;
 			}
 		}

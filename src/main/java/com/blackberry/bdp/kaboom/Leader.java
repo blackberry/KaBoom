@@ -95,7 +95,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				totalWeight += kaboomClient.getWeight();
 				idToKaBoomClient.put(kaboomClient.getId(), kaboomClient);
 			}
-			LOG.info("The total weight of the KaBoom cluster is {}", totalWeight);
+			LOG.debug("The total weight of the KaBoom cluster is {}", totalWeight);
 
 			for (KaBoomTopic kaboomTopic : kaboomTopics) {
 				nameToKaBoomTopic.put(kaboomTopic.getKafkaTopic().getName(), kaboomTopic);
@@ -113,8 +113,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 							if (!nameToKaBoomTopic.containsKey(m.group(1))) {
 								deletedReason = "because of missing topic configuration";
 							} else {
-								String clientId = new String(curator.getData().forPath(assignmentZkPath), UTF8);
-								LOG.info("Found client ID string {} at {}", clientId, assignmentZkPath);
+								String clientId = new String(curator.getData().forPath(assignmentZkPath), UTF8);								
 								int assignedClientId = new Integer(clientId);
 								if (!idToKaBoomClient.containsKey(assignedClientId)) {
 									deletedReason = String.format("because client %s is not connected", assignedClientId);
@@ -170,13 +169,11 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			 *  work.  If that behavior changes then additional logic will be required
 			 *  to ensure this isn't executed too often  
 			 */
-			if (readyFlagWriterThread == null || !readyFlagWriterThread.isAlive()) {
-				LOG.info("[ready flag writer] thread doesn't exist or is not running");
+			if (readyFlagWriterThread == null || !readyFlagWriterThread.isAlive()) {				
 				readyFlagWriter = new ReadyFlagWriter(config, kaboomTopics);
 				readyFlagWriter.addListener(this);
 				readyFlagWriterThread = new Thread(readyFlagWriter);
-				readyFlagWriterThread.start();
-				LOG.info("[ready flag writer] thread created and started");
+				readyFlagWriterThread.start();				
 			} else {
 				LOG.warn("[ready flag writer] is either not null or is still alive (could it be hung?)");
 			}

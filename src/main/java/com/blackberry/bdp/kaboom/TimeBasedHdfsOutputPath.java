@@ -89,7 +89,7 @@ public class TimeBasedHdfsOutputPath {
 						 outputFileMap.size(),
 						 config.getRunningConfig().getMaxOpenBoomFilesPerPartition(),
 						 oldestOutputFile.openFilePath);
-					outputFileMap.remove(oldestTs);					
+					outputFileMap.remove(oldestTs);
 				} catch (Exception e) {
 					LOG.error("[{}] Failed to close off oldest boom writer: ", partitionId, e);
 				}
@@ -207,6 +207,8 @@ public class TimeBasedHdfsOutputPath {
 				if (config.getRunningConfig().getUseNativeCompression()) {
 					boomWriter.loadNativeDeflateLib();
 				}
+
+				LOG.info("[{}] FastBoomWriter created for {}", partitionId, openFilePath);
 
 			} catch (Exception e) {
 				LOG.error("[{}] Error creating file {}", partitionId, openFilePath, e);

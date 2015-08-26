@@ -135,6 +135,7 @@ public class EvenLoadBalancer extends Leader {
 				}
 				partition.setAssignedClient(chosenClient);
 				chosenClient.getAssignedPartitions().add(partition);
+				LOG.info("Assigned {} to client ID {}", partition.getTopicPartitionString(), chosenClient.getId());
 			} catch (Exception e) {
 				LOG.error("Failed to create assignment {} for {}", zkPath, chosenClient.getId(), e);
 			}
