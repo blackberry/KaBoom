@@ -1,5 +1,15 @@
 Changes in 0.8.2:
 
+When Kontroller was introduced a new package in KaBoom was created to integrate with the Kafka/KaBoom clusters via an API.  This release of KaBoom is a significant effort to refactor the entire code base to use those APIs internally.  The complex data structures, arrays and hash maps that exposed the cluster details are replaced  by an intuitive object oriented API.  
+
+There's also two new features that Matt requested after discovering lease conflicts between boom files.  Previously, when a new leader took over it would wait 30 seconds, then ran the configured load balancer.  It was possible during a rolling restart for there to be clients not yet registered when the balancer ran.  This could lead to uneven work distribution.  This imbalance would then be resolved 10 minutes later when  the balancer ran again.   An even nastier scenario where these short-lived assignments could be handed out twice was possible if the newly elected leader was a node that hadn't yet been restarted.  Depending on how quickly workers realized they were no longer assigned the partition and how quickly another worker tried to create the same boom file, the possibility existed that two workers could be trying to manage boom files in HDFS with the same path.
+
+To resolve the balancer running to early, there's now a new running configuration option 'New Leader Calm Down Delay (ms)' defaulted to 30 seconds.  For busy clusters like at BlackBerry, this should be set to a high enough time to account for cluster wide restarts, 1-2 minutes.
+
+To resolve the possibility that two workers on separate clients could have overlapping assignments, the KaBoom client ID now prefixes the boom file name.
+
+Complete change log below...
+
 - Fixes some missing/improperly formatted license headers
 - The leader now writes their client ID to ZK
 - Sprints that never receive a message previously (0.8.0, 0.8.1) didn't update ZK with a offset timestamp, now they will store the sprint end time 
@@ -26,8 +36,13 @@ Changes in 0.8.2:
 - KaBoomClient now extends ZkVersioned 
 - Migrated KaBoom's ephemeral node for client to be a persisted ephemeral mode KaBoomClient removing the yaml dependencies
 - KaBoom client ephemeral node serialization is now updated as the client's attributes change
+- Supports deleting topic configuration through the API
+- Supports reloading topic configuration through the API and workers restart gracefully
+- Added the concept of graceful shutdown of the workers
+- Added two new metrics for the number of workers found dead and the number of workers gracefully restarted
 - Improved how the leader removes assignments from disconnected clients
 - Improved how the ReadyFlagController balances flag propagator paths
+
 - New running configuration option newLeaderCalmDownDelay (milliseconds, default 30 * 1000) The amount of time to wait after a new leader is elected before it starts leading
 - Prefixes the KaBoom Client ID to all boom files to ensure that race conditions over partition re-assignments don't lead to lease conflicts or missing leases
 
