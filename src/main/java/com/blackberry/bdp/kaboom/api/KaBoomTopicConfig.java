@@ -19,6 +19,7 @@ package com.blackberry.bdp.kaboom.api;
 import org.apache.curator.framework.CuratorFramework;
 
 import com.blackberry.bdp.common.versioned.ZkVersioned;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.util.ArrayList;
 
@@ -29,7 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class KaBoomTopicConfig extends ZkVersioned{
-	private static final Logger LOG = LoggerFactory.getLogger(KaBoomTopicConfig.class);
+	@JsonIgnore private static final Logger LOG = LoggerFactory.getLogger(KaBoomTopicConfig.class);
 	
 	@Getter @Setter public String id = "<NEW TOPIC NAME>";
 	@Getter @Setter public String hdfsRootDir = "/path/to/some/dir";

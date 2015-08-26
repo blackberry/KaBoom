@@ -15,10 +15,8 @@
  */
 package com.blackberry.bdp.kaboom;
 
-import static com.blackberry.bdp.common.conversion.Converter.getBytes;
-import static com.blackberry.bdp.common.conversion.Converter.intFromBytes;
 import com.blackberry.bdp.kaboom.api.KaBoomClient;
-import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
+import com.blackberry.bdp.kaboom.api.KaBoomTopic;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,29 +43,14 @@ public class ReadyFlagController {
 
 	private final CuratorFramework curator;
 	private final String flagAssignmentsPath;
-	private final List<String> unassignedTopics;
+	private final List<KaBoomTopic> unassignedTopics;
+	private final List<KaBoomTopic> kaboomTopics;
 
-	public ReadyFlagController(StartupConfig config) throws Exception {
+	public ReadyFlagController(StartupConfig config, List<KaBoomTopic> kaboomTopics) throws Exception {
 		this.curator = config.getKaBoomCurator();
 		this.unassignedTopics = new ArrayList<>();
+		this.kaboomTopics = kaboomTopics;
 		this.flagAssignmentsPath = config.getZkRootPathFlagAssignments();
-
-		/**
-		 * Our topics will for a single service are generally within the same HDFS root path
-		 * and we don't want to create a flag propagator for each one.  Let's get a unique 
-		 * list of HDFS root paths from all the topics and ensure we only load balance those
-		 */
-		ArrayList<KaBoomTopicConfig> topicConfigs = KaBoomTopicConfig.getAll(
-			 KaBoomTopicConfig.class, config.getKaBoomCurator(), config.getZkRootPathTopicConfigs());
-		Map<Path, String> tempHdfsPathToTopic = new HashMap<>();
-		for (KaBoomTopicConfig topicConfig : topicConfigs) {
-			Path tempPath = getRootFromPathTemplate(topicConfig.getHdfsRootDir());
-			if (!tempHdfsPathToTopic.containsKey(tempPath)) {
-				LOG.debug("Topic {} is the first instance with a unique HDFS root path {}", topicConfig.getId(), tempPath);
-				tempHdfsPathToTopic.put(tempPath, topicConfig.getId());
-				unassignedTopics.add(topicConfig.getId());
-			}
-		}
 	}
 
 	public static Path getRootFromPathTemplate(String pathTemplate) throws Exception {
@@ -80,36 +63,57 @@ public class ReadyFlagController {
 		}
 	}
 
-	public void balance(int totalWeight, HashMap<Integer, KaBoomClient> kaboomClientMap) throws Exception {
+	public void balance(int totalWeight, HashMap<Integer, KaBoomClient> kaboomClientMap) throws Exception {		
+		/**
+		 * Our topics for a single service are generally within the same HDFS root path
+		 * and we don't want to create a flag propagator for each one.  Let's get a unique 
+		 * list of HDFS root paths from all the topics and ensure we only load balance those
+		 */
+		unassignedTopics.clear();
 		
-		// Clear the existing flag assignments collection, and re-caculate our target loads
-		ArrayList<KaBoomClient> kaboomClientList = new ArrayList<>();		
+		Map<Path, String> tempHdfsPathToTopic = new HashMap<>();		
+		Map<String, KaBoomTopic> nameToKaBoomTopic = new HashMap<>();		
+		for (KaBoomTopic topic : this.kaboomTopics) {
+			Path tempPath = getRootFromPathTemplate(topic.getConfig().getHdfsRootDir());
+			if (!tempHdfsPathToTopic.containsKey(tempPath)) {
+				LOG.debug("Topic {} is the first instance with a unique HDFS root path {}", 
+					 topic.getName(), tempPath);
+				tempHdfsPathToTopic.put(tempPath, topic.getName());
+				unassignedTopics.add(topic);
+				nameToKaBoomTopic.put(topic.getName(), topic);
+			}
+		}
+
+		// Build a new List for KaBoomClient's since we'll be sorting
+		List<KaBoomClient> kaboomClientList = new ArrayList<>();		
+		
+		// Clear the existing flag assignments collection, and re-caculate our target loads		
 		for (Entry<Integer, KaBoomClient> entry : kaboomClientMap.entrySet()) {
 			entry.getValue().getAssignedFlagPropagatorTopics().clear();
 			entry.getValue().calculateFlagPropagatorTargetLoad(unassignedTopics.size(), totalWeight);
 			kaboomClientList.add(entry.getValue());
 		}
 
-		// Delete any topic assignemnts for disconnected clients or for topics that are no longer configured
+		// Delete any flag assignemnts for disconnected clients or for topics that are no longer configured
 		try {
-			for (String topic : curator.getChildren().forPath(flagAssignmentsPath)) {
+			for (String topic : curator.getChildren().forPath(flagAssignmentsPath)) {								
 				try {
 					String zkPathAssignment = String.format("%s/%s", flagAssignmentsPath, topic);
-					int assignedClientId = intFromBytes(curator.getData().forPath(zkPathAssignment));
+					int assignedClientId = Integer.parseInt(new String(curator.getData().forPath(zkPathAssignment), UTF8));
 					String reasonToDelete = null;
-					if (!unassignedTopics.contains(topic)) {
+					if (!nameToKaBoomTopic.containsKey(topic)) {
 						reasonToDelete = String.format("becaue the topic {} is no longer configured in KaBoom", topic);
-					} else {
-						if (!kaboomClientMap.containsKey(assignedClientId)) {
-							reasonToDelete = String.format("becaue assigned KaBoomClient is no longer connected");
-						}
+					} else if (!kaboomClientMap.containsKey(assignedClientId)) {
+						reasonToDelete = String.format("becaue assigned KaBoomClient is no longer connected");
 					}
 					if (reasonToDelete != null) {
 						curator.delete().forPath(zkPathAssignment);
 						LOG.info("Flag propagator assignment {} for {} removed {}",
 							 zkPathAssignment, assignedClientId, reasonToDelete);
 					} else {
-						kaboomClientMap.get(assignedClientId).getAssignedFlagPropagatorTopics().add(topic);
+						kaboomClientMap.get(assignedClientId).getAssignedFlagPropagatorTopics().add(
+							 nameToKaBoomTopic.get(topic));
+						unassignedTopics.remove(nameToKaBoomTopic.get(topic));
 					}
 				} catch (Exception e) {
 					LOG.error("[{}] Failed to grab current client flag propagator assignment for topic", topic);
@@ -120,25 +124,24 @@ public class ReadyFlagController {
 			return;
 		}
 
-		// Delete topic assignments for clients that are assigned too many topics to propagate flags for
+		// Delete flag assignments for clients that are assigned too many topics
 		for (Map.Entry<Integer, KaBoomClient> e : kaboomClientMap.entrySet()) {
 			int clientId = e.getKey();
 			KaBoomClient client = e.getValue();
 			// delete assignments for clients that are over-assigned their target load 
-			if (client.getAssignedFlagPropagatorTopics().size() >= client.getTargetFlagPropagatorLoad() + 1) {
+			if (client.tooManyAssignedFlags()) {
 				LOG.info("Client {}'s flag propagator load is {} and target load is {}, need to  unassign topics",
-					 clientId, client.getAssignedFlagPropagatorTopics().size(), client.getTargetFlagPropagatorLoad());
-				int numAssignedTopics = client.getAssignedFlagPropagatorTopics().size();
+					 clientId, client.getAssignedFlagPropagatorTopics().size(), client.getTargetFlagPropagatorLoad());				
 				int numTotalFails = 0;
-				while (numAssignedTopics > client.getTargetFlagPropagatorLoad()) {
-					// Find a random topic in the assigned unassignedTopics and delete it					
-					String topicToDelete = client.getAssignedFlagPropagatorTopics().get(rand.nextInt(numAssignedTopics));
-					String deletePath = String.format("%s/%s", flagAssignmentsPath, topicToDelete);
+				while (client.tooManyAssignedFlags()) {
+					// Find a random topic in the assigned unassignedTopics and delete it										
+					KaBoomTopic topicToDelete = client.getAssignedFlagPropagatorTopics().get(
+						 rand.nextInt(client.getAssignedFlagPropagatorTopics().size()));
+					String deletePath = String.format("%s/%s", flagAssignmentsPath, topicToDelete.getKafkaTopic().getName());
 					try {
 						curator.delete().forPath(deletePath);
 						LOG.info("Deleted flag propagator assignment ZK path {} for clientId {}:", deletePath, clientId);
-						client.getAssignedFlagPropagatorTopics().remove(topicToDelete);
-						numAssignedTopics = client.getAssignedFlagPropagatorTopics().size();
+						client.getAssignedFlagPropagatorTopics().remove(topicToDelete);						
 					} catch (Exception ex) {
 						LOG.error("Failed to delete flag propagator assignment ZK path {} for clientId {}:", deletePath, clientId, ex);
 						numTotalFails++;
@@ -170,24 +173,27 @@ public class ReadyFlagController {
 			}
 		};
 
+		LOG.info("[ready flag controller] there are {} unassigned topics for flag propagation", unassignedTopics.size());
+		
 		// Assign unassigned topics to the least loaded client sorting it on each iteration
 		int numFailures = 0;		
 		int maxRetires = 5;		
-		Iterator<String> iter = unassignedTopics.iterator();		
+		Iterator<KaBoomTopic> iter = unassignedTopics.iterator();		
 		while (iter.hasNext()) {
-			String topic = iter.next();
+			KaBoomTopic topic = iter.next();
 			Collections.sort(kaboomClientList, comparator);
 			KaBoomClient leastLoadedClient = kaboomClientList.get(0);
-			String assignmentPath = String.format("%s/%s", flagAssignmentsPath, topic);
+			String assignmentPath = String.format("%s/%s", flagAssignmentsPath, topic.getName());
 			try {
 				if (curator.checkExists().forPath(assignmentPath) != null) {
-					curator.setData().forPath(assignmentPath, getBytes(leastLoadedClient.getId()));
+					curator.setData().forPath(assignmentPath, 
+						 String.valueOf(leastLoadedClient.getId()).getBytes(UTF8));
 				} else {
-					curator.create().withMode(CreateMode.PERSISTENT)
-						 .forPath(assignmentPath, getBytes(leastLoadedClient.getId()));
+					curator.create().withMode(CreateMode.PERSISTENT).forPath(assignmentPath, 
+						 String.valueOf(leastLoadedClient.getId()).getBytes(UTF8));							  
 				}
 				leastLoadedClient.getAssignedFlagPropagatorTopics().add(topic);
-				LOG.info("Flag propagation assigned {} to {}", topic, leastLoadedClient.getId());
+				LOG.info("Flag propagation assigned {} to {}", topic.getName(), leastLoadedClient.getId());
 				iter.remove();
 			} catch (Exception e) {
 				numFailures++;

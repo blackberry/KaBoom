@@ -108,6 +108,10 @@ public class KaBoomTopic {
 		return kaboomTopics;
 	}
 
+	public String getName() {
+		return kafkaTopic.getName();
+	}
+	
 	public Long oldestPartitionOffset() throws Exception {
 		Long oldestTimestamp = null;
 		for (KaBoomPartition partiton : partitions) {

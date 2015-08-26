@@ -170,6 +170,7 @@ public class KaBoom {
 			if (config.getRunningConfig().isPropagateReadyFlags() && System.currentTimeMillis()
 				 > (lastFlagPropagationTs + config.getRunningConfig().getPropagateReadyFlagFrequency())) {
 				for (String topic : client.getAssignments(config, config.getZkRootPathFlagAssignments())) {
+					LOG.info("Flag propagator for topic {}", topic);
 					if (topicToFlagPropThread.get(topic) != null && topicToFlagPropThread.get(topic).isAlive()) {
 						LOG.warn("[{}] Flag propagator thread is still running", topic);
 					} else {
@@ -196,13 +197,9 @@ public class KaBoom {
 
 			// Get all my assignments and create a worker if there's anything not already being worked
 			Map<String, Boolean> validWorkingPartitions = new HashMap<>();
-
 			for (String partitionId : client.getAssignments(config, config.getZkRootPathPartitionAssignments())) {
-				if (partitionToWorkerMap.containsKey(partitionId)) {
-					if (false == partitionToThreadsMap.get(partitionId).isAlive()) {
-						partitionToThreadsMap.remove(partitionId);
-						partitionToWorkerMap.remove(partitionId);
-						validWorkingPartitions.remove(partitionId);
+				if (partitionToWorkerMap.containsKey(partitionId)) {					
+					if (false == partitionToThreadsMap.get(partitionId).isAlive()) {						
 						if (partitionToWorkerMap.get(partitionId).isGracefulShutdown()) {
 							LOG.info("worker thead for {} found to have been shutdown gracefully", partitionId);
 							config.getGracefulWorkerShutdownMeter().mark();
@@ -210,6 +207,9 @@ public class KaBoom {
 							LOG.error("worker thead for {} found dead (removed thread/worker objects)", partitionId);
 							config.getDeadWorkerMeter().mark();
 						}
+						validWorkingPartitions.remove(partitionId);						
+						partitionToWorkerMap.remove(partitionId);							 
+						partitionToThreadsMap.remove(partitionId);						
 					} else {
 						validWorkingPartitions.put(partitionId, true);
 					}

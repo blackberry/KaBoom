@@ -53,7 +53,7 @@ public class EvenLoadBalancer extends Leader {
 
 		// Overloaded?  
 		for (KaBoomClient client : kaboomClients) {
-			if (client.overloaded() == false) {
+			if (client.tooManyAssignedPartitions() == false) {
 				continue;
 			}
 			LOG.info("KaBoom client is overloaded and needs to shed assignments", client.getId());
@@ -69,7 +69,7 @@ public class EvenLoadBalancer extends Leader {
 				}
 			}
 			// ...then unassign partitions, remote ones first until we're even
-			while (client.overloaded()) {
+			while (client.tooManyAssignedPartitions()) {
 				KaBoomPartition partitionToDelete;
 				LOG.info("client {} target partiton load is {} and assigned partitons count is {}",
 					 client.getId(), client.getTargetPartitionLoad(), client.getAssignedPartitions().size());
@@ -118,7 +118,7 @@ public class EvenLoadBalancer extends Leader {
 			// Grab the least loaded client  in case we  cannot find an underloaded local client
 			KaBoomClient chosenClient = kaboomClients.get(0);
 			for (KaBoomClient client : kaboomClients) {
-				if (!client.overloaded() && client.getHostname().equals(
+				if (!client.tooManyAssignedPartitions() && client.getHostname().equals(
 					 partition.getKafkaPartition().getLeader().getHost())) {
 					chosenClient = client;
 					break;

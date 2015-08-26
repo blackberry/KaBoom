@@ -150,7 +150,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			}
 
 			try {
-				readyFlagController = new ReadyFlagController(config);
+				readyFlagController = new ReadyFlagController(config, kaboomTopics);
 				readyFlagController.balance(totalWeight, idToKaBoomClient);
 			} catch (Exception e) {
 				LOG.error("There was an error running the ready flag controller's balancer", e);
