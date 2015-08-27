@@ -28,6 +28,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.blackberry.bdp.common.conversion.Converter;
+import java.util.concurrent.TimeUnit;
+import org.apache.curator.framework.recipes.locks.InterProcessMutex;
+import org.apache.curator.framework.state.ConnectionState;
+import org.apache.curator.framework.state.ConnectionStateListener;
 
 public class WorkerTest {
 
@@ -83,6 +87,75 @@ public class WorkerTest {
 		long value2 = Converter.longFromBytes(curator.getData().forPath(zkPath));
 		Assert.assertEquals(value1, value2);
 		LOG.info("Testing conversion of null {} equals {}", value1, value2);
+	}
+
+	@Test
+	public void testCuratoringLocking() throws Exception {
+		String zkPath = "/node/lock";
+
+		SynchronousWorker sw1 = new SynchronousWorker(zkPath, 2);
+		Thread t1 = new Thread(sw1);
+
+		SynchronousWorker sw2 = new SynchronousWorker(zkPath, 10);
+		Thread t2 = new Thread(sw2);
+
+		t1.start();
+		Thread.sleep(50);
+		t2.start();
+		t1.join();
+		t2.join();
+
+		Assert.assertEquals(sw1.lockAcquired, true);
+		Assert.assertEquals(sw2.lockAcquired, false);
+	}
+
+	private class SynchronousWorker implements Runnable {
+
+		protected String zkPath;
+		protected long waitTime;
+		private final InterProcessMutex lock;
+		protected boolean lockAcquired = false;
+		private boolean paused = false;
+
+		protected SynchronousWorker(String zkPath, long waitTime) {
+			this.zkPath = zkPath;
+			this.waitTime = waitTime;
+			this.lock = new InterProcessMutex(curator, zkPath);
+		}
+		
+		private void abort() {
+		}
+		
+
+		@Override
+		public void run() {
+			curator.getConnectionStateListenable().addListener(new ConnectionStateListener() {
+				@Override
+				public void stateChanged(CuratorFramework client, ConnectionState newState) {
+					if (newState == ConnectionState.SUSPENDED) {
+						paused = true;
+					} else if (newState == ConnectionState.RECONNECTED) {
+						paused = false;
+					} else if (newState == ConnectionState.LOST) {
+						abort();
+					}
+				}
+			});
+
+			LOG.info("Thread {} trying to obtain lock on {} (waiting up to {} seconds)...",
+				 Thread.currentThread().getName(), zkPath, waitTime);
+			try {
+				lockAcquired = lock.acquire(waitTime, TimeUnit.SECONDS);
+				if (lockAcquired) {
+					LOG.info("{} holds the lock", Thread.currentThread().getName());
+				} else {
+					LOG.error("{} failed to obtain lock after waiting {} seconds", Thread.currentThread().getName(), waitTime);
+				}
+			} catch (Exception e) {
+				LOG.error("{} failed to obtain lock", Thread.currentThread().getName(), e);
+			}
+		}
+
 	}
 
 }

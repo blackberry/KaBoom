@@ -43,6 +43,7 @@ public class RunningConfig extends ZkVersioned {
 	@Getter @Setter public long propagateReadyFlagFrequency = 10 * 60 *  1000;
 	@Getter @Setter public long propateReadyFlagDelayBetweenPathsMs = 0;
 	@Getter @Setter public long newLeaderCalmDownDelay = 30 * 1000;
+	@Getter @Setter public long assignmentLockTimeout = 3 * 1000;
 
 	/**
 	 * Instantiates a default RunningConfig without any ZK interaction

@@ -78,9 +78,9 @@ public class KaBoom {
 		}
 
 		// Ensure that the required zk paths exist
-		for (String path : new String[]{config.getZkPathLeaderClientId(), 
-			config.getZkRootPathClients(), 
-			config.getZkRootPathPartitionAssignments(), 
+		for (String path : new String[]{config.getZkPathLeaderClientId(),
+			config.getZkRootPathClients(),
+			config.getZkRootPathPartitionAssignments(),
 			config.getZkRootPathFlagAssignments()}) {
 			if (config.getKaBoomCurator().checkExists().forPath(path) == null) {
 				try {
@@ -96,16 +96,16 @@ public class KaBoom {
 		}
 
 		// Register our existence
-		{			
-			client = new KaBoomClient(config.getKaBoomCurator(), 
-				 String.format("%s/%s", config.getZkRootPathClients(), config.getKaboomId()));			
+		{
+			client = new KaBoomClient(config.getKaBoomCurator(),
+				 String.format("%s/%s", config.getZkRootPathClients(), config.getKaboomId()));
 			client.setId(config.getKaboomId());
 			client.setMode(CreateMode.EPHEMERAL);
 			client.setHostname(config.getHostname());
 			client.setWeight(config.getWeight());
 			client.save();
 		}
-		
+
 		// Instantiate our load balancer
 		Leader loadBalancer = null;
 		if (config.getLoadBalancerType().equals("even")) {
@@ -117,7 +117,7 @@ public class KaBoom {
 		}
 
 		// Start leader election thread
-		final LeaderSelector leaderSelector = new LeaderSelector(config.getKaBoomCurator(), 
+		final LeaderSelector leaderSelector = new LeaderSelector(config.getKaBoomCurator(),
 			 config.getZkPathLeaderClientId(), loadBalancer);
 		leaderSelector.autoRequeue();
 		leaderSelector.start();
@@ -198,18 +198,18 @@ public class KaBoom {
 			// Get all my assignments and create a worker if there's anything not already being worked
 			Map<String, Boolean> validWorkingPartitions = new HashMap<>();
 			for (String partitionId : client.getAssignments(config, config.getZkRootPathPartitionAssignments())) {
-				if (partitionToWorkerMap.containsKey(partitionId)) {					
-					if (false == partitionToThreadsMap.get(partitionId).isAlive()) {						
-						if (partitionToWorkerMap.get(partitionId).isGracefulShutdown()) {
+				if (partitionToWorkerMap.containsKey(partitionId)) {
+					if (false == partitionToThreadsMap.get(partitionId).isAlive()) {
+						if (false == partitionToWorkerMap.get(partitionId).isAbort()) {
 							LOG.info("worker thead for {} found to have been shutdown gracefully", partitionId);
 							config.getGracefulWorkerShutdownMeter().mark();
 						} else {
 							LOG.error("worker thead for {} found dead (removed thread/worker objects)", partitionId);
 							config.getDeadWorkerMeter().mark();
 						}
-						validWorkingPartitions.remove(partitionId);						
-						partitionToWorkerMap.remove(partitionId);							 
-						partitionToThreadsMap.remove(partitionId);						
+						validWorkingPartitions.remove(partitionId);
+						partitionToWorkerMap.remove(partitionId);
+						partitionToThreadsMap.remove(partitionId);
 					} else {
 						validWorkingPartitions.put(partitionId, true);
 					}
@@ -219,13 +219,17 @@ public class KaBoom {
 					if (m.matches()) {
 						String topic = m.group(1);
 						int partition = Integer.parseInt(m.group(2));
-						Worker worker = new Worker(config, topic, partition);
-						partitionToWorkerMap.put(partitionId, worker);
-						partitionToThreadsMap.put(partitionId, new Thread(worker));
-						partitionToThreadsMap.get(partitionId).start();
-						LOG.info("KaBoom clientId {} assigned to partitonId {} and a new worker has been started",
-							 config.getKaboomId(), partitionId);
-						validWorkingPartitions.put(partitionId, true);
+						try {
+							Worker worker = new Worker(config, topic, partition);
+							partitionToWorkerMap.put(partitionId, worker);
+							partitionToThreadsMap.put(partitionId, new Thread(worker));
+							partitionToThreadsMap.get(partitionId).start();
+							LOG.info("KaBoom clientId {} assigned to partitonId {} and a new worker has been started",
+								 config.getKaboomId(), partitionId);
+							validWorkingPartitions.put(partitionId, true);
+						} catch (Exception e) {
+							LOG.error("failed to create new worker for {}-{}", topic, partition, e);
+						}
 					} else {
 						LOG.error("Could not get topic and partition from node name. ({})", partitionId);
 					}
@@ -235,17 +239,16 @@ public class KaBoom {
 			Iterator<Map.Entry<String, Worker>> iter = partitionToWorkerMap.entrySet().iterator();
 			while (iter.hasNext()) {
 				Map.Entry<String, Worker> entry = iter.next();
-				Worker worker = entry.getValue();				
+				Worker worker = entry.getValue();
 				if (!validWorkingPartitions.containsKey(worker.getPartitionId())) {
 					worker.stop();
 					LOG.info("Worker currently assigned to {} is no longer valid has been instructed to stop working", worker.getPartitionId());
 				}
 				if (worker.pinged()) {
 					if (!worker.getPong()) {
-						LOG.error("[{}] has not responded from being pinged, interupting thread and sending kill request to the worker",
-							 worker.getPartitionId());
-						partitionToThreadsMap.get(worker.getPartitionId()).interrupt();
-						worker.kill();
+						LOG.error("[{}] has not responded from being pinged, aborting", worker.getPartitionId());
+						worker.abort();
+						partitionToThreadsMap.get(worker.getPartitionId()).interrupt();						
 						iter.remove();
 					} else {
 						worker.ping();

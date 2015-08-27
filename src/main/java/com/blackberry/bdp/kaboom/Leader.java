@@ -15,7 +15,6 @@
  */
 package com.blackberry.bdp.kaboom;
 
-import static com.blackberry.bdp.common.conversion.Converter.intFromBytes;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Random;
@@ -114,7 +113,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 							if (!nameToKaBoomTopic.containsKey(m.group(1))) {
 								deletedReason = "because of missing topic configuration";
 							} else {
-								String clientId = new String(curator.getData().forPath(assignmentZkPath), UTF8);								
+								String clientId = new String(curator.getData().forPath(assignmentZkPath), UTF8);
 								int assignedClientId = new Integer(clientId);
 								if (!idToKaBoomClient.containsKey(assignedClientId)) {
 									deletedReason = String.format("because client %s is not connected", assignedClientId);

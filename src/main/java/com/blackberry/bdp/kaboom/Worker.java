@@ -24,7 +24,6 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.apache.curator.framework.CuratorFramework;
 import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,26 +37,34 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.Meter;
+import java.nio.charset.Charset;
 import org.apache.curator.framework.recipes.cache.NodeCache;
 import org.apache.curator.framework.recipes.cache.NodeCacheListener;
+import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.zookeeper.data.Stat;
 
-public class Worker implements Runnable {
+public final class Worker extends SynchronousWorker implements Runnable {
 
 	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
+	protected static final Charset UTF8 = Charset.forName("UTF-8");
 
 	private String partitionId;
 	private Consumer consumer;
 	private long lowerOffsetsReceived = 0;
 	private long timestamp;
-	private boolean stopping = false;
 	private String hostname;
 	private final StartupConfig config;
-	private final CuratorFramework curator;
+
 	private final String zkRoot;
 	private String zkPath;
 	private String zkPath_offSetTimestamp;
 	private String zkPath_offSetOverride;
+
+	private boolean stopping = false;
+	private boolean abort = false;
+	private Boolean pinged = false;
+	private Boolean pong = false;
+
 	private String topic;
 	private int partition;
 	private long startTime;
@@ -74,16 +81,11 @@ public class Worker implements Runnable {
 	private TimeBasedHdfsOutputPath hdfsOutputPath;
 	private static Set<Worker> workers = new HashSet<>();
 	private static final Object workersLock = new Object();
-	private Boolean pinged = false;
-	private Boolean pong = false;
-	private Boolean killed = false;
 	private KaBoomTopicConfig topicConfig;
 	private long sprintCounter;
 	private WorkSprint previousSprint;
 	private WorkSprint currentSprint;
-	private boolean gracefulShutdown = false;
-	private boolean persistMetadataOnShutdown = true;
-	private boolean finished = false;
+	private InterProcessMutex lock;
 
 	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
@@ -230,112 +232,135 @@ public class Worker implements Runnable {
 	}
 
 	public Worker(StartupConfig config, String topicName, int partition) throws Exception {
-		this.sprintCounter = 0;
-		this.config = config;
-		this.curator = config.getKaBoomCurator();
-		this.topic = topicName;
-		this.partition = partition;
-		this.startTime = System.currentTimeMillis();
-		this.messagesWritten = 0;
-		
-		this.zkRoot = config.getZkRootPathKaBoom();		
-		this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getKaBoomCurator(), zkRoot + "/topics/" + topic);
-		partitionId = String.format("%s-%d", topic, partition);
-		this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
-		this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
-		this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
-		this.hdfsOutputPath = new TimeBasedHdfsOutputPath(config, topicConfig, partition);		
+		// Set up our Synchronous Worker and obtain our assignment lock
+		super(config.getKaBoomCurator(),
+			 String.format("KaBoom Client ID=%d", config.getKaboomId()),
+			 String.valueOf(config.getKaboomId()).getBytes(),
+			 config.zkPathPartitionAssignment(topicName, partition),			 
+			 config.getRunningConfig().getAssignmentLockTimeout());
 
-		LOG.info("[{}] worker instantiated with topic configuration version {}", partitionId, topicConfig.getVersion());
+		/**
+		 * Since we're now holding a lock we need to ensure we're wrapping 
+		 * everything in the constructor around a try block and releasing the 
+		 * lock on any errors.  The run() method of the thread then releases 
+		 * the lock in it's finally block, so there should be no way for a lock to
+		 * not get released once the worker is finished.
+		 */
+		try {
+			partitionId = String.format("%s-%d", topicName, partition);
+			
+			this.sprintCounter = 0;
+			this.config = config;
+			this.topic = topicName;
+			this.partition = partition;
+			this.startTime = System.currentTimeMillis();
+			this.messagesWritten = 0;
 
-		NodeCache nodeCache = new NodeCache(curator, topicConfig.getZkPath());
-		nodeCache.getListenable().addListener(new NodeCacheListener() {
-			@Override
-			public void nodeChanged() throws Exception {
-				Stat newZkStat = curator.checkExists().forPath(topicConfig.getZkPath());
-				if (newZkStat == null) {
-					LOG.info("[{}] topic configuration for {} has been deleted",
-						 partitionId,
-						 topicConfig.getId());
-					persistMetadataOnShutdown = false;
-					stop();
-				} else {
-					KaBoomTopicConfig newTopicConfig = KaBoomTopicConfig.get(
-						 KaBoomTopicConfig.class, curator, zkRoot + "/topics/" + topic);
-					if (!newTopicConfig.getVersion().equals(topicConfig.getVersion())) {
-						LOG.info("[{}] topic {} configuration (version {}) was updated to version {}, shutting down worker...",
+			this.zkRoot = config.getZkRootPathKaBoom();
+			this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getKaBoomCurator(), zkRoot + "/topics/" + topic);
+			
+			this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
+			this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
+			this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
+			this.hdfsOutputPath = new TimeBasedHdfsOutputPath(config, topicConfig, partition);
+
+			zkPath = String.format("%s/%s/%d", config.getZkRootPathTopicConfigs(), topic, partition);
+			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
+			zkPath_offSetOverride = zkPath + "/offset_override";
+
+			LOG.info("[{}] worker instantiated with topic configuration version {}", partitionId, topicConfig.getVersion());
+
+			NodeCache nodeCache = new NodeCache(curator, topicConfig.getZkPath());
+			nodeCache.getListenable().addListener(new NodeCacheListener() {
+				@Override
+				public void nodeChanged() throws Exception {
+					Stat newZkStat = curator.checkExists().forPath(topicConfig.getZkPath());
+					if (newZkStat == null) {
+						LOG.info("[{}] topic configuration for {} has been deleted",
 							 partitionId,
-							 topicConfig.getId(),
-							 topicConfig.getVersion(),
-							 newTopicConfig.getVersion());
-						stop();
+							 topicConfig.getId());
+						abort();
+					} else {
+						KaBoomTopicConfig newTopicConfig = KaBoomTopicConfig.get(
+							 KaBoomTopicConfig.class, curator, zkRoot + "/topics/" + topic);
+						if (!newTopicConfig.getVersion().equals(topicConfig.getVersion())) {
+							LOG.info("[{}] topic {} configuration (version {}) was updated to version {}, shutting down worker...",
+								 partitionId,
+								 topicConfig.getId(),
+								 topicConfig.getVersion(),
+								 newTopicConfig.getVersion());
+							stop();
+						}
 					}
+				}
+
+			});
+			nodeCache.start();
+
+			lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
+			lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
+			msgWrittenGaugeName = "kaboom:partitions:" + partitionId + ":messages written per second";
+			lowerOffsetsGaugeName = "kaboom:partitions:" + partitionId + ":early offsets received";
+
+			String[] metrics_to_remove = {lagGaugeName, lagSecGaugeName, msgWrittenGaugeName, lowerOffsetsGaugeName};
+
+			for (final String metric_name : metrics_to_remove) {
+				if (MetricRegistrySingleton.getInstance().getMetricsRegistry()
+					 .getGauges(new MetricFilter() {
+						 @Override
+						 public boolean matches(String s, Metric m) {
+							 return s.equals(metric_name);
+						 }
+
+					 }).size() > 0) {
+					LOG.debug("Removing existing metric: '{}'", metric_name);
+					MetricRegistrySingleton.getInstance().getMetricsRegistry()
+						 .remove(metric_name);
 				}
 			}
 
-		});
-		nodeCache.start();
-
-		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
-		lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
-		msgWrittenGaugeName = "kaboom:partitions:" + partitionId + ":messages written per second";
-		lowerOffsetsGaugeName = "kaboom:partitions:" + partitionId + ":early offsets received";
-
-		String[] metrics_to_remove = {lagGaugeName, lagSecGaugeName, msgWrittenGaugeName, lowerOffsetsGaugeName};
-
-		for (final String metric_name : metrics_to_remove) {
-			if (MetricRegistrySingleton.getInstance().getMetricsRegistry()
-				 .getGauges(new MetricFilter() {
+			MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				 .register(lagGaugeName, new Gauge<Long>() {
 					 @Override
-					 public boolean matches(String s, Metric m) {
-						 return s.equals(metric_name);
+					 public Long getValue() {
+						 return lag;
 					 }
 
-				 }).size() > 0) {
-				LOG.debug("Removing existing metric: '{}'", metric_name);
-				MetricRegistrySingleton.getInstance().getMetricsRegistry()
-					 .remove(metric_name);
+				 });
+
+			MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				 .register(lagSecGaugeName, new Gauge<Integer>() {
+					 @Override
+					 public Integer getValue() {
+						 return lag_sec;
+					 }
+
+				 });
+
+			MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				 .register(msgWrittenGaugeName, new Gauge<Long>() {
+					 @Override
+					 public Long getValue() {
+						 return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
+					 }
+
+				 });
+
+			MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				 .register(lowerOffsetsGaugeName, new Gauge<Long>() {
+					 @Override
+					 public Long getValue() {
+						 return lowerOffsetsReceived;
+					 }
+
+				 });
+
+			synchronized (workersLock) {
+				workers.add(this);
 			}
-		}
-
-		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register(lagGaugeName, new Gauge<Long>() {
-				 @Override
-				 public Long getValue() {
-					 return lag;
-				 }
-
-			 });
-
-		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register(lagSecGaugeName, new Gauge<Integer>() {
-				 @Override
-				 public Integer getValue() {
-					 return lag_sec;
-				 }
-
-			 });
-
-		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register(msgWrittenGaugeName, new Gauge<Long>() {
-				 @Override
-				 public Long getValue() {
-					 return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
-				 }
-
-			 });
-
-		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register(lowerOffsetsGaugeName, new Gauge<Long>() {
-				 @Override
-				 public Long getValue() {
-					 return lowerOffsetsReceived;
-				 }
-
-			 });
-
-		synchronized (workersLock) {
-			workers.add(this);
+		} catch (Exception e) {			
+			//releaseAssignment();
+			throw e;
 		}
 	}
 
@@ -349,10 +374,8 @@ public class Worker implements Runnable {
 	@Override
 	public void run() {
 		try {
-			zkPath = zkRoot + "/topics/" + getTopic() + "/" + getPartition();
-			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
-			zkPath_offSetOverride = zkPath + "/offset_override";
-
+			lock = new InterProcessMutex(curator, zkPathToLock());
+			aquireAssignment(lock);
 			try {
 				previousSprint = null;
 				currentSprint = new WorkSprint(getStoredOffsetFromZk());
@@ -391,9 +414,11 @@ public class Worker implements Runnable {
 					if (pinged) {
 						pong = true;
 					}
-					if (killed || Thread.interrupted()) {
-						throw new Exception("A kill request/interrupt has been received");
+					if (paused) {
+						Thread.sleep(100);
+						continue;
 					}
+
 					if (currentSprint.sprintEnd <= System.currentTimeMillis()) {
 						previousSprint = currentSprint;
 						currentSprint = new WorkSprint(previousSprint.offset);
@@ -551,52 +576,57 @@ public class Worker implements Runnable {
 					boomWritesMeterTotal.mark();
 
 					currentSprint.checkTimestamp(timestamp);
-
+					
 				} catch (Exception e) {
 					LOG.error("[{}] Error processing message: ", partitionId, e);
 					LOG.info("[{}] Calling abort on {}", partitionId, hdfsOutputPath);
-					hdfsOutputPath.abortAll();
+					abort();
 					return;
 				}
 			}
-
 			shutdownProcedure();
-
 		} catch (Exception e) {
 			LOG.error("[{}] An exception occured while setting up this worker thread", getPartitionId(), e);
 		} finally {
+			LOG.info("[{}] Worker finished after having processed {} events", partitionId, messagesWritten);
+			try {
+				releaseAssignment(lock);
+			} catch (Exception ex) {
+				LOG.error("Failed to release assignment after worker thread finished: ", ex);
+			}
 			synchronized (workersLock) {
 				workers.remove(this);
 			}
-			finished = true;
 		}
 	}
 
 	private void shutdownProcedure() {
-		LOG.info("[{}] Shutting down on sprint number {} with persistMetadata={}, offset={} and timestamp={} ({})",
-			 partitionId,
-			 currentSprint.sprintNumber,
-			 persistMetadataOnShutdown,
-			 currentSprint.offset,
-			 currentSprint.maxMessageTimestamp,
-			 dateString(currentSprint.maxMessageTimestamp));
-
 		MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagGaugeName);
 		MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagSecGaugeName);
 		MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(msgWrittenGaugeName);
 
+		LOG.info("[{}] Shutting down (abortting: {}) on sprint number {} with offset={} and timestamp={} ({})",
+			 partitionId, isAbort(),
+			 currentSprint.sprintNumber,
+			 currentSprint.offset,
+			 currentSprint.maxMessageTimestamp,
+			 dateString(currentSprint.maxMessageTimestamp));
+
 		try {
-			hdfsOutputPath.closeAll();
-			LOG.info("[{}] all output files have been closed", partitionId);
-			if (persistMetadataOnShutdown) {
+			if (isAbort()) {
+				hdfsOutputPath.abortAll();
+				LOG.info("[{}] all HDFS output paths have been aborted", partitionId);
+			} else {
+				hdfsOutputPath.closeAll();
+				LOG.info("[{}] all HDFS output files have been closed", partitionId);
 				currentSprint.storeOffset();
 				currentSprint.storeOffsetTimestamp();
 			}
 		} catch (Exception e) {
-			gracefulShutdown = false;
-			LOG.error("[{}] Exception raised during shutdown: ", e);
+			LOG.error("[{}] Exception raised during shutdown: ", partitionId, e);
+		} finally {
+
 		}
-		LOG.info("[{}] Worker stopped after having processed {} events", partitionId, messagesWritten);
 	}
 
 	private long getStoredOffsetFromZk() throws Exception {
@@ -625,17 +655,10 @@ public class Worker implements Runnable {
 	}
 
 	/**
-	 * @return the gracefulShutdown
+	 * @return the abort
 	 */
-	public boolean isGracefulShutdown() {
-		return gracefulShutdown;
-	}
-
-	/**
-	 * @return the finished
-	 */
-	public boolean isFinished() {
-		return finished;
+	public boolean isAbort() {
+		return abort;
 	}
 
 	private class WorkSprint {
@@ -723,15 +746,26 @@ public class Worker implements Runnable {
 
 	}
 
+	/**
+	 * Stops the worker gracefully
+	 */
+	@Override
 	public void stop() {
-		LOG.info("[{}] Graceful shutdown request received", partitionId);
-		gracefulShutdown = true;
+		if (isAbort()) {
+			LOG.info("[{}] Abort request received", partitionId);
+		} else {
+			LOG.info("[{}] Graceful shutdown request received", partitionId);
+		}
 		stopping = true;
 	}
 
-	public void kill() {
-		LOG.info("[{}] Kill request received", partitionId);
-		killed = true;
+	/**
+	 * Stops working and aborts all progress
+	 */
+	@Override
+	protected void abort() {
+		abort = true;
+		stop();
 	}
 
 	public void ping() {

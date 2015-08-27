@@ -86,7 +86,7 @@ public class StartupConfig {
 	
 	private String zkRootPathKafka = "";
 	private String zkRootPathKafkaBrokers = String.format("%s/%s", zkRootPathKafka, "brokers/ids");	
-	private String zkRootPathKaBoom = "/kaboom";	
+	private String zkRootPathKaBoom = "/kaboom";
 	private String zkRootPathClients = String.format("%s/%s", zkRootPathKaBoom, "clients");
 	private String zkRootPathTopicConfigs = String.format("%s/%s", zkRootPathKaBoom, "topics");
 	private String zkRootPathPartitionAssignments = String.format("%s/%s", zkRootPathKaBoom, "assignments");
@@ -329,6 +329,10 @@ public class StartupConfig {
 	
 	public String zkPathPartitionAssignment(String partitionId) {
 		return String.format("%s/%s", getZkRootPathPartitionAssignments(),  partitionId); 
+	}
+
+	public String zkPathPartitionAssignment(String topicName, int partitionNumber) {
+		return String.format("%s/%s-%d", getZkRootPathPartitionAssignments(),  topicName, partitionNumber); 
 	}
 
 	/**
