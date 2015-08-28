@@ -6,7 +6,9 @@ There's also two new features that Matt requested after discovering lease confli
 
 To resolve the balancer running to early, there's now a new running configuration option 'New Leader Calm Down Delay (ms)' defaulted to 30 seconds.  For busy clusters like at BlackBerry, this should be set to a high enough time to account for cluster wide restarts, 1-2 minutes.
 
-To resolve the possibility that two workers on separate clients could have overlapping assignments, the KaBoom client ID now prefixes the boom file name.
+To resolve the possibility that two workers on separate clients could have overlapping assignments a new abstract class AsynchronousAssignee has been introduced that requires a thread to provide a ZK assignment path and an identity (byte[]) expected to be found in the assignment.  It then uses an InterProcessMutex to lock the assignment.   To further safeguard against potential problems a watch is placed on the zookeeper connection and the pause() method is called if the connection becomes suspended.  If the connection is restored it checks that it's still assigned and resumes the worker.  Another watch is placed on the znode for the assignment and the worker is scheduled to stop() the moment it's no longer the assignee.
+
+A note on shutdown/shutdown hooks:  Sometime since the switch to log4j2 KaBoom's shutdown hook was being overwritten by log4j2's shutdown hook.  This prevented worker shifts from finishing properly and could result in metadata not being persisted during shutdown.  To prevent this you can disable the log4j2 shutdown hook in your log4j2 configuration's opening configuration tag with <configuration ... shutdownHook="disable">
 
 Complete change log below...
 
@@ -42,9 +44,12 @@ Complete change log below...
 - Added two new metrics for the number of workers found dead and the number of workers gracefully restarted
 - Improved how the leader removes assignments from disconnected clients
 - Improved how the ReadyFlagController balances flag propagator paths
-
 - New running configuration option newLeaderCalmDownDelay (milliseconds, default 30 * 1000) The amount of time to wait after a new leader is elected before it starts leading
 - Prefixes the KaBoom Client ID to all boom files to ensure that race conditions over partition re-assignments don't lead to lease conflicts or missing leases
+- Moved the method that gets the current offset from ZK into the Worker's private class
+- Renamed private class WorkerSprint in Worker to WorkerShift
+- Added a bunch of convienience methods in WorkerShift isOver() isFinsihed() isTimeToFinish()
+- Added a new abstract class AsynchronousAssignee for threads that are assigned work from ZK
 
 Changes in 0.8.1:
 

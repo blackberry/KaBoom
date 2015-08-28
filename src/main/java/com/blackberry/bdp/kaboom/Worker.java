@@ -43,7 +43,7 @@ import org.apache.curator.framework.recipes.cache.NodeCacheListener;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.zookeeper.data.Stat;
 
-public final class Worker extends SynchronousWorker implements Runnable {
+public final class Worker extends AsynchronousAssignee implements Runnable {
 
 	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
 	protected static final Charset UTF8 = Charset.forName("UTF-8");
@@ -61,7 +61,7 @@ public final class Worker extends SynchronousWorker implements Runnable {
 	private String zkPath_offSetOverride;
 
 	private boolean stopping = false;
-	private boolean abort = false;
+	private boolean aborting = false;
 	private Boolean pinged = false;
 	private Boolean pong = false;
 
@@ -83,8 +83,8 @@ public final class Worker extends SynchronousWorker implements Runnable {
 	private static final Object workersLock = new Object();
 	private KaBoomTopicConfig topicConfig;
 	private long sprintCounter;
-	private WorkSprint previousSprint;
-	private WorkSprint currentSprint;
+	private WorkerShift previousShift = null;
+	private WorkerShift currentShift;
 	private InterProcessMutex lock;
 
 	static {
@@ -236,7 +236,7 @@ public final class Worker extends SynchronousWorker implements Runnable {
 		super(config.getKaBoomCurator(),
 			 String.format("KaBoom Client ID=%d", config.getKaboomId()),
 			 String.valueOf(config.getKaboomId()).getBytes(),
-			 config.zkPathPartitionAssignment(topicName, partition),			 
+			 config.zkPathPartitionAssignment(topicName, partition),
 			 config.getRunningConfig().getAssignmentLockTimeout());
 
 		/**
@@ -248,7 +248,7 @@ public final class Worker extends SynchronousWorker implements Runnable {
 		 */
 		try {
 			partitionId = String.format("%s-%d", topicName, partition);
-			
+
 			this.sprintCounter = 0;
 			this.config = config;
 			this.topic = topicName;
@@ -258,7 +258,7 @@ public final class Worker extends SynchronousWorker implements Runnable {
 
 			this.zkRoot = config.getZkRootPathKaBoom();
 			this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getKaBoomCurator(), zkRoot + "/topics/" + topic);
-			
+
 			this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
 			this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 			this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
@@ -358,7 +358,7 @@ public final class Worker extends SynchronousWorker implements Runnable {
 			synchronized (workersLock) {
 				workers.add(this);
 			}
-		} catch (Exception e) {			
+		} catch (Exception e) {
 			//releaseAssignment();
 			throw e;
 		}
@@ -374,17 +374,15 @@ public final class Worker extends SynchronousWorker implements Runnable {
 	@Override
 	public void run() {
 		try {
-			lock = new InterProcessMutex(curator, zkPathToLock());
-			aquireAssignment(lock);
+			aquireAssignment(new InterProcessMutex(curator, zkPathToLock()));
 			try {
-				previousSprint = null;
-				currentSprint = new WorkSprint(getStoredOffsetFromZk());
+				currentShift = new WorkerShift();
 				hostname = InetAddress.getLocalHost().getCanonicalHostName();
 			} catch (UnknownHostException uhe) {
 				LOG.error("[{}] Can't determine local hostname", getPartitionId());
 				hostname = "unknown.host";
 			} catch (Exception e) {
-				LOG.error("[{}] Error getting offset.", getPartitionId(), e);
+				LOG.error("[{}] Error: ",partitionId, e);
 				return;
 			}
 
@@ -393,13 +391,13 @@ public final class Worker extends SynchronousWorker implements Runnable {
 			consumer = new Consumer(config.getConsumerConfiguration(),
 				 clientId, getTopic(),
 				 getPartition(),
-				 currentSprint.offset,
+				 currentShift.offset,
 				 MetricRegistrySingleton.getInstance().getMetricsRegistry());
 
 			LOG.info("[{}] Created worker with topic config version {} starting at offset {}.",
 				 getPartitionId(),
 				 topicConfig.getVersion(),
-				 currentSprint.offset);
+				 currentShift.offset);
 
 			byte[] bytes = new byte[1024 * 1024];
 			int length;
@@ -409,24 +407,25 @@ public final class Worker extends SynchronousWorker implements Runnable {
 			VersionParser ver = new VersionParser();
 			TimestampParser tsp = new TimestampParser();
 
-			while (stopping == false) {
+			while (stopping == false && aborting == false) {
 				try {
+
 					if (pinged) {
 						pong = true;
 					}
+
 					if (paused) {
 						Thread.sleep(100);
 						continue;
 					}
 
-					if (currentSprint.sprintEnd <= System.currentTimeMillis()) {
-						previousSprint = currentSprint;
-						currentSprint = new WorkSprint(previousSprint.offset);
+					if (currentShift.isOver()) {
+						previousShift = currentShift;
+						currentShift = new WorkerShift(previousShift);
 					} else {
-						if (previousSprint != null && System.currentTimeMillis() - previousSprint.sprintEnd
-							 >= config.getRunningConfig().getFileCloseGraceTimeAfterExpiredMs()) {
-							previousSprint.finish();
-							previousSprint = null;
+						if (previousShift != null && previousShift.isTimeToFinish()) {
+							previousShift.finish();
+							previousShift = null;
 						}
 					}
 
@@ -440,10 +439,10 @@ public final class Worker extends SynchronousWorker implements Runnable {
 					 * called consumer.getMessage() let's see if the offset of the last message 
 					 * is what we expected and handle the fun edge cases when it's not
 					 */
-					if (currentSprint.offset != consumer.getLastOffset()) {
+					if (currentShift.offset != consumer.getLastOffset()) {
 						long highWatermark = consumer.getHighWaterMark();
-						if (currentSprint.offset > consumer.getLastOffset()) {
-							if (currentSprint.offset < highWatermark) {
+						if (currentShift.offset > consumer.getLastOffset()) {
+							if (currentShift.offset < highWatermark) {
 								/* 
 								 * When using SNAPPY compression in Krackle's consumer there will be messages received
 								 * that are in the snappy block that are from earlier than our requested offset.  When this
@@ -457,7 +456,7 @@ public final class Worker extends SynchronousWorker implements Runnable {
 								lowerOffsetsReceived++;
 								continue;
 							} else {
-								if (currentSprint.offset > highWatermark) {
+								if (currentShift.offset > highWatermark) {
 									/*	
 									 *	If the expected offset is greater than than actual offset and also higher than the high watermark 
 									 *	then perhaps the broker we're receiving messages from has changed and the new broker has a 
@@ -465,16 +464,16 @@ public final class Worker extends SynchronousWorker implements Runnable {
 									 */
 									if (config.getRunningConfig().getSinkToHighWatermark()) {
 										LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
-											 getPartitionId(), currentSprint.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
+											 getPartitionId(), currentShift.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
 										consumer.setNextOffset(highWatermark);
-										currentSprint.offset = highWatermark;
+										currentShift.offset = highWatermark;
 
 										LOG.info("[{}] Successfully set offset to the high watermark of {}", getPartitionId(), highWatermark);
 
 										continue;
 									} else {
 										LOG.error("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, ignoring offset and skipping message.",
-											 getPartitionId(), currentSprint.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
+											 getPartitionId(), currentShift.offset, highWatermark, config.getRunningConfig().getSinkToHighWatermark());
 										continue;
 									}
 								} else {
@@ -485,7 +484,7 @@ public final class Worker extends SynchronousWorker implements Runnable {
 						} else {
 							LOG.error("[{}] Offset anomaly! Expected:{}, Got {}, Consumer high watermark {}, latest {}, earliest {}",
 								 partitionId,
-								 currentSprint.offset,
+								 currentShift.offset,
 								 consumer.getLastOffset(),
 								 consumer.getHighWaterMark(),
 								 consumer.getLatestOffset(),
@@ -494,8 +493,8 @@ public final class Worker extends SynchronousWorker implements Runnable {
 					}
 
 					messagesWritten++;
-					currentSprint.offset = consumer.getNextOffset();
-					lag = consumer.getHighWaterMark() - currentSprint.offset;
+					currentShift.offset = consumer.getNextOffset();
+					lag = consumer.getHighWaterMark() - currentShift.offset;
 
 					// (byte) 0xFE: -2
 					// (byte) 0x00: 0
@@ -567,16 +566,16 @@ public final class Worker extends SynchronousWorker implements Runnable {
 					}
 
 					hdfsOutputPath.getBoomWriter(
-						 currentSprint.sprintNumber,
+						 currentShift.sprintNumber,
 						 timestamp,
-						 config.getKaboomId() + "-" + partitionId + "-" + currentSprint.offset + ".bm").writeLine(timestamp, bytes, pos, length - pos);
+						 config.getKaboomId() + "-" + partitionId + "-" + currentShift.offset + ".bm").writeLine(timestamp, bytes, pos, length - pos);
 
 					boomWritesMeter.mark();
 					boomWritesMeterTopic.mark();
 					boomWritesMeterTotal.mark();
 
-					currentSprint.checkTimestamp(timestamp);
-					
+					currentShift.checkTimestamp(timestamp);
+
 				} catch (Exception e) {
 					LOG.error("[{}] Error processing message: ", partitionId, e);
 					LOG.info("[{}] Calling abort on {}", partitionId, hdfsOutputPath);
@@ -584,13 +583,13 @@ public final class Worker extends SynchronousWorker implements Runnable {
 					return;
 				}
 			}
-			shutdownProcedure();
+			shutdown();
 		} catch (Exception e) {
 			LOG.error("[{}] An exception occured while setting up this worker thread", getPartitionId(), e);
 		} finally {
 			LOG.info("[{}] Worker finished after having processed {} events", partitionId, messagesWritten);
 			try {
-				releaseAssignment(lock);
+				releaseAssignment();
 			} catch (Exception ex) {
 				LOG.error("Failed to release assignment after worker thread finished: ", ex);
 			}
@@ -600,87 +599,65 @@ public final class Worker extends SynchronousWorker implements Runnable {
 		}
 	}
 
-	private void shutdownProcedure() {
+	private void shutdown() {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagGaugeName);
 		MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagSecGaugeName);
 		MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(msgWrittenGaugeName);
 
 		LOG.info("[{}] Shutting down (abortting: {}) on sprint number {} with offset={} and timestamp={} ({})",
-			 partitionId, isAbort(),
-			 currentSprint.sprintNumber,
-			 currentSprint.offset,
-			 currentSprint.maxMessageTimestamp,
-			 dateString(currentSprint.maxMessageTimestamp));
+			 partitionId, isAborting(),
+			 currentShift.sprintNumber,
+			 currentShift.offset,
+			 currentShift.maxMessageTimestamp,
+			 dateString(currentShift.maxMessageTimestamp));
 
 		try {
-			if (isAbort()) {
+			if (isAborting()) {
 				hdfsOutputPath.abortAll();
 				LOG.info("[{}] all HDFS output paths have been aborted", partitionId);
 			} else {
-				hdfsOutputPath.closeAll();
-				LOG.info("[{}] all HDFS output files have been closed", partitionId);
-				currentSprint.storeOffset();
-				currentSprint.storeOffsetTimestamp();
+				if (previousShift != null && !previousShift.isFinished()) {
+					previousShift.finish();
+				}
+				currentShift.finish(true);
 			}
 		} catch (Exception e) {
 			LOG.error("[{}] Exception raised during shutdown: ", partitionId, e);
-		} finally {
-
 		}
 	}
 
-	private long getStoredOffsetFromZk() throws Exception {
-		if (curator.checkExists().forPath(zkPath) == null) {
-			LOG.info("[{}] offset path {} does not exist, returning zero", partitionId, zkPath);
-			return 0L;
-		} else {
-			long zkOffset = Converter.longFromBytes(curator.getData().forPath(zkPath), 0);
-			LOG.info("[{}] offset {} found in path {}", partitionId, zkOffset, zkPath);
+	private class WorkerShift {
 
-			if (curator.checkExists().forPath(zkPath_offSetOverride) != null) {
-				long zkOffsetOverride = Converter.longFromBytes(curator.getData().forPath(zkPath_offSetOverride), 0);
-				if (config.getRunningConfig().getAllowOffsetOverrides()) {
-					LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}",
-						 this.getPartitionId(), zkOffset, zkOffsetOverride, config.getRunningConfig().getAllowOffsetOverrides());
-					curator.delete().forPath(zkPath_offSetOverride);
-					LOG.info("{} successfully deleted offset override ZK path: {}", this.getPartitionId(), zkPath_offSetOverride);
-					return zkOffsetOverride;
-				} else {
-					LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}",
-						 this.getPartitionId(), zkOffset, zkOffsetOverride, config.getRunningConfig().getAllowOffsetOverrides());
-				}
-			}
-			return zkOffset;
-		}
-	}
-
-	/**
-	 * @return the abort
-	 */
-	public boolean isAbort() {
-		return abort;
-	}
-
-	private class WorkSprint {
-
-		private long sprintStart;
-		private long sprintEnd;
+		private long shiftStart;
+		private long shiftEnd;
 		private long offset;
 		private long maxMessageTimestamp;
 		private final long sprintNumber;
+		private boolean finished;
 
-		private WorkSprint(long startingOffset) {
+		public WorkerShift() throws Exception {
+			this(null);
+		}
+
+		public WorkerShift(WorkerShift previousShift) throws Exception {
 			sprintCounter++;
-			calculateSprintTimes();
-			this.offset = startingOffset;
+			calculateShiftTimes();
 			this.sprintNumber = sprintCounter;
 			this.maxMessageTimestamp = -1;
-			LOG.info("[{}] New sprint #{} for offest {} start time is {} and end time is {}",
+			this.finished = false;
+
+			if (previousShift != null) {
+				this.offset = previousShift.offset;
+			} else {
+				this.offset = getStoredOffsetFromZk();				
+			}
+
+			LOG.info("[{}] Starting shift #{} for offest {} start time is {} and end time is {}",
 				 partitionId,
 				 sprintNumber,
 				 this.offset,
-				 dateString(sprintStart),
-				 dateString(sprintEnd));
+				 dateString(shiftStart),
+				 dateString(shiftEnd));
 		}
 
 		private void checkTimestamp(long timestamp) {
@@ -689,33 +666,53 @@ public final class Worker extends SynchronousWorker implements Runnable {
 			}
 		}
 
-		private void calculateSprintTimes() {
-			sprintStart = System.currentTimeMillis() - System.currentTimeMillis()
+		private void calculateShiftTimes() {
+			shiftStart = System.currentTimeMillis() - System.currentTimeMillis()
 				 % (config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000);
-			sprintEnd = sprintStart + config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000;
+			shiftEnd = shiftStart + config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000;
 		}
 
 		private void finish() {
-			try {
-				LOG.info("[{}] Sprint ending at {} is finished", partitionId, dateString(sprintEnd));
-				hdfsOutputPath.closeOffSprint(sprintNumber);
-				storeOffset();
-				storeOffsetTimestamp();
+			finish(false);
+		}
 
+		private void finish(boolean persistMetadata) {
+			try {
+				LOG.info("[{}] Sprint ending at {} is finished", partitionId, dateString(shiftEnd));
+				hdfsOutputPath.closeOffSprint(sprintNumber);
+				if (persistMetadata) {
+					storeOffset();
+					storeOffsetTimestamp();
+				}
 			} catch (Exception e) {
 				LOG.error("[{}] There was an error closing off a sprint: ", partitionId, e);
+			} finally {
+				finished = true;
 			}
 		}
 
+		private boolean isOver() {
+			return System.currentTimeMillis() >= shiftEnd;
+		}
+
+		private boolean isFinished() {
+			return finished;
+		}
+
+		private boolean isTimeToFinish() {
+			return !isFinished() && System.currentTimeMillis() - shiftEnd
+				 >= config.getRunningConfig().getFileCloseGraceTimeAfterExpiredMs();
+		}
+		
 		private void storeOffsetTimestamp() throws Exception {
 			long zkTimestamp = maxMessageTimestamp;
 			if (zkTimestamp == -1) {
-				LOG.info("[{}] Sprint {} never recieved a message, using sprint end time {} ({}) for last offset timestamp",
+				LOG.info("[{}] Shift #{} never recieved a message, using shift end time {} ({}) for offset timestamp",
 					 partitionId,
 					 sprintNumber,
-					 sprintEnd,
-					 dateString(sprintEnd));
-				zkTimestamp = sprintEnd;
+					 shiftEnd,
+					 dateString(shiftEnd));
+				zkTimestamp = shiftEnd;
 			}
 
 			if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
@@ -727,9 +724,11 @@ public final class Worker extends SynchronousWorker implements Runnable {
 					 Converter.getBytes(zkTimestamp));
 			}
 
-			LOG.info("[{}] stored offset timestamp in ZK {} ({})",
+			LOG.info("[{}] Shift #{} stored offset timestamp {} to ZK {} ({})",
 				 partitionId,
+				 sprintNumber,
 				 zkTimestamp,
+				 zkPath_offSetTimestamp,
 				 dateString(zkTimestamp));
 		}
 
@@ -737,10 +736,35 @@ public final class Worker extends SynchronousWorker implements Runnable {
 			if (curator.checkExists().forPath(zkPath) == null) {
 				curator.create().creatingParentsIfNeeded()
 					 .withMode(CreateMode.PERSISTENT).forPath(zkPath, Converter.getBytes(offset));
-				LOG.info("[{}] new ZK path created to write offset {} to {}", partitionId, offset, zkPath);
 			} else {
 				curator.setData().forPath(zkPath, Converter.getBytes(offset));
-				LOG.info("[{}] wrote offset {} to existing path {}", partitionId, offset, zkPath);
+			}
+			LOG.info("[{}] Shift #{} wrote offset {} to existing path {}",
+				 sprintNumber, partitionId, offset, zkPath);
+		}
+
+		private Long getStoredOffsetFromZk() throws Exception {
+			if (curator.checkExists().forPath(zkPath) == null) {
+				LOG.info("[{}] offset path {} does not exist, returning zero", partitionId, zkPath);
+				return 0L;
+			} else {
+				long zkOffset = Converter.longFromBytes(curator.getData().forPath(zkPath), 0);
+				LOG.info("[{}] offset {} found in path {}", partitionId, zkOffset, zkPath);
+
+				if (curator.checkExists().forPath(zkPath_offSetOverride) != null) {
+					long zkOffsetOverride = Converter.longFromBytes(curator.getData().forPath(zkPath_offSetOverride), 0);
+					if (config.getRunningConfig().getAllowOffsetOverrides()) {
+						LOG.warn("{} : offset in ZK is {} but an override of {} exists and allowOffsetOverride={}",
+							 partitionId, zkOffset, zkOffsetOverride, config.getRunningConfig().getAllowOffsetOverrides());
+						curator.delete().forPath(zkPath_offSetOverride);
+						LOG.info("{} successfully deleted offset override ZK path: {}", partitionId, zkPath_offSetOverride);
+						return zkOffsetOverride;
+					} else {
+						LOG.warn("{} : offset in ZK is {} and an override of {} exists however allowOffsetOverride={}",
+							 partitionId, zkOffset, zkOffsetOverride, config.getRunningConfig().getAllowOffsetOverrides());
+					}
+				}
+				return zkOffset;
 			}
 		}
 
@@ -751,8 +775,8 @@ public final class Worker extends SynchronousWorker implements Runnable {
 	 */
 	@Override
 	public void stop() {
-		if (isAbort()) {
-			LOG.info("[{}] Abort request received", partitionId);
+		if (isAborting()) {
+
 		} else {
 			LOG.info("[{}] Graceful shutdown request received", partitionId);
 		}
@@ -764,8 +788,15 @@ public final class Worker extends SynchronousWorker implements Runnable {
 	 */
 	@Override
 	protected void abort() {
-		abort = true;
-		stop();
+		LOG.info("[{}] Abort request received", partitionId);
+		aborting = true;
+	}
+
+	/**
+	 * @return the aborting
+	 */
+	public boolean isAborting() {
+		return aborting;
 	}
 
 	public void ping() {

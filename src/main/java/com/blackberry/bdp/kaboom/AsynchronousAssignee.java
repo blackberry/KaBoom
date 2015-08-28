@@ -25,13 +25,21 @@ import org.apache.curator.framework.recipes.cache.NodeCacheListener;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.curator.framework.state.ConnectionState;
 import org.apache.curator.framework.state.ConnectionStateListener;
-import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public abstract class SynchronousWorker {
+/**
+ * It would have been swell to have the lock created and acquired in the 
+ * constructor thus reducing the implementers responsibility to only calling
+ * super() but the lock is tied to the thread and the instantiation of the 
+ * implemented object is always within the parent thread creating it.
+ * Instead we'll have the lock provided during aquireAssignment() and the
+ * best we can do is check if we're assigned during instantiation.
+ */
 
-	private static final Logger LOG = LoggerFactory.getLogger(SynchronousWorker.class);
+public abstract class AsynchronousAssignee implements Runnable{
+
+	private static final Logger LOG = LoggerFactory.getLogger(AsynchronousAssignee.class);
 
 	protected boolean paused = false;
 	protected final CuratorFramework curator;
@@ -41,11 +49,12 @@ public abstract class SynchronousWorker {
 	private final String workerName;
 	private final static String lockRoot = "/_LOCKS_";
 	private final long waitTimeMs;
+	private InterProcessMutex lock;
 
 	protected abstract void stop();
 	protected abstract void abort();
 
-	protected SynchronousWorker(CuratorFramework curator,		 
+	protected AsynchronousAssignee(CuratorFramework curator,		 
 		 String workerName,
 		 byte[] assigneeBytes,
 		 String zkAssignmentPath,
@@ -61,18 +70,16 @@ public abstract class SynchronousWorker {
 			throw new NotAssignedException(
 				 String.format("%s cannot setup worker when not assigned to %s",
 					  workerName, zkAssignmentPath));
-
-		//this.lock = new InterProcessMutex(curator, zkPathToLock());
-		
 	}
 
 	public void aquireAssignment(InterProcessMutex lock) throws Exception {
+		this.lock = lock;
 		if (!isAssigned())
 			throw new NotAssignedException(
 				 String.format("%s will not attempt to aquire lock when not assigned to %s",
 					  workerName, zkAssignmentPath));
 
-		LOG.info("Worker {} trying to obtain lock on {} (waiting up to {} ms)...",
+		LOG.debug("Worker {} trying to obtain lock on {} (waiting up to {} ms)...",
 			 workerName, zkAssignmentPath, waitTimeMs);
 
 		if (lock.acquire(waitTimeMs, TimeUnit.MILLISECONDS)) {
@@ -80,7 +87,6 @@ public abstract class SynchronousWorker {
 			watchConnection();
 			LOG.info("{} now holds the lock on {}",
 				 workerName, zkAssignmentPath);
-			logInfo();
 		} else {
 			throw new LockNotAcquiredException(String.format(
 				 "%s failed to obtain lock on %s after waiting %d ms",
@@ -88,14 +94,7 @@ public abstract class SynchronousWorker {
 		}	
 	}
 	
-	private void logInfo() throws Exception {
-		LOG.info("My session ID is: {}", curator.getZookeeperClient().getZooKeeper().getSessionId());
-		Stat stat = curator.checkExists().forPath(zkPathToLock());
-		LOG.info("The ephemeral node owner of the lock is: {}", stat.getEphemeralOwner());
-	}
-	
-	protected void releaseAssignment(InterProcessMutex lock) throws Exception {
-		logInfo();
+	protected void releaseAssignment() throws Exception {
 		lock.release();
 	}
 
@@ -147,15 +146,12 @@ public abstract class SynchronousWorker {
 					LOG.info("{} is no longer assigned to {}", workerName, zkAssignmentPath);
 					stop();
 				}
-				LOG.info("We have a node changed!");
-				logInfo();				
 			}
 		});
 		nodeCache.start();
 	}
 
 	public final String zkPathToLock() {
-		//return zkAssignmentPath;
 		return String.format("%s%s", lockRoot, zkAssignmentPath);
 	}
 

@@ -32,6 +32,9 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.config.Configurator;
 
 public class KaBoom {
 
@@ -125,38 +128,47 @@ public class KaBoom {
 		final Map<String, Worker> partitionToWorkerMap = new HashMap<>();
 		final Map<String, Thread> partitionToThreadsMap = new HashMap<>();
 
-		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-			@Override
-			public void run() {
-				shutdown();
-				for (Map.Entry<String, Worker> entry : partitionToWorkerMap.entrySet()) {
-					Worker w = entry.getValue();
-					w.stop();
-				}
-				for (Map.Entry<String, Thread> entry : partitionToThreadsMap.entrySet()) {
-					Thread t = entry.getValue();
+		{
+			Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+				@Override
+				public void run() {
+					shutdown();
+					for (Map.Entry<String, Worker> entry : partitionToWorkerMap.entrySet()) {
+						Worker w = entry.getValue();
+						w.stop();
+					}
+					for (Map.Entry<String, Thread> entry : partitionToThreadsMap.entrySet()) {
+						Thread t = entry.getValue();
 
+						try {
+							t.join();
+						} catch (InterruptedException e) {
+							LOG.error("Interrupted joining thread.", e);
+						}
+					}
 					try {
-						t.join();
-					} catch (InterruptedException e) {
-						LOG.error("Interrupted joining thread.", e);
+						FileSystem.get(config.getHadoopConfiguration()).close();
+					} catch (Throwable t) {
+						LOG.error("Error closing Hadoop filesystem", t);
+					}
+					try {
+						config.getKaBoomCurator().delete().forPath("/kaboom/clients/" + config.getKaboomId());
+					} catch (Exception e) {
+						LOG.error("Error deleting /kaboom/clients/{}", config.getKaboomId(), e);
+					}
+					leaderSelector.close();
+					config.getKaBoomCurator().close();
+					
+					//shutdown log4j2
+					if (LogManager.getContext() instanceof LoggerContext) {
+						LOG.info("Shutting down log4j2");
+						Configurator.shutdown((LoggerContext) LogManager.getContext());
+					} else {
+						LOG.warn("Unable to shutdown log4j2");
 					}
 				}
-				try {
-					FileSystem.get(config.getHadoopConfiguration()).close();
-				} catch (Throwable t) {
-					LOG.error("Error closing Hadoop filesystem", t);
-				}
-				try {
-					config.getKaBoomCurator().delete().forPath("/kaboom/clients/" + config.getKaboomId());
-				} catch (Exception e) {
-					LOG.error("Error deleting /kaboom/clients/{}", config.getKaboomId(), e);
-				}
-				leaderSelector.close();
-				config.getKaBoomCurator().close();
-			}
-
-		}));
+			}));
+		}
 
 		Pattern topicPartitionPattern = Pattern.compile("^(.*)-(\\d+)$");
 
@@ -200,7 +212,7 @@ public class KaBoom {
 			for (String partitionId : client.getAssignments(config, config.getZkRootPathPartitionAssignments())) {
 				if (partitionToWorkerMap.containsKey(partitionId)) {
 					if (false == partitionToThreadsMap.get(partitionId).isAlive()) {
-						if (false == partitionToWorkerMap.get(partitionId).isAbort()) {
+						if (false == partitionToWorkerMap.get(partitionId).isAborting()) {
 							LOG.info("worker thead for {} found to have been shutdown gracefully", partitionId);
 							config.getGracefulWorkerShutdownMeter().mark();
 						} else {
@@ -248,7 +260,7 @@ public class KaBoom {
 					if (!worker.getPong()) {
 						LOG.error("[{}] has not responded from being pinged, aborting", worker.getPartitionId());
 						worker.abort();
-						partitionToThreadsMap.get(worker.getPartitionId()).interrupt();						
+						partitionToThreadsMap.get(worker.getPartitionId()).interrupt();
 						iter.remove();
 					} else {
 						worker.ping();

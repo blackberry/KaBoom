@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- This status="$LEVEL" on the next line  is for the logging of log4j2 as it configured tself, don't adjust it for  your application logging -->
-<configuration status="WARN" monitorInterval="30">
+<configuration status="WARN" monitorInterval="30" shutdownHook="disable">
    <appenders>
       <Console name="console" target="SYSTEM_OUT">
          <PatternLayout pattern="[%d] %p %m (%c)%n" />
