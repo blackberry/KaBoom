@@ -424,7 +424,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 						currentShift = new WorkerShift(previousShift);
 					} else {
 						if (previousShift != null && previousShift.isTimeToFinish()) {
-							previousShift.finish();
+							previousShift.finish(true);
 							previousShift = null;
 						}
 					}
@@ -676,6 +676,9 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 			finish(false);
 		}
 
+		/** 				 
+		@param persistMetadata whether to persist the partition metadata to ZK
+		*/
 		private void finish(boolean persistMetadata) {
 			try {
 				LOG.info("[{}] Sprint ending at {} is finished", partitionId, dateString(shiftEnd));
