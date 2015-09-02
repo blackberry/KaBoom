@@ -249,7 +249,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 		try {
 			partitionId = String.format("%s-%d", topicName, partition);
 
-			this.sprintCounter = 0;
+			//this.sprintCounter = 0;
 			this.config = config;
 			this.topic = topicName;
 			this.partition = partition;
@@ -579,7 +579,6 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 					LOG.error("[{}] Error processing message: ", partitionId, e);
 					LOG.info("[{}] Calling abort on {}", partitionId, hdfsOutputPath);
 					abort();
-					return;
 				}
 			}
 			shutdown();
@@ -779,11 +778,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 	 */
 	@Override
 	public void stop() {
-		if (isAborting()) {
-
-		} else {
-			LOG.info("[{}] Graceful shutdown request received", partitionId);
-		}
+		LOG.info("[{}] Graceful shutdown request received", partitionId);
 		stopping = true;
 	}
 

@@ -4,7 +4,7 @@
 
 KaBoom parses the date and time from each message it consumes from Kafka.  The HDFS directories that it writes boom files within are based on a path template (`TimeBasedHdfsOutputPath`) that can contain date and time symbols.  With a typical confifguration this allows KaBoom to create boom files in a path that would look something simmilar to this:
 
-`hdfs://hadoop.company.com/logs/<topic>/<YYYY>-<MM>-<DD>/<HH>/<boom file>.bm`
+`hdfs://hadoop.company.com/logs/<YYYY>-<MM>-<DD>/<HH>/<topic>/data/<boom file>`
 
 This allows workflows based off time periods to easily watch the HDFS file system and kick off jobs that then read boom files knowing they contain messages pertaining to their date/time parts of the path.
 
@@ -16,15 +16,15 @@ KaBoom assigns partitons to clients that start a worker for each partition.  A p
 
 When a worker is first created and begins work on a particular partition it starts a shift.  Shift's keep track of two important pieces of information, their `currentOffset` and the maximum observed timestamp of a message during the shift (`maxTimestamp`).  
 
-For the offset, when the first shift created it looks into ZooKeeper and grabs the offset that it needs to start consuming at.  If no offset is found, it starts at 0.  If that offset is out of range, then the behavior of the startup configuration property `auto.offset.reset` determines wether it start consuming from the latest (most recent) or earliest (oldest) offset.  However, we'll just assume that the first shift created finds an offset in ZK and that it's within a valid range for the partition.
+For the offset, when the first shift is created it looks into ZooKeeper and grabs the offset that it needs to start consuming at.  If no offset is found, it starts at 0.  If that offset is out of range, then the behavior of the startup configuration property `auto.offset.reset` determines wether it start consuming from the latest (most recent) or earliest (oldest) offset.  However, we'll just assume that the first shift created finds an offset in ZK and that it's within a valid range for the partition.
 
-The 'maxTimestamp` of each shift starts with `maxTimestamp = -1`.
+The `maxTimestamp` of each shift starts with `maxTimestamp = -1`.
 
 Shifts have a duration (let's assume it's one hour) and calculate their start/end times based when that shift should have started (had it started on time).  For example, if KaBoom starts/restarts at 5:52pm, it determines that the start time would have been 5:00pm and the end time would have been 6:00pm (actual equation is `ts - ts % duration` where `ts` represents `System.currentTimeMillis()`).
 
 ### KaBoom 0.8.2 - Worker Shift Numbers
 
-Shifts are numbered, the first shift of a worker is `#1` and each subsequent shift that gets started increments that counter by.
+Shifts are numbered, the first shift of a worker is `#1` and each subsequent shift that gets started increments that counter by 1.
 
 ## KaBoom 0.8.2 - Message Consume Loop
 
@@ -37,3 +37,67 @@ If the current shift isn't over, it checks to see if a `previousShift` is hangin
 The call to `previousShift.finish(true)` instructs it's `TimeBasedHdfsOutputPath` to close off all boom files associated to `previousSprint.sprintNumber`.  
 
 Only if all boom files associated to `previousSprint.sprintNumber` are closed off successfully does the metadata get persisted.
+
+Once the worker calls `previousShift.finish(true)`, it sets `previousShift=null`, making the current shift the only other shift that's instantiated within he worker.
+
+## Persisting Metadata
+
+When a shift persists it's metadata, it's important to understand what that entails.  For the offset, that's pretty easy, the offset is always the next offset that the Worker is going to attempt to consume.  These are always incremented by 1 after each message, and have nothing to do with the concept of timestamps.
+
+The `maxTimestamp` however, is a little different.  If `maxTimestamp == -1` then the timestamp that gets stored is `sprint.endTime`.  This ensures that if there are no messages for KaBoom to consume, that we'll be able to reliably indicate that KaBoom has completed an hour's (shift duration) worth of consuming, and that the hour (shift duration) is ready for consumption within external workflows (at least this partiton--there are likely more in the topic). 
+
+## KaBoom 0.8.2 - Shutting Down
+
+Once `stop()` or `abort()` have been called, the next message consume loop will break.  The only other way for the message consume loop to break is if an exception occurs, in which case, `abort()` is called.
+
+Immediatley following the message consume loop, `shutdown()` is called.  This method performs some housekeeping (removing gauge metrics, etc) and then determines if it's gracefully shutting down or aborting.
+
+Graceful shutdowns check if `previousShift != null` and if so, then it calls `previousShift.finish()`.  The lack of the `true` boolean parameter indicates that the previousShift shouldn't persist it's metadata upon successfull closure of it's boom files.  It then calls `currentShift.finish(true)`, which does store the `offset` and `maxTimestamp` to ZK.
+
+## Why This Matters
+
+With the above design implemented, ZooKeeper is guaranteed to contain metadata for each partiton that get's updated hourly.  The metadata updates exist 100% independant of the timestamps within the messages that KaBoom recieves.  KaBoom will only ever persist an offest for a partion once the previous hour's boom files have been closed off succesfully.  It'll remember the latest timestamp that it ever parsed from a message within that hour, and reliably store that timestamp.
+
+## Ready Flag Writer
+
+The `ReadyFlagWriter` grabs all the topics that KaBoom is configured for, and then determines the earliest of the stored `maxTimestamps` for all it's partitons.   It then, starts at the beginning of the top of the previous hour and checks if 
+
+* A) There's a `_READY` flag in that hour already
+* B) That the timesatmp of the top of the hour is < `earliestMaxTimestamp`
+
+Only if a ready flag doesn't already exist AND if all the partitions have `maxTimestamp`'s greater (i.e. later) than the top of that hour, would it write the `_READY` flag.
+
+This flag gets written into the `hdfs://hadoop.company.com/logs/<YYYY>-<MM>-<DD>/<HH>/<topic>/data` directory AND to the `hdfs://hadoop.company.com/logs/<YYYY>-<MM>-<DD>/<HH>/<topic>` directory.
+
+This is a per topic flag that is written into a specific hourly directory.
+
+The hourly directory is created if one doesn't exist.
+
+## Ready Flag Propagation
+
+Topics often share a common HDFS root directory in their `TimeBasedHdfsOutputPath`, first KaBoom gathers a unique list of topics with common HDFS output paths and then assigns those topics for `_READY` flag propagation evenly amongst all connected KaBoom clients.
+
+A topic-specific propagator thread is spawned every 10 minutes (if a earlier one isn't still running) and it performs a depth first traversal of the topic's HDFS root dir.  
+
+If the path is an hourly directory (i.e. `hdfs://hadoop.company.com/logs/<YYYY>-<MM>-<DD>/<HH>`) it then it checks all child directories (topics, in our example) for a `_READY` flag.  If they all do it creates `hdfs://hadoop.company.com/logs/<YYYY>-<MM>-<DD>/<HH>/_READY`.
+
+If the path is a daily directory (i.e. `hdfs://hadoop.company.com/logs/<YYYY>-<MM>-<DD>`) it then checks all the child directories (hours, in our example) for a `_READY` flag.  If they all do it creates `hdfs://hadoop.company.com/logs/<YYYY>-<MM>-<DD>/_READY`.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
