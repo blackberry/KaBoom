@@ -74,11 +74,12 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	public void takeLeadership(CuratorFramework curator) throws Exception {
 		this.curator = curator;
 		ZkUtils.writeToPath(curator, config.getZkPathLeaderClientId(), config.getKaboomId(), true, CreateMode.EPHEMERAL);
-		LOG.info("KaBoom client ID {} is the new leader, entering the {} calm down", 
+		LOG.info("KaBoom client ID {} is the new leader, entering the {} calm down",
 			 config.getKaboomId(), config.getRunningConfig().getNewLeaderCalmDownDelay());
 		Thread.sleep(config.getRunningConfig().getNewLeaderCalmDownDelay());
 
 		while (true) {
+
 			kafkaBrokers = KafkaBroker.getAll(config.getKafkaCurator(), config.getZkRootPathKafkaBrokers());
 			kafkaTopics = KafkaTopic.getAll(config.getKafkaSeedBrokers(), "leaderLookup", kafkaBrokers);
 			kaboomClients = KaBoomClient.getAll(KaBoomClient.class, curator, config.getZkRootPathClients());
@@ -87,11 +88,11 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				 config.getZkRootPathTopicConfigs(),
 				 config.getZkRootPathPartitionAssignments(),
 				 config.getZkRootPathFlagAssignments());
-			
+
 			int totalPartitions = KaBoomTopic.getTotalPartitonCount(kaboomTopics);
-			
+
 			int totalWeight = 0;
-			for (KaBoomClient kaboomClient : kaboomClients) {				
+			for (KaBoomClient kaboomClient : kaboomClients) {
 				totalWeight += kaboomClient.getWeight();
 				idToKaBoomClient.put(kaboomClient.getId(), kaboomClient);
 			}
@@ -109,20 +110,26 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 						Matcher m = topicPartitionPattern.matcher(partitionId);
 						if (m.matches()) {
 							String assignmentZkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(), partitionId);
-							String deletedReason = null;								 
-							if (!nameToKaBoomTopic.containsKey(m.group(1))) {
+							String deletedReason = null;
+							String clientId = new String(curator.getData().forPath(assignmentZkPath), UTF8);
+							String topicName = m.group(1);
+							int partitonId = Integer.parseInt(m.group(2));
+							int assignedClientId = new Integer(clientId);							
+							if (!nameToKaBoomTopic.containsKey(topicName)) {
 								deletedReason = "because of missing topic configuration";
 							} else {
-								String clientId = new String(curator.getData().forPath(assignmentZkPath), UTF8);
-								int assignedClientId = new Integer(clientId);
 								if (!idToKaBoomClient.containsKey(assignedClientId)) {
 									deletedReason = String.format("because client %s is not connected", assignedClientId);
 								}
-							}
+							}							
 							if (deletedReason != null) {
 								curator.delete().forPath(assignmentZkPath);
 								LOG.info("Assignment {} deleted {}", assignmentZkPath, deletedReason);
-							} 
+							} else {
+								LOG.info("Pre-balanced found  {} assigned to {}", partitionId, assignedClientId);
+								idToKaBoomClient.get(assignedClientId).getAssignedPartitions().add(
+									 nameToKaBoomTopic.get(topicName).getKaBoomPartition(partitonId));
+							}
 						}
 					} catch (Exception e) {
 						LOG.error("There was a problem pruning the assignments of unsupported topic {}", partitionId, e);
@@ -169,11 +176,11 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			 *  work.  If that behavior changes then additional logic will be required
 			 *  to ensure this isn't executed too often  
 			 */
-			if (readyFlagWriterThread == null || !readyFlagWriterThread.isAlive()) {				
+			if (readyFlagWriterThread == null || !readyFlagWriterThread.isAlive()) {
 				readyFlagWriter = new ReadyFlagWriter(config, kaboomTopics);
 				readyFlagWriter.addListener(this);
 				readyFlagWriterThread = new Thread(readyFlagWriter);
-				readyFlagWriterThread.start();				
+				readyFlagWriterThread.start();
 			} else {
 				LOG.warn("[ready flag writer] is either not null or is still alive (could it be hung?)");
 			}

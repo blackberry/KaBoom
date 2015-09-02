@@ -82,7 +82,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 	private static Set<Worker> workers = new HashSet<>();
 	private static final Object workersLock = new Object();
 	private KaBoomTopicConfig topicConfig;
-	private long sprintCounter;
+	//private long sprintCounter;
 	private WorkerShift previousShift = null;
 	private WorkerShift currentShift;
 	private InterProcessMutex lock;
@@ -565,7 +565,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 					}
 
 					hdfsOutputPath.getBoomWriter(
-						 currentShift.sprintNumber,
+						 currentShift.shiftNumber,
 						 timestamp,
 						 config.getKaboomId() + "-" + partitionId + "-" + currentShift.offset + ".bm").writeLine(timestamp, bytes, pos, length - pos);
 
@@ -605,7 +605,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 
 		LOG.info("[{}] Shutting down (abortting: {}) on sprint number {} with offset={} and timestamp={} ({})",
 			 partitionId, isAborting(),
-			 currentShift.sprintNumber,
+			 currentShift.shiftNumber,
 			 currentShift.offset,
 			 currentShift.maxMessageTimestamp,
 			 dateString(currentShift.maxMessageTimestamp));
@@ -631,7 +631,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 		private long shiftEnd;
 		private long offset;
 		private long maxMessageTimestamp;
-		private final long sprintNumber;
+		private final long shiftNumber;
 		private boolean finished;
 
 		public WorkerShift() throws Exception {
@@ -639,21 +639,23 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 		}
 
 		public WorkerShift(WorkerShift previousShift) throws Exception {
-			sprintCounter++;
+			//sprintCounter++;
 			calculateShiftTimes();
-			this.sprintNumber = sprintCounter;
+			//this.sprintNumber = sprintCounter;
 			this.maxMessageTimestamp = -1;
 			this.finished = false;
 
 			if (previousShift != null) {
 				this.offset = previousShift.offset;
+				this.shiftNumber = previousShift.shiftNumber + 1;
 			} else {
 				this.offset = getStoredOffsetFromZk();				
+				this.shiftNumber = 1;
 			}
 
 			LOG.info("[{}] Starting shift #{} for offest {} start time is {} and end time is {}",
 				 partitionId,
-				 sprintNumber,
+				 shiftNumber,
 				 this.offset,
 				 dateString(shiftStart),
 				 dateString(shiftEnd));
@@ -681,7 +683,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 		private void finish(boolean persistMetadata) {
 			try {
 				LOG.info("[{}] Sprint ending at {} is finished", partitionId, dateString(shiftEnd));
-				hdfsOutputPath.closeOffSprint(sprintNumber);
+				hdfsOutputPath.closeOffSprint(shiftNumber);
 				if (persistMetadata) {
 					storeOffset();
 					storeOffsetTimestamp();
@@ -711,7 +713,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 			if (zkTimestamp == -1) {
 				LOG.info("[{}] Shift #{} never recieved a message, using shift end time {} ({}) for offset timestamp",
 					 partitionId,
-					 sprintNumber,
+					 shiftNumber,
 					 shiftEnd,
 					 dateString(shiftEnd));
 				zkTimestamp = shiftEnd;
@@ -728,7 +730,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 
 			LOG.info("[{}] Shift #{} stored offset timestamp {} to ZK {} ({})",
 				 partitionId,
-				 sprintNumber,
+				 shiftNumber,
 				 zkTimestamp,
 				 zkPath_offSetTimestamp,
 				 dateString(zkTimestamp));
@@ -742,7 +744,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 				curator.setData().forPath(zkPath, Converter.getBytes(offset));
 			}
 			LOG.info("[{}] Shift #{} wrote offset {} to existing path {}",
-				 sprintNumber, partitionId, offset, zkPath);
+				 shiftNumber, partitionId, offset, zkPath);
 		}
 
 		private Long getStoredOffsetFromZk() throws Exception {

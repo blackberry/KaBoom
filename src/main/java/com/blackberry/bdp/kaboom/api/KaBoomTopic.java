@@ -33,6 +33,15 @@ public class KaBoomTopic {
 	public KaBoomTopic(KafkaTopic kafkaTopic) {
 		this.kafkaTopic = kafkaTopic;
 	}
+	
+	public KaBoomPartition getKaBoomPartition(int partitionId) {
+		KaBoomPartition partition = null;
+		for (KaBoomPartition p : partitions) {
+			if (p.getKafkaPartition().getPartitionId() == partitionId)
+				 partition = p;
+		}
+		return partition;
+	}
 
 	/**
 	 * @param kaboomClients	 

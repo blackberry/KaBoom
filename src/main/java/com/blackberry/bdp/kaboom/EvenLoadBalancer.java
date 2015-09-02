@@ -53,6 +53,7 @@ public class EvenLoadBalancer extends Leader {
 
 		// Overloaded?  
 		for (KaBoomClient client : kaboomClients) {
+			LOG.info("Client {} has {} assigned partitons", client.getId(), client.getAssignedPartitions().size());
 			if (client.tooManyAssignedPartitions() == false) {
 				continue;
 			}
