@@ -374,7 +374,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 	@Override
 	public void run() {
 		try {
-			aquireAssignment(new InterProcessMutex(curator, zkPathToLock()));
+			aquireAssignment();
 			try {
 				currentShift = new WorkerShift();
 				hostname = InetAddress.getLocalHost().getCanonicalHostName();
@@ -386,10 +386,9 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 				return;
 			}
 
-			String clientId = "kaboom-" + hostname;
-
 			consumer = new Consumer(config.getConsumerConfiguration(),
-				 clientId, getTopic(),
+				 "kaboom-" + hostname, 
+				 getTopic(),
 				 getPartition(),
 				 currentShift.offset,
 				 MetricRegistrySingleton.getInstance().getMetricsRegistry());

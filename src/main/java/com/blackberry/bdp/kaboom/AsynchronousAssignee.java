@@ -72,8 +72,8 @@ public abstract class AsynchronousAssignee implements Runnable{
 					  workerName, zkAssignmentPath));
 	}
 
-	public void aquireAssignment(InterProcessMutex lock) throws Exception {
-		this.lock = lock;
+	public void aquireAssignment() throws Exception {
+		this.lock = new InterProcessMutex(curator, zkPathToLock());
 		if (!isAssigned())
 			throw new NotAssignedException(
 				 String.format("%s will not attempt to aquire lock when not assigned to %s",
