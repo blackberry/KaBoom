@@ -672,26 +672,21 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 			shiftEnd = shiftStart + config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000;
 		}
 
-		private void finish() {
+		private void finish() throws Exception {
 			finish(false);
 		}
 
 		/** 				 
 		@param persistMetadata whether to persist the partition metadata to ZK
 		*/
-		private void finish(boolean persistMetadata) {
-			try {
-				LOG.info("[{}] Sprint ending at {} is finished", partitionId, dateString(shiftEnd));
-				hdfsOutputPath.closeOffSprint(shiftNumber);
-				if (persistMetadata) {
-					storeOffset();
-					storeOffsetTimestamp();
-				}
-			} catch (Exception e) {
-				LOG.error("[{}] There was an error closing off a sprint: ", partitionId, e);
-			} finally {
-				finished = true;
+		private void finish(boolean persistMetadata) throws Exception {
+			LOG.info("[{}] Sprint ending at {} is finished", partitionId, dateString(shiftEnd));
+			hdfsOutputPath.closeOffSprint(shiftNumber);
+			if (persistMetadata) {
+				storeOffset();
+				storeOffsetTimestamp();
 			}
+			finished = true;			
 		}
 
 		private boolean isOver() {
