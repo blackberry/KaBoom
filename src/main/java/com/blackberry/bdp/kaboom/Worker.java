@@ -79,6 +79,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 	private Meter boomWritesMeterTopic;
 	private Meter boomWritesMeterTotal;
 	private Meter tsParseErrorsMeterTopic;
+	private Meter priParseErrorsMeterTopic;
 	private TimeBasedHdfsOutputPath hdfsOutputPath;
 	private static Set<Worker> workers = new HashSet<>();
 	private static final Object workersLock = new Object();
@@ -261,6 +262,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 			this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getKaBoomCurator(), zkRoot + "/topics/" + topic);
 
 			this.tsParseErrorsMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":timestamp parse errors");
+			this.priParseErrorsMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":PRI parse errors");
 			this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
 			this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 			this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
@@ -517,8 +519,12 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 					}
 
 					// Optional PRI at the start of the line.
-					if (pri.parsePri(bytes, pos, length)) {
-						pos += pri.getPriLength();
+					try {
+						if (pri.parsePri(bytes, pos, length)) {
+							pos += pri.getPriLength();
+						}						
+					} catch (Exception e) {
+						priParseErrorsMeterTopic.mark();
 					}
 
 					// On the off chance that someone is following RFC5424 and has
