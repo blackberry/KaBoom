@@ -208,10 +208,10 @@ public class TimeBasedHdfsOutputPath {
 					boomWriter.loadNativeDeflateLib();
 				}
 
-				LOG.info("[{}] FastBoomWriter created for {}", partitionId, openFilePath);
+				LOG.info("[{}] FastBoomWriter created {}", partitionId, openFilePath);
 
 			} catch (Exception e) {
-				LOG.error("[{}] Error creating file {}", partitionId, openFilePath, e);
+				LOG.error("[{}] Error creating file {}: ", partitionId, openFilePath, e);
 			}
 		}
 

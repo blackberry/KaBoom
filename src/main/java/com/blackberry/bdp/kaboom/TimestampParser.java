@@ -87,7 +87,7 @@ public class TimestampParser {
 
 			this.length = pos - i;
 		} catch (Throwable t) {
-			LOG.error("Error parsing timestamp.", t);
+			LOG.debug("Error parsing timestamp.", t);
 			error = ERROR;
 		}
 	}
