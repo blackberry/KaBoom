@@ -57,7 +57,7 @@ public class EvenLoadBalancer extends Leader {
 			if (client.tooManyAssignedPartitions() == false) {
 				continue;
 			}
-			LOG.info("KaBoom client is overloaded and needs to shed assignments", client.getId());
+			LOG.info("KaBoom client {} is overloaded and needs to shed assignments", client.getId());
 			// Build up our lists of local and remote partitions...
 			List<KaBoomPartition> localPartitions = new ArrayList<>();
 			List<KaBoomPartition> remotePartitions = new ArrayList<>();
