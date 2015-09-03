@@ -17,14 +17,18 @@
 package com.blackberry.bdp.kaboom;
 
 import static org.junit.Assert.*;
+import org.junit.Rule;
 
 import org.junit.Test;
-
-import com.blackberry.bdp.kaboom.PriParser;
+import org.junit.rules.ExpectedException;
 
 public class PriParserTest {
+	
+	@Rule
+	public final ExpectedException exception = ExpectedException.none();
+	
 	@Test
-	public void testSkipPri() {
+	public void testSkipPri() throws Exception {
 		PriParser pri = new PriParser();
 
 		// Test all good values
@@ -42,7 +46,9 @@ public class PriParserTest {
 		assertFalse(pri.parsePri("<200>This is a test".getBytes(), 0, 15));
 		assertFalse(pri.parsePri("<01>This is a test".getBytes(), 0, 15));
 
+		exception.expect(IndexOutOfBoundsException.class);
 		assertFalse(pri.parsePri("<0".getBytes(), 0, 2));
+		
 		assertFalse(pri.parsePri("<1".getBytes(), 0, 2));
 		assertFalse(pri.parsePri("<2".getBytes(), 0, 2));
 		assertFalse(pri.parsePri("<10".getBytes(), 0, 3));
@@ -50,4 +56,5 @@ public class PriParserTest {
 		assertFalse(pri.parsePri("<100".getBytes(), 0, 4));
 		assertFalse(pri.parsePri("<191".getBytes(), 0, 4));
 	}
+	
 }
