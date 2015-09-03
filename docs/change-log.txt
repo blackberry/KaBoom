@@ -50,6 +50,9 @@ Complete change log below...
 - Renamed private class WorkerSprint in Worker to WorkerShift
 - Added a bunch of convienience methods in WorkerShift isOver() isFinsihed() isTimeToFinish()
 - Added a new abstract class AsynchronousAssignee for threads that are assigned work from ZK
+- Reduced the verbosity of the error messages when the KaBoomTopic are missing Kafka topics or are not configured
+- Added a new metric "kaboom:topic:<topic>:timestamp parse errors" for tracking monitoring timestamp parsing errors
+- Removed the error log that a timestamp could not be parsed
 
 Changes in 0.8.1:
 

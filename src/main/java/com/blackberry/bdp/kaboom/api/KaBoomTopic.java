@@ -76,7 +76,7 @@ public class KaBoomTopic {
 
 		for (String topicName : Util.childrenInZkPath(curator, zkPathTopics)) {
 			try {
-			// The initial KaBoomTopic is built with a KafkaTopic
+				// The initial KaBoomTopic is built with a KafkaTopic
 
 				KaBoomTopic topic = new KaBoomTopic(nameToKafkaTopics.get(topicName));
 
@@ -92,7 +92,11 @@ public class KaBoomTopic {
 						 Converter.intFromBytes(curator.getData().forPath(flagPath)));
 				}
 
-				String topicZkPath = String.format("%s/%s", zkPathTopics, topicName);
+				String topicZkPath = String.format("%s/%s", zkPathTopics, topicName);				
+				if (curator.getData().forPath(topicZkPath).length == 0) {
+					LOG.warn("The length byte[] at {} is 0 therefore topic {} isn't configured", topicName);
+					continue;
+				}
 				topic.config = KaBoomTopicConfig.get(KaBoomTopicConfig.class, curator, topicZkPath);
 				if (topic.config == null) {
 					LOG.error("the configuration for topic for {} is null", topicName);
@@ -129,7 +133,7 @@ public class KaBoomTopic {
 				kaboomTopics.add(topic);
 				LOG.debug("KaBoom topic {} found", topic.getKafkaTopic().getName());
 			} catch (Exception e) {
-				LOG.error("Failed to build a KaBoomTopic for {}: ", topicName, e);
+				LOG.warn("Failed to build a KaBoomTopic for {} topic could be a deprecated or legacy topic: ", topicName, e);
 			}
 		}
 

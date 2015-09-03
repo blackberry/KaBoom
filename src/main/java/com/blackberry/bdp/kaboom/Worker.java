@@ -78,6 +78,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 	private Meter boomWritesMeter;
 	private Meter boomWritesMeterTopic;
 	private Meter boomWritesMeterTotal;
+	private Meter tsParseErrorsMeterTopic;
 	private TimeBasedHdfsOutputPath hdfsOutputPath;
 	private static Set<Worker> workers = new HashSet<>();
 	private static final Object workersLock = new Object();
@@ -259,6 +260,7 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 			this.zkRoot = config.getZkRootPathKaBoom();
 			this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getKaBoomCurator(), zkRoot + "/topics/" + topic);
 
+			this.tsParseErrorsMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":timestamp parse errors");
 			this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
 			this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
 			this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
@@ -548,7 +550,8 @@ public final class Worker extends AsynchronousAssignee implements Runnable {
 							LOG.debug("[{}] Failed to parse timestamp.  Using stored timestamp", getPartitionId());
 							timestamp = Converter.longFromBytes(bytes, 2);
 						} else {
-							LOG.error("[{}] Error parsing timestamp.", getPartitionId());
+							LOG.debug("[{}] Error parsing timestamp.", getPartitionId());
+							tsParseErrorsMeterTopic.mark();
 							timestamp = System.currentTimeMillis();
 						}
 					}
