@@ -83,6 +83,7 @@ public class EvenLoadBalancer extends Leader {
 				try {
 					curator.delete().forPath(deletePath);
 					client.getAssignedPartitions().remove(partitionToDelete);
+					partitionToDelete.setAssignedClient(null);
 					LOG.info("Deleted assignment {} to relieve overloaded client {}",
 						 deletePath, client.getId());
 				} catch (Exception e) {
