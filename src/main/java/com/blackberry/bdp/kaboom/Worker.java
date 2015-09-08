@@ -43,7 +43,7 @@ import org.apache.curator.framework.recipes.cache.NodeCacheListener;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.zookeeper.data.Stat;
 
-public final class Worker extends AsynchronousAssignee implements Runnable {
+public final class Worker extends AsyncAssignee implements Runnable {
 
 	private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
 	protected static final Charset UTF8 = Charset.forName("UTF-8");

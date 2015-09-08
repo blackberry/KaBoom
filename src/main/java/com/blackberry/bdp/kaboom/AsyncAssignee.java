@@ -25,6 +25,7 @@ import org.apache.curator.framework.recipes.cache.NodeCacheListener;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.curator.framework.state.ConnectionState;
 import org.apache.curator.framework.state.ConnectionStateListener;
+import org.apache.zookeeper.KeeperException.NoNodeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,9 +38,9 @@ import org.slf4j.LoggerFactory;
  * best we can do is check if we're assigned during instantiation.
  */
 
-public abstract class AsynchronousAssignee implements Runnable{
+public abstract class AsyncAssignee implements Runnable{
 
-	private static final Logger LOG = LoggerFactory.getLogger(AsynchronousAssignee.class);
+	private static final Logger LOG = LoggerFactory.getLogger(AsyncAssignee.class);
 
 	protected boolean paused = false;
 	protected final CuratorFramework curator;
@@ -54,7 +55,7 @@ public abstract class AsynchronousAssignee implements Runnable{
 	protected abstract void stop();
 	protected abstract void abort();
 
-	protected AsynchronousAssignee(CuratorFramework curator,		 
+	protected AsyncAssignee(CuratorFramework curator,		 
 		 String workerName,
 		 byte[] assigneeBytes,
 		 String zkAssignmentPath,
@@ -99,7 +100,11 @@ public abstract class AsynchronousAssignee implements Runnable{
 	}
 
 	private boolean isAssigned() throws Exception {
-		return Arrays.equals(curator.getData().forPath(zkAssignmentPath), assigneeBytes);
+		try {
+			return Arrays.equals(curator.getData().forPath(zkAssignmentPath), assigneeBytes);
+		} catch (NoNodeException nne) {
+			return false;
+		}		
 	}
 
 	private void watchConnection() {
