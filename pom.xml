@@ -60,6 +60,12 @@ limitations under the License.
 			<artifactId>args4j</artifactId>
 			<version>2.32</version>				
 		</dependency>
+		
+		<dependency>
+			<groupId>com.blackberry.bdp.kaboom</groupId>
+			<artifactId>kaboom-api</artifactId>
+			<version>0.8.2-SNAPSHOT</version>				
+		</dependency>
 
 		<!-- Hadoop dependencies -->
 		<dependency>

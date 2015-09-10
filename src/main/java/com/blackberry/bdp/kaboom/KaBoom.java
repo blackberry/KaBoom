@@ -181,7 +181,7 @@ public class KaBoom {
 			// Propagate any flags that we have been assigned to
 			if (config.getRunningConfig().isPropagateReadyFlags() && System.currentTimeMillis()
 				 > (lastFlagPropagationTs + config.getRunningConfig().getPropagateReadyFlagFrequency())) {
-				for (String topic : client.getAssignments(config, config.getZkRootPathFlagAssignments())) {
+				for (String topic : client.getAssignments(config.getKaBoomCurator(), config.getZkRootPathFlagAssignments())) {
 					LOG.info("Flag propagator for topic {}", topic);
 					if (topicToFlagPropThread.get(topic) != null && topicToFlagPropThread.get(topic).isAlive()) {
 						LOG.warn("[{}] Flag propagator thread is still running", topic);
@@ -209,7 +209,7 @@ public class KaBoom {
 
 			// Get all my assignments and create a worker if there's anything not already being worked
 			Map<String, Boolean> validWorkingPartitions = new HashMap<>();
-			for (String partitionId : client.getAssignments(config, config.getZkRootPathPartitionAssignments())) {
+			for (String partitionId : client.getAssignments(config.getKaBoomCurator(), config.getZkRootPathPartitionAssignments())) {
 				if (partitionToWorkerMap.containsKey(partitionId)) {
 					if (false == partitionToThreadsMap.get(partitionId).isAlive()) {
 						if (false == partitionToWorkerMap.get(partitionId).isAborting()) {
