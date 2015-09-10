@@ -260,7 +260,6 @@ limitations under the License.
 										<path>/opt/kaboom/config</path>
 										<path>/opt/kaboom/lib</path>
 										<path>/opt/kaboom/src</path>
-										<path>/opt/kaboom/file_positions_cache</path>										
 										<path>/var/log/kaboom</path>
 										<path>/var/run/kaboom</path>
 									</paths>
@@ -381,11 +380,18 @@ limitations under the License.
 
 						<!-- Libraries -->
 						<mapping>
-							<directory>/opt/kaboom/lib</directory>
-							<artifact></artifact>
-							<dependency/>
+							<directory>/opt/kontroller/lib</directory>
+							<artifact/>
+							<sources>
+								<source>
+									<location>${project.build.directory}/lib</location>
+									<includes>
+										<include>*</include>
+									</includes>
+								</source>
+							</sources>
 						</mapping>
-
+						
 						<!-- Config -->
 						<mapping>
 							<directory>/opt/kaboom/config</directory>

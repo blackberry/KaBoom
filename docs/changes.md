@@ -57,6 +57,7 @@ Complete change log below...
 * Added a new metric "kaboom:topic:<topic>:PRI parse errors" for tracking and monitoring PRI parsing errors
 * Removed the error log that a timestamp could not be parsed
 * Removed the error log that a PRI could not be parsed
+* Fixes issues with the PRM that included all project dependencies instead of the filtered set from the copy-dependencies plugin
 
 ## 0.8.1
 

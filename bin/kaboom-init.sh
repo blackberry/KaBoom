@@ -67,7 +67,7 @@ start() {
   /usr/bin/kdestroy 2>&1 | grep -v 'kdestroy: No credentials cache found while destroying cache'
   . $CONFIGDIR/kaboom-env.sh
 
-  nohup $JAVA $JAVA_OPTS -classpath $CLASSPATH com.blackberry.bdp.kaboom.KaBoom $CONFIGDIR/kaboom.properties >$LOGDIR/server.out 2>&1 &
+  nohup $JAVA $JAVA_OPTS -classpath "$CLASSPATH" com.blackberry.bdp.kaboom.KaBoom $CONFIGDIR/kaboom.properties >$LOGDIR/server.out 2>&1 &
 
   RETVAL=$?
   PID=$!
