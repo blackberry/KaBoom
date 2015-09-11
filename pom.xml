@@ -381,7 +381,7 @@ limitations under the License.
 
 						<!-- Libraries -->
 						<mapping>
-							<directory>/opt/kontroller/lib</directory>
+							<directory>/opt/kaboom/lib</directory>
 							<artifact/>
 							<sources>
 								<source>
