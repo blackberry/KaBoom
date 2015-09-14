@@ -22,18 +22,14 @@ Complete change log below...
 * New startup configuration variable zkRootPathClients configured via property: kaboom.zk.root.path.clients (default: zkRootPath + "/clients")
 * New startup configuration variable zkRootPathTopicConfigs configured via property: kaboom.zk.root.path.topic.configs (default: zkRootPath + "/topics")
 * New startup configuration variable zkRootPathPartitionAssignments configured via property: kaboom.zk.root.path.partition.assignments (default: zkRootPath + "/assignments")
-* New startup configuration variable zkRootPathFlagAssignments configured via property: kaboom.zk.root.path.flag.assignments (default: zkRootPath + "/flag-assignments")
 * New startup configuration variable zkPathRunningConfig configured via property: kaboom.zk.path.runningConfig (default: zkRootPath + "/config")
 * New startup configuration variable zkPathLeaderClientId configured via property: kaboom.zk.leader.clientId(default: zkRootPath + "/leader")
 * Refactored any zkPaths to refer to the paths above in StartupConfig
 * Removed StartupConfig.getTopicConfig(topicName)
 * Removed a slew of unneccessary getters from StartupConfig
-* ReadyFlagWriter now uses KaBoomTopic from the api package instead of StateUtils to get topics and their partition lists
 * Added public KaBoomTopicConfig getConfig() to KaBoomTopic in the API package making KaBoomTopic more authoritative
 * Added new class KaBoomPartitionDetails to replace the private inner class KaBoomTopic.PartitionDetails that was being exposed via the getter
-* Removed the ZK traversal public method to get the oldest partition timestamp for a topic name from ReadyFlagWriter
 * Added public long KaBoomTopic.oldestPartitionOffset() to replace above
-* Removed usage of the Kafka API in ReadyFlagWriter as above changes in KaBoomTopic now include all the info required
 * Removed StateUtils (now API usage is how  metadata and configurations are discovered)
 * Removed KaBoomNodeInfo in favor of the API KaBoomClient
 * Added KaBoomClient.calculateTargetLoad(int totalPartitions, int totalWeight)
@@ -45,19 +41,19 @@ Complete change log below...
 * Added the concept of graceful shutdown of the workers
 * Added two new metrics for the number of workers found dead and the number of workers gracefully restarted
 * Improved how the leader removes assignments from disconnected clients
-* Improved how the ReadyFlagController balances flag propagator paths
 * New running configuration option newLeaderCalmDownDelay (milliseconds, default 30 * 1000) The amount of time to wait after a new leader is elected before it starts leading
 * Prefixes the KaBoom Client ID to all boom files to ensure that race conditions over partition re-assignments don't lead to lease conflicts or missing leases
 * Moved the method that gets the current offset from ZK into the Worker's private class
 * Renamed private class WorkerSprint in Worker to WorkerShift
 * Added a bunch of convienience methods in WorkerShift isOver() isFinsihed() isTimeToFinish()
-* Added a new abstract class AsynchronousAssignee for threads that are assigned work from ZK
+* Added a new abstract class for threads that are assigned work from ZK that obtain locks on assignment paths
 * Reduced the verbosity of the error messages when the KaBoomTopic are missing Kafka topics or are not configured
 * Added a new metric "kaboom:topic:<topic>:timestamp parse errors" for tracking and monitoring timestamp parsing errors
 * Added a new metric "kaboom:topic:<topic>:PRI parse errors" for tracking and monitoring PRI parsing errors
 * Removed the error log that a timestamp could not be parsed
 * Removed the error log that a PRI could not be parsed
 * Fixes issues with the PRM that included all project dependencies instead of the filtered set from the copy-dependencies plugin
+* Removed all references to _READY flags, flag writers/propagator from entire project
 
 ## 0.8.1
 

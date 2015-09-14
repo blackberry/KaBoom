@@ -84,7 +84,6 @@ public final class Worker extends AsyncAssignee implements Runnable {
 	private static Set<Worker> workers = new HashSet<>();
 	private static final Object workersLock = new Object();
 	private KaBoomTopicConfig topicConfig;
-	//private long sprintCounter;
 	private WorkerShift previousShift = null;
 	private WorkerShift currentShift;
 	private InterProcessMutex lock;
@@ -251,7 +250,6 @@ public final class Worker extends AsyncAssignee implements Runnable {
 		try {
 			partitionId = String.format("%s-%d", topicName, partition);
 
-			//this.sprintCounter = 0;
 			this.config = config;
 			this.topic = topicName;
 			this.partition = partition;
@@ -611,7 +609,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(lagSecGaugeName);
 		MetricRegistrySingleton.getInstance().getMetricsRegistry().remove(msgWrittenGaugeName);
 
-		LOG.info("[{}] Shutting down (abortting: {}) on sprint number {} with offset={} and timestamp={} ({})",
+		LOG.info("[{}] Shutting down (abortting: {}) on shift number {} with offset={} and timestamp={} ({})",
 			 partitionId, isAborting(),
 			 currentShift.shiftNumber,
 			 currentShift.offset,
@@ -647,9 +645,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 		}
 
 		public WorkerShift(WorkerShift previousShift) throws Exception {
-			//sprintCounter++;
 			calculateShiftTimes();
-			//this.sprintNumber = sprintCounter;
 			this.maxMessageTimestamp = -1;
 			this.finished = false;
 
@@ -677,8 +673,8 @@ public final class Worker extends AsyncAssignee implements Runnable {
 
 		private void calculateShiftTimes() {
 			shiftStart = System.currentTimeMillis() - System.currentTimeMillis()
-				 % (config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000);
-			shiftEnd = shiftStart + config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000;
+				 % (config.getRunningConfig().getWorkerShiftDurationSeconds() * 1000);
+			shiftEnd = shiftStart + config.getRunningConfig().getWorkerShiftDurationSeconds() * 1000;
 		}
 
 		private void finish() throws Exception {
@@ -689,8 +685,8 @@ public final class Worker extends AsyncAssignee implements Runnable {
 		@param persistMetadata whether to persist the partition metadata to ZK
 		*/
 		private void finish(boolean persistMetadata) throws Exception {
-			LOG.info("[{}] Sprint ending at {} is finished", partitionId, dateString(shiftEnd));
-			hdfsOutputPath.closeOffSprint(shiftNumber);
+			LOG.info("[{}] Shift ending at {} is finished", partitionId, dateString(shiftEnd));
+			hdfsOutputPath.closeOffShift(shiftNumber);
 			if (persistMetadata) {
 				storeOffset();
 				storeOffsetTimestamp();
@@ -747,7 +743,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 				curator.setData().forPath(zkPath, Converter.getBytes(offset));
 			}
 			LOG.info("[{}] Shift #{} wrote offset {} to existing path {}",
-				 shiftNumber, partitionId, offset, zkPath);
+				 partitionId, shiftNumber, offset, zkPath);
 		}
 
 		private Long getStoredOffsetFromZk() throws Exception {

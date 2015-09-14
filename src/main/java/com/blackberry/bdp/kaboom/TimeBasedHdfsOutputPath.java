@@ -70,11 +70,11 @@ public class TimeBasedHdfsOutputPath {
 		return strDate;
 	}
 
-	public FastBoomWriter getBoomWriter(long sprintNumber, long ts, String filename) throws IOException, Exception {
-		reusableRequestedStartTime = ts - ts % (this.config.getRunningConfig().getWorkerSprintDurationSeconds() * 1000);
+	public FastBoomWriter getBoomWriter(long shiftNumber, long ts, String filename) throws IOException, Exception {
+		reusableRequestedStartTime = ts - ts % (this.config.getRunningConfig().getWorkerShiftDurationSeconds() * 1000);
 		reusableRequestedOutputFile = outputFileMap.get(reusableRequestedStartTime);
 		if (reusableRequestedOutputFile == null) {
-			reusableRequestedOutputFile = new OutputFile(sprintNumber, filename, reusableRequestedStartTime);
+			reusableRequestedOutputFile = new OutputFile(shiftNumber, filename, reusableRequestedStartTime);
 			outputFileMap.put(reusableRequestedStartTime, reusableRequestedOutputFile);
 			if (outputFileMap.size() > config.getRunningConfig().getMaxOpenBoomFilesPerPartition()) {
 				long oldestTs = getOldestLastUsedTimestamp();
@@ -124,16 +124,16 @@ public class TimeBasedHdfsOutputPath {
 		}
 	}
 
-	public void closeOffSprint(long sprintNumber) throws Exception {
+	public void closeOffShift(long shiftNumber) throws Exception {
 		Iterator<Map.Entry<Long, OutputFile>> iter = outputFileMap.entrySet().iterator();
 		while (iter.hasNext()) {
 			Map.Entry<Long, OutputFile> entry = iter.next();
-			if (entry.getValue().sprintNumber == sprintNumber) {
+			if (entry.getValue().shiftNumber == shiftNumber) {
 				try {
 					entry.getValue().close();
-					LOG.info("[{}] Sprint {} file closed: {}  ({} files still open",
+					LOG.info("[{}] Shift #{} file closed: {}  ({} files still open",
 						 partitionId,
-						 sprintNumber,
+						 shiftNumber,
 						 entry.getValue().openFilePath,
 						 outputFileMap.size());
 					iter.remove();
@@ -164,10 +164,10 @@ public class TimeBasedHdfsOutputPath {
 		private long startTime;
 		private Boolean useTempOpenFileDir;
 		private long lastUsedTimestmap;
-		private final long sprintNumber;
+		private final long shiftNumber;
 
-		public OutputFile(long sprintNumber, String filename, Long startTime) {
-			this.sprintNumber = sprintNumber;
+		public OutputFile(long shiftNumber, String filename, Long startTime) {
+			this.shiftNumber = shiftNumber;
 			this.filename = filename;
 			this.startTime = startTime;
 			this.useTempOpenFileDir = config.getRunningConfig().getUseTempOpenFileDirectory();

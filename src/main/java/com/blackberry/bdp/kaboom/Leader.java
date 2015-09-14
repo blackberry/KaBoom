@@ -45,7 +45,6 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 	protected static final Random rand = new Random();
 
 	final protected StartupConfig config;
-	private ReadyFlagWriter readyFlagWriter;
 	protected CuratorFramework curator;
 	private Thread readyFlagWriterThread;
 
@@ -56,8 +55,6 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 
 	private final HashMap<Integer, KaBoomClient> idToKaBoomClient = new HashMap<>();
 	private final HashMap<String, KaBoomTopic> nameToKaBoomTopic = new HashMap<>();
-
-	protected ReadyFlagController readyFlagController;
 
 	public Leader(StartupConfig config) {
 		this.config = config;
@@ -154,35 +151,6 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 				run_balancer(kafkaBrokers, kaboomClients, kaboomTopics, kafkaTopics);
 			} catch (Exception e) {
 				LOG.error("The load balancer raised an exception: ", e);
-			}
-
-			try {
-				readyFlagController = new ReadyFlagController(config, kaboomTopics);
-				readyFlagController.balance(totalWeight, idToKaBoomClient);
-			} catch (Exception e) {
-				LOG.error("There was an error running the ready flag controller's balancer", e);
-			}
-
-			/*
-			 * All the operations that the leader performs that involve modifications 
-			 * to the KaBoomClient objects should now be completed.  Let's iterate 
-			 * over them and save() to persist their attributes in Zk
-			 */
-			/*
-			 *  Check to see if the kafka_ready flag writer thread exists and is alive:
-			 *  
-			 *  If it doesn't exist or isn't running, start it.  This is designed to 
-			 *  work well when the load balancer sleeps for 10 minutes after assigning 
-			 *  work.  If that behavior changes then additional logic will be required
-			 *  to ensure this isn't executed too often  
-			 */
-			if (readyFlagWriterThread == null || !readyFlagWriterThread.isAlive()) {
-				readyFlagWriter = new ReadyFlagWriter(config, kaboomTopics);
-				readyFlagWriter.addListener(this);
-				readyFlagWriterThread = new Thread(readyFlagWriter);
-				readyFlagWriterThread.start();
-			} else {
-				LOG.warn("[ready flag writer] is either not null or is still alive (could it be hung?)");
 			}
 
 			Thread.sleep(config.getRunningConfig().getLeaderSleepDurationMs());

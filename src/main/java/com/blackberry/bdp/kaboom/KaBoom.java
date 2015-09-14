@@ -19,7 +19,6 @@ import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 import com.blackberry.bdp.common.logger.InstrumentedLoggerSingleton;
 import com.blackberry.bdp.common.props.Parser;
 import com.blackberry.bdp.kaboom.api.KaBoomClient;
-import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import java.nio.charset.Charset;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -175,38 +174,8 @@ public class KaBoom {
 		long lastFlagPropagationTs = System.currentTimeMillis();
 
 		Map<String, Thread> topicToFlagPropThread = new HashMap<>();
-		Map<String, ReadyFlagPropagator> topicToFlagPropagator = new HashMap<>();
 
 		while (shutdown == false) {
-			// Propagate any flags that we have been assigned to
-			if (config.getRunningConfig().isPropagateReadyFlags() && System.currentTimeMillis()
-				 > (lastFlagPropagationTs + config.getRunningConfig().getPropagateReadyFlagFrequency())) {
-				for (String topic : client.getAssignments(config.getKaBoomCurator(), config.getZkRootPathFlagAssignments())) {
-					LOG.info("Flag propagator for topic {}", topic);
-					if (topicToFlagPropThread.get(topic) != null && topicToFlagPropThread.get(topic).isAlive()) {
-						LOG.warn("[{}] Flag propagator thread is still running", topic);
-					} else {
-						ReadyFlagPropagator flagPropagator = topicToFlagPropagator.get(topic);
-						if (flagPropagator == null) {
-							KaBoomTopicConfig topicConfig = KaBoomTopicConfig.get(
-								 KaBoomTopicConfig.class, config.getKaBoomCurator(), String.format("/kaboom/topics/%s", topic));
-							flagPropagator = new ReadyFlagPropagator(topicConfig, config);
-							topicToFlagPropagator.put(topic, flagPropagator);
-						}
-						Thread t = topicToFlagPropThread.get(topic);
-						if (t == null) {
-							t = new Thread(flagPropagator);
-							topicToFlagPropThread.put(topic, t);
-						} else {
-							t = new Thread(flagPropagator);
-						}
-						t.start();
-						LOG.info("Started flag propagator thread for {}", topic);
-					}
-				}
-				lastFlagPropagationTs = System.currentTimeMillis();
-			}
-
 			// Get all my assignments and create a worker if there's anything not already being worked
 			Map<String, Boolean> validWorkingPartitions = new HashMap<>();
 			for (String partitionId : client.getAssignments(config.getKaBoomCurator(), config.getZkRootPathPartitionAssignments())) {
