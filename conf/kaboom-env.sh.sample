@@ -7,7 +7,7 @@ LIBDIR="$BASEDIR/lib"
 LOGDIR="/var/log/kaboom"
 CONFIGDIR="$BASEDIR/config"
 JMXPORT=9580
-LOG4JPROPERTIES=$CONFIGDIR/log4j2.xml
+LOG4JPROPERTIES=$CONFIGDIR/log4j.properties
 PIDBASE=/var/run/kaboom
 KABOOM_USER=kaboom
 
@@ -27,7 +27,7 @@ JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.authenticate=false"
 JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.ssl=false"
 JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.port=$JMXPORT"
 
-JAVA_OPTS="$JAVA_OPTS -Dlog4j.configurationFile=file:$LOG4JPROPERTIES"
+JAVA_OPTS="$JAVA_OPTS -Dlog4j.configuration=file:$LOG4JPROPERTIES"
 
 JAVA_OPTS="$JAVA_OPTS -Dkaboom.logs.dir=$LOGDIR"
 JAVA_OPTS="$JAVA_OPTS -Djava.library.path=$LIBDIR"

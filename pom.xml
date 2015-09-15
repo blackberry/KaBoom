@@ -336,7 +336,7 @@ limitations under the License.
 									<paths>
 										<path>${project.basedir}/conf/kaboom.properties.sample</path>
 										<path>${project.basedir}/conf/kaboom-env.sh.sample</path>
-										<path>${project.basedir}/conf/log4j2.xml.sample</path>
+										<path>${project.basedir}/conf/log4j.properties.sample</path>
 									</paths>
 									<dst>/opt/kaboom/config</dst>
 								</data>
@@ -440,13 +440,13 @@ limitations under the License.
 								
 						<!-- Executables -->
 						<mapping>
-							<directory>/opt/kaboom/bin</directory>
+							<directory>/etc/rc.d/init.d</directory>
 							<filemode>744</filemode>
 							<sources>
 								<source>
 									<location>${project.basedir}/bin</location>
 									<includes>
-										<include>*</include>
+										<include>kaboom</include>
 									</includes>
 								</source>
 							</sources>
