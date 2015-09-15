@@ -158,13 +158,13 @@ public class KaBoom {
 					leaderSelector.close();
 					config.getKaBoomCurator().close();
 					
-					//shutdown log4j2
-					if (LogManager.getContext() instanceof LoggerContext) {
-						LOG.info("Shutting down log4j2");
-						Configurator.shutdown((LoggerContext) LogManager.getContext());
-					} else {
-						LOG.warn("Unable to shutdown log4j2");
-					}
+					//shutdown log4j2					
+//					if (LogManager.getContext() instanceof LoggerContext) {
+//						LOG.info("Shutting down log4j2");
+//						Configurator.shutdown((LoggerContext) LogManager.getContext());
+//					} else {
+//						LOG.warn("Unable to shutdown log4j2");
+//					}
 				}
 			}));
 		}

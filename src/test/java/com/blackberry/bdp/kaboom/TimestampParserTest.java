@@ -24,8 +24,6 @@ import java.util.TimeZone;
 
 import org.junit.Test;
 
-import com.blackberry.bdp.kaboom.TimestampParser;
-
 public class TimestampParserTest {
 
 	@Test

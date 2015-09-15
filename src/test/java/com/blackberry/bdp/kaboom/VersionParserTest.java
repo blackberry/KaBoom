@@ -20,8 +20,6 @@ import static org.junit.Assert.*;
 
 import org.junit.Test;
 
-import com.blackberry.bdp.kaboom.VersionParser;
-
 public class VersionParserTest {
 	@Test
 	public void testSkipPri() {

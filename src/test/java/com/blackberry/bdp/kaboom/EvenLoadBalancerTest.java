@@ -15,8 +15,8 @@
  */
 package com.blackberry.bdp.kaboom;
 
-import static com.blackberry.bdp.kaboom.Leader.UTF8;
 import com.blackberry.bdp.kaboom.api.KaBoomClient;
+import java.nio.charset.Charset;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -34,6 +34,7 @@ public class EvenLoadBalancerTest {
 	private static final Logger LOG = LoggerFactory.getLogger(EvenLoadBalancerTest.class);
 	private static CuratorFramework curator;
 	private static LocalZkServer zk;
+	protected static final Charset UTF8 = Charset.forName("UTF-8");
 
 	private static CuratorFramework buildCuratorFramework() {
 		String connectionString = "localhost:21818";
