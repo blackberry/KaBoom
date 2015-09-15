@@ -2,58 +2,7 @@
 
 ## 0.8.2:
 
-When Kontroller was introduced a new package in KaBoom was created to integrate with the Kafka/KaBoom clusters via an API.  This release of KaBoom is a significant effort to refactor the entire code base to use those APIs internally.  The complex data structures, arrays and hash maps that exposed the cluster details are now replaced by this API.
-
-There's also two new features that Matt requested after discovering lease conflicts between boom files.  Previously, when a new leader took over it would wait 30 seconds, then ran the configured load balancer.  It was possible during a rolling restart for there to be clients not yet registered when the balancer ran.  This could lead to uneven work distribution.  This imbalance would then be resolved 10 minutes later when  the balancer ran again.   An even nastier scenario where these short-lived assignments could be handed out twice was possible if the newly elected leader was a node that hadn't yet been restarted.  Depending on how quickly workers realized they were no longer assigned the partition and how quickly another worker tried to create the same boom file, the possibility existed that two workers could be trying to manage boom files in HDFS with the same path.
-
-To resolve the balancer running to early, there's now a new running configuration option 'New Leader Calm Down Delay (ms)' defaulted to 30 seconds.  For busy clusters like at BlackBerry, this should be set to a high enough time to account for cluster wide restarts, 1-2 minutes.
-
-To resolve the possibility that two workers on separate clients could have overlapping assignments a new abstract class AsynchronousAssignee has been introduced that requires a thread to provide a ZK assignment path and an identity (byte[]) expected to be found in the assignment.  It then uses an InterProcessMutex to lock the assignment.   To further safeguard against potential problems a watch is placed on the zookeeper connection and the pause() method is called if the connection becomes suspended.  If the connection is restored it checks that it's still assigned and resumes the worker.  Another watch is placed on the znode for the assignment and the worker is scheduled to stop() the moment it's no longer the assignee.
-
-A note on shutdown/shutdown hooks:  Sometime since the switch to log4j2 KaBoom's shutdown hook was being overwritten by log4j2's shutdown hook.  This prevented worker shifts from finishing properly and could result in metadata not being persisted during shutdown.  To prevent this you can disable the log4j2 shutdown hook in your log4j2 configuration's opening configuration tag with <configuration ... shutdownHook="disable">
-
-Complete change log below...
-
-* Fixes some missing/improperly formatted license headers
-* The leader now writes their client ID to ZK
-* Sprints that never receive a message previously (0.8.0, 0.8.1) didn't update ZK with a offset timestamp, now they will store the sprint end time 
-* New startup configuration variable zkRootPathKaBoom configured via property: kaboom.zk.root.path (default: "/kaboom")
-* New startup configuration variable zkRootPathKafka configured via property: kafka.zk.root.path (default: "/")
-* New startup configuration variable zkRootPathClients configured via property: kaboom.zk.root.path.clients (default: zkRootPath + "/clients")
-* New startup configuration variable zkRootPathTopicConfigs configured via property: kaboom.zk.root.path.topic.configs (default: zkRootPath + "/topics")
-* New startup configuration variable zkRootPathPartitionAssignments configured via property: kaboom.zk.root.path.partition.assignments (default: zkRootPath + "/assignments")
-* New startup configuration variable zkPathRunningConfig configured via property: kaboom.zk.path.runningConfig (default: zkRootPath + "/config")
-* New startup configuration variable zkPathLeaderClientId configured via property: kaboom.zk.leader.clientId(default: zkRootPath + "/leader")
-* Refactored any zkPaths to refer to the paths above in StartupConfig
-* Removed StartupConfig.getTopicConfig(topicName)
-* Removed a slew of unneccessary getters from StartupConfig
-* Added public KaBoomTopicConfig getConfig() to KaBoomTopic in the API package making KaBoomTopic more authoritative
-* Added new class KaBoomPartitionDetails to replace the private inner class KaBoomTopic.PartitionDetails that was being exposed via the getter
-* Added public long KaBoomTopic.oldestPartitionOffset() to replace above
-* Removed StateUtils (now API usage is how  metadata and configurations are discovered)
-* Removed KaBoomNodeInfo in favor of the API KaBoomClient
-* Added KaBoomClient.calculateTargetLoad(int totalPartitions, int totalWeight)
-* KaBoomClient now extends ZkVersioned 
-* Migrated KaBoom's ephemeral node for client to be a persisted ephemeral mode KaBoomClient removing the yaml dependencies
-* KaBoom client ephemeral node serialization is now updated as the client's attributes change
-* Supports deleting topic configuration through the API
-* Supports reloading topic configuration through the API and workers restart gracefully
-* Added the concept of graceful shutdown of the workers
-* Added two new metrics for the number of workers found dead and the number of workers gracefully restarted
-* Improved how the leader removes assignments from disconnected clients
-* New running configuration option newLeaderCalmDownDelay (milliseconds, default 30 * 1000) The amount of time to wait after a new leader is elected before it starts leading
-* Prefixes the KaBoom Client ID to all boom files to ensure that race conditions over partition re-assignments don't lead to lease conflicts or missing leases
-* Moved the method that gets the current offset from ZK into the Worker's private class
-* Renamed private class WorkerSprint in Worker to WorkerShift
-* Added a bunch of convienience methods in WorkerShift isOver() isFinsihed() isTimeToFinish()
-* Added a new abstract class for threads that are assigned work from ZK that obtain locks on assignment paths
-* Reduced the verbosity of the error messages when the KaBoomTopic are missing Kafka topics or are not configured
-* Added a new metric "kaboom:topic:<topic>:timestamp parse errors" for tracking and monitoring timestamp parsing errors
-* Added a new metric "kaboom:topic:<topic>:PRI parse errors" for tracking and monitoring PRI parsing errors
-* Removed the error log that a timestamp could not be parsed
-* Removed the error log that a PRI could not be parsed
-* Fixes issues with the PRM that included all project dependencies instead of the filtered set from the copy-dependencies plugin
-* Removed all references to _READY flags, flag writers/propagator from entire project
+* TODO: Re-write the change log
 
 ## 0.8.1
 

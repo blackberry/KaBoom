@@ -60,11 +60,29 @@ limitations under the License.
 			<artifactId>args4j</artifactId>
 			<version>2.32</version>				
 		</dependency>
-		
+				
 		<dependency>
 			<groupId>com.blackberry.bdp.kaboom</groupId>
 			<artifactId>kaboom-api</artifactId>
 			<version>0.8.2-SNAPSHOT</version>				
+		</dependency>
+		
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>1.7.12</version>
+		</dependency>
+		
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-log4j12</artifactId>
+			<version>1.7.12</version>
+		</dependency>
+		
+		<dependency>
+			<groupId>log4j</groupId>
+			<artifactId>log4j</artifactId>
+			<version>1.2.17</version>
 		</dependency>
 
 		<!-- Hadoop dependencies -->
@@ -73,11 +91,13 @@ limitations under the License.
 			<artifactId>hadoop-client</artifactId>
 			<version>2.4.0</version>
 		</dependency>
+		
 		<dependency>
 			<groupId>org.apache.curator</groupId>
 			<artifactId>curator-recipes</artifactId>
 			<version>2.7.1</version>
 		</dependency>
+		
 		<dependency>
 			<groupId>com.blackberry.bdp.krackle</groupId>
 			<artifactId>krackle</artifactId>
@@ -89,21 +109,25 @@ limitations under the License.
 				</exclusion>
 			</exclusions>			
 		</dependency>
+		
 		<dependency>
 			<groupId>com.blackberry.bdp.common</groupId>
 			<artifactId>bdp-common-dev</artifactId>
 			<version>0.0.12-SNAPSHOT</version>
 		</dependency>
+		
 		<dependency>
 			<groupId>org.apache.kafka</groupId>
 			<artifactId>kafka_2.9.2</artifactId>
 			<version>0.8.1.1</version>
 		</dependency>
+		
 		<dependency>
 			<groupId>org.codehaus.jackson</groupId>
 			<artifactId>jackson-mapper-asl</artifactId>
 			<version>1.9.13</version>
 		</dependency>
+		
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
@@ -142,8 +166,7 @@ limitations under the License.
 						<configuration>
 							<outputDirectory>${project.build.directory}/lib</outputDirectory>
 							<includeScope>runtime</includeScope>
-							<!-- We want all our dependencies included, except for log4j1.x related stuff -->
-							<excludeArtifactIds>slf4j-log4j12,log4j</excludeArtifactIds>
+							<excludeArtifactIds>log4j-api,log4j-core,log4j-slf4j-impl</excludeArtifactIds>
 						</configuration>
 					</execution>
 				</executions>
