@@ -27,8 +27,6 @@ import org.slf4j.LoggerFactory;
 
 import com.blackberry.bdp.kaboom.api.KaBoomTopic;
 import com.blackberry.bdp.common.zk.ZkUtils;
-import com.blackberry.bdp.common.threads.NotifyingThread;
-import com.blackberry.bdp.common.threads.ThreadCompleteListener;
 import com.blackberry.bdp.kaboom.api.KaBoomClient;
 import com.blackberry.bdp.kaboom.api.KafkaBroker;
 
@@ -38,7 +36,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.zookeeper.CreateMode;
 
-public abstract class Leader extends LeaderSelectorListenerAdapter implements ThreadCompleteListener {
+public abstract class Leader extends LeaderSelectorListenerAdapter {
 
 	private static final Logger LOG = LoggerFactory.getLogger(Leader.class);
 	protected static final Charset UTF8 = Charset.forName("UTF-8");
@@ -46,7 +44,6 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 
 	final protected StartupConfig config;
 	protected CuratorFramework curator;
-	private Thread readyFlagWriterThread;
 
 	private List<KafkaBroker> kafkaBrokers;
 	private List<KaBoomTopic> kaboomTopics;
@@ -154,19 +151,6 @@ public abstract class Leader extends LeaderSelectorListenerAdapter implements Th
 			}
 
 			Thread.sleep(config.getRunningConfig().getLeaderSleepDurationMs());
-		}
-	}
-
-	/*
-	 * This method is called when the ready flag writer thread finishes.  There is 
-	 * currently nothing special that needs to happen, but later we may wish to have 
-	 * greater control over when threads start/stop and when they need to be ran 
-	 * again
-	 */
-	@Override
-	public void notifyOfThreadComplete(NotifyingThread notifyingThread, Exception e) {
-		if (e != null) {
-			LOG.error("[ready flag writer] Exception raised in thread: {}", e);
 		}
 	}
 
