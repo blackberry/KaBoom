@@ -400,8 +400,13 @@ limitations under the License.
 						<!-- Libraries -->
 						<mapping>
 							<directory>/opt/kaboom/lib</directory>
-							<artifact/>
 							<sources>
+								<source>
+									<location>${project.build.directory}</location>
+									<includes>
+										<include>${project.build.finalName}.jar</include>
+									</includes>
+								</source>
 								<source>
 									<location>${project.build.directory}/lib</location>
 									<includes>
@@ -409,8 +414,8 @@ limitations under the License.
 									</includes>
 								</source>
 							</sources>
-						</mapping>
-						
+						</mapping>						
+																		
 						<!-- Config -->
 						<mapping>
 							<directory>/opt/kaboom/config</directory>
