@@ -18,6 +18,7 @@ package com.blackberry.bdp.kaboom;
 import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 import com.blackberry.bdp.common.props.Parser;
 import com.blackberry.bdp.kaboom.api.KaBoomClient;
+import com.codahale.metrics.Meter;
 import java.nio.charset.Charset;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -39,6 +40,8 @@ public class KaBoom {
 	private StartupConfig config;
 	private KaBoomClient client;
 	private final static Object serverLock = new Object();
+	private Meter deadWorkerMeter;
+	private Meter gracefulWorkerShutdownMeter;
 
 	public static void main(String[] args) throws Exception {
 
@@ -58,6 +61,12 @@ public class KaBoom {
 		if (Boolean.parseBoolean(System.getProperty("metrics.to.console", "false").trim())) {
 			MetricRegistrySingleton.getInstance().enableConsole();
 		}
+		
+		deadWorkerMeter = MetricRegistrySingleton.getInstance().
+			 getMetricsRegistry().meter("kaboom:total:dead workers");
+		
+		gracefulWorkerShutdownMeter = MetricRegistrySingleton.getInstance().			 
+			 getMetricsRegistry().meter("kaboom:total:gracefully shutdown workers");		
 
 		try {
 			Properties props = StartupConfig.getProperties();
@@ -168,12 +177,8 @@ public class KaBoom {
 
 		Pattern topicPartitionPattern = Pattern.compile("^(.*)-(\\d+)$");
 
-		long lastFlagPropagationTs = System.currentTimeMillis();
-
-		Map<String, Thread> topicToFlagPropThread = new HashMap<>();
-
-		synchronized (serverLock) {
-			while (shutdown == false) {
+		while (shutdown == false) {
+			synchronized (serverLock) {			
 				// Get all my assignments and create a worker if there's anything not already being worked
 				Map<String, Boolean> validWorkingPartitions = new HashMap<>();
 				for (String partitionId : client.getAssignments(config.getKaBoomCurator(), config.getZkRootPathPartitionAssignments())) {
@@ -181,10 +186,10 @@ public class KaBoom {
 						if (false == partitionToThreadsMap.get(partitionId).isAlive()) {
 							if (false == partitionToWorkerMap.get(partitionId).isAborting()) {
 								LOG.info("worker thead for {} found to have been shutdown gracefully", partitionId);
-								config.getGracefulWorkerShutdownMeter().mark();
+								gracefulWorkerShutdownMeter.mark();
 							} else {
 								LOG.error("worker thead for {} found dead (removed thread/worker objects)", partitionId);
-								config.getDeadWorkerMeter().mark();
+								deadWorkerMeter.mark();
 							}
 							validWorkingPartitions.remove(partitionId);
 							partitionToWorkerMap.remove(partitionId);
@@ -235,9 +240,9 @@ public class KaBoom {
 					} else {
 						worker.ping();
 					}
-				}
-				Thread.sleep(config.getRunningConfig().getKaboomServerSleepDurationMs());
+				}				
 			}
+			Thread.sleep(config.getRunningConfig().getKaboomServerSleepDurationMs());
 		}
 	}
 

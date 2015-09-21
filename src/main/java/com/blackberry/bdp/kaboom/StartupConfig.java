@@ -81,9 +81,6 @@ public class StartupConfig {
 	private final String loadBalancerType;
 	private final RunningConfig runningConfig;
 	
-	private final Meter deadWorkerMeter;
-	private final Meter gracefulWorkerShutdownMeter;
-	
 	private String zkRootPathKafka = "";
 	private String zkRootPathKafkaBrokers = String.format("%s/%s", zkRootPathKafka, "brokers/ids");	
 	private String zkRootPathKaBoom = "/kaboom";
@@ -154,10 +151,6 @@ public class StartupConfig {
 		zkRootPathFlagAssignments = propsParser.parseString("kaboom.zk.root.path.flag.assignments", zkRootPathFlagAssignments);
 		zkPathRunningConfig = propsParser.parseString("kaboom.zk.path.runningConfig", zkPathRunningConfig);
 		zkPathLeaderClientId = propsParser.parseString("kaboom.zk.path.leader.clientId", zkPathLeaderClientId);
-
-		
-		deadWorkerMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:dead workers");
-		gracefulWorkerShutdownMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:gracefully shutdown workers");
 		
 		kaboomCurator = buildCuratorFramework(kaboomZkConnectionString);
 		kafkaCurator = buildCuratorFramework(kafkaZkConnectionString);
@@ -389,20 +382,6 @@ public class StartupConfig {
 	 */
 	public RunningConfig getRunningConfig() {
 		return runningConfig;
-	}
-
-	/**
-	 * @return the deadWorkerMeter
-	 */
-	public Meter getDeadWorkerMeter() {
-		return deadWorkerMeter;
-	}
-
-	/**
-	 * @return the gracefulWorkerShutdownMeter
-	 */
-	public Meter getGracefulWorkerShutdownMeter() {
-		return gracefulWorkerShutdownMeter;
 	}
 
 	/**
