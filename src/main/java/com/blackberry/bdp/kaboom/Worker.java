@@ -710,12 +710,20 @@ public final class Worker extends AsyncAssignee implements Runnable {
 		private void storeOffsetTimestamp() throws Exception {
 			long zkTimestamp = maxMessageTimestamp;
 			if (zkTimestamp == -1) {
-				LOG.info("[{}] Shift #{} never recieved a message, using shift end time {} ({}) for offset timestamp",
+				LOG.info("[{}] Shift #{} never parsed a timestamp, using shift end time {} ({}) for offset timestamp",
 					 partitionId,
 					 shiftNumber,
 					 shiftEnd,
 					 dateString(shiftEnd));
 				zkTimestamp = shiftEnd;
+			} else if (zkTimestamp > System.currentTimeMillis()) {
+				zkTimestamp = System.currentTimeMillis();
+				LOG.warn("[{}] future max message timesamp ({}, {}) being limited to current system time ({}, {})",
+					 partitionId,
+					 maxMessageTimestamp,
+					 dateString(maxMessageTimestamp),
+					 zkTimestamp,
+					 dateString(zkTimestamp));
 			}
 
 			if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {
