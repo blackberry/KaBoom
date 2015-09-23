@@ -233,137 +233,126 @@ public final class Worker extends AsyncAssignee implements Runnable {
 	}
 
 	public Worker(StartupConfig config, String topicName, int partition) throws Exception {
-		// Set up our Synchronous Worker and obtain our assignment lock
+		// Set up our Synchronous Worker
 		super(config.getKaBoomCurator(),
 			 String.format("KaBoom Client ID=%d", config.getKaboomId()),
 			 String.valueOf(config.getKaboomId()).getBytes(),
 			 config.zkPathPartitionAssignment(topicName, partition),
 			 config.getRunningConfig().getAssignmentLockTimeout());
 
-		/**
-		 * Since we're now holding a lock we need to ensure we're wrapping 
-		 * everything in the constructor around a try block and releasing the 
-		 * lock on any errors.  The run() method of the thread then releases 
-		 * the lock in it's finally block, so there should be no way for a lock to
-		 * not get released once the worker is finished.
-		 */
-		try {
-			partitionId = String.format("%s-%d", topicName, partition);
+		partitionId = String.format("%s-%d", topicName, partition);
 
-			this.config = config;
-			this.topic = topicName;
-			this.partition = partition;
-			this.startTime = System.currentTimeMillis();
-			this.messagesWritten = 0;
+		this.config = config;
+		this.topic = topicName;
+		this.partition = partition;
+		this.startTime = System.currentTimeMillis();
+		this.messagesWritten = 0;
 
-			this.zkRoot = config.getZkRootPathKaBoom();
-			this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getKaBoomCurator(), zkRoot + "/topics/" + topic);
+		this.zkRoot = config.getZkRootPathKaBoom();
+		this.topicConfig = KaBoomTopicConfig.get(KaBoomTopicConfig.class, config.getKaBoomCurator(), zkRoot + "/topics/" + topic);
 
-			this.tsParseErrorsMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":timestamp parse errors");
-			this.priParseErrorsMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":PRI parse errors");
-			this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
-			this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
-			this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
-			this.hdfsOutputPath = new TimeBasedHdfsOutputPath(config, topicConfig, partition);
+		this.tsParseErrorsMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":timestamp parse errors");
+		this.priParseErrorsMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":PRI parse errors");
+		this.boomWritesMeterTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":boom writes");
+		this.boomWritesMeterTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:boom writes");
+		this.boomWritesMeter = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:partitions:" + partitionId + ":boom writes");
+		this.hdfsOutputPath = new TimeBasedHdfsOutputPath(config, topicConfig, partition);
 
-			zkPath = String.format("%s/%s/%d", config.getZkRootPathTopicConfigs(), topic, partition);
-			zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
-			zkPath_offSetOverride = zkPath + "/offset_override";
+		zkPath = String.format("%s/%s/%d", config.getZkRootPathTopicConfigs(), topic, partition);
+		zkPath_offSetTimestamp = zkPath + "/offset_timestamp";
+		zkPath_offSetOverride = zkPath + "/offset_override";
 
-			LOG.info("[{}] worker instantiated with topic configuration version {}", partitionId, topicConfig.getVersion());
+		LOG.info("[{}] worker instantiated with topic configuration version {}", partitionId, topicConfig.getVersion());
 
-			NodeCache nodeCache = new NodeCache(curator, topicConfig.getZkPath());
-			nodeCache.getListenable().addListener(new NodeCacheListener() {
-				@Override
-				public void nodeChanged() throws Exception {
-					Stat newZkStat = curator.checkExists().forPath(topicConfig.getZkPath());
-					if (newZkStat == null) {
-						LOG.info("[{}] topic configuration for {} has been deleted",
+		NodeCache nodeCache = new NodeCache(curator, topicConfig.getZkPath());
+		nodeCache.getListenable().addListener(new NodeCacheListener() {
+			@Override
+			public void nodeChanged() throws Exception {
+				Stat newZkStat = curator.checkExists().forPath(topicConfig.getZkPath());
+				if (newZkStat == null) {
+					LOG.info("[{}] topic configuration for {} has been deleted",
+						 partitionId,
+						 topicConfig.getId());
+					abort();
+				} else {
+					KaBoomTopicConfig newTopicConfig = KaBoomTopicConfig.get(
+						 KaBoomTopicConfig.class, curator, zkRoot + "/topics/" + topic);
+					if (!newTopicConfig.getVersion().equals(topicConfig.getVersion())) {
+						LOG.info("[{}] topic {} configuration (version {}) was updated to version {}, shutting down worker...",
 							 partitionId,
-							 topicConfig.getId());
-						abort();
-					} else {
-						KaBoomTopicConfig newTopicConfig = KaBoomTopicConfig.get(
-							 KaBoomTopicConfig.class, curator, zkRoot + "/topics/" + topic);
-						if (!newTopicConfig.getVersion().equals(topicConfig.getVersion())) {
-							LOG.info("[{}] topic {} configuration (version {}) was updated to version {}, shutting down worker...",
-								 partitionId,
-								 topicConfig.getId(),
-								 topicConfig.getVersion(),
-								 newTopicConfig.getVersion());
-							stop();
-						}
+							 topicConfig.getId(),
+							 topicConfig.getVersion(),
+							 newTopicConfig.getVersion());
+						stop();
 					}
 				}
-
-			});
-			nodeCache.start();
-
-			lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
-			lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
-			msgWrittenGaugeName = "kaboom:partitions:" + partitionId + ":messages written per second";
-			lowerOffsetsGaugeName = "kaboom:partitions:" + partitionId + ":early offsets received";
-
-			String[] metrics_to_remove = {lagGaugeName, lagSecGaugeName, msgWrittenGaugeName, lowerOffsetsGaugeName};
-
-			for (final String metric_name : metrics_to_remove) {
-				if (MetricRegistrySingleton.getInstance().getMetricsRegistry()
-					 .getGauges(new MetricFilter() {
-						 @Override
-						 public boolean matches(String s, Metric m) {
-							 return s.equals(metric_name);
-						 }
-
-					 }).size() > 0) {
-					LOG.debug("Removing existing metric: '{}'", metric_name);
-					MetricRegistrySingleton.getInstance().getMetricsRegistry()
-						 .remove(metric_name);
-				}
 			}
 
-			MetricRegistrySingleton.getInstance().getMetricsRegistry()
-				 .register(lagGaugeName, new Gauge<Long>() {
+		});
+		nodeCache.start();
+
+		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
+		lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
+		msgWrittenGaugeName = "kaboom:partitions:" + partitionId + ":messages written per second";
+		lowerOffsetsGaugeName = "kaboom:partitions:" + partitionId + ":early offsets received";
+
+		String[] metrics_to_remove = {lagGaugeName, lagSecGaugeName, msgWrittenGaugeName, lowerOffsetsGaugeName};
+
+		for (final String metric_name : metrics_to_remove) {
+			if (MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				 .getGauges(new MetricFilter() {
 					 @Override
-					 public Long getValue() {
-						 return lag;
+					 public boolean matches(String s, Metric m) {
+						 return s.equals(metric_name);
 					 }
 
-				 });
-
-			MetricRegistrySingleton.getInstance().getMetricsRegistry()
-				 .register(lagSecGaugeName, new Gauge<Integer>() {
-					 @Override
-					 public Integer getValue() {
-						 return lag_sec;
-					 }
-
-				 });
-
-			MetricRegistrySingleton.getInstance().getMetricsRegistry()
-				 .register(msgWrittenGaugeName, new Gauge<Long>() {
-					 @Override
-					 public Long getValue() {
-						 return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
-					 }
-
-				 });
-
-			MetricRegistrySingleton.getInstance().getMetricsRegistry()
-				 .register(lowerOffsetsGaugeName, new Gauge<Long>() {
-					 @Override
-					 public Long getValue() {
-						 return lowerOffsetsReceived;
-					 }
-
-				 });
-
-			synchronized (workersLock) {
-				workers.add(this);
+				 }).size() > 0) {
+				LOG.debug("Removing existing metric: '{}'", metric_name);
+				MetricRegistrySingleton.getInstance().getMetricsRegistry()
+					 .remove(metric_name);
 			}
-		} catch (Exception e) {
-			//releaseAssignment();
-			throw e;
 		}
+
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+			 .register(lagGaugeName, new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 return lag;
+				 }
+
+			 });
+
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+			 .register(lagSecGaugeName, new Gauge<Integer>() {
+				 @Override
+				 public Integer getValue() {
+					 return lag_sec;
+				 }
+
+			 });
+
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+			 .register(msgWrittenGaugeName, new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
+				 }
+
+			 });
+
+		MetricRegistrySingleton.getInstance().getMetricsRegistry()
+			 .register(lowerOffsetsGaugeName, new Gauge<Long>() {
+				 @Override
+				 public Long getValue() {
+					 return lowerOffsetsReceived;
+				 }
+
+			 });
+
+		synchronized (workersLock) {
+			workers.add(this);
+		}
+
 	}
 
 	private static String dateString(Long ts) {
@@ -384,12 +373,12 @@ public final class Worker extends AsyncAssignee implements Runnable {
 				LOG.error("[{}] Can't determine local hostname", getPartitionId());
 				hostname = "unknown.host";
 			} catch (Exception e) {
-				LOG.error("[{}] Error: ",partitionId, e);
+				LOG.error("[{}] Error: ", partitionId, e);
 				return;
 			}
 
 			consumer = new Consumer(config.getConsumerConfiguration(),
-				 "kaboom-" + hostname, 
+				 "kaboom-" + hostname,
 				 getTopic(),
 				 getPartition(),
 				 currentShift.offset,
@@ -520,7 +509,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 					try {
 						if (pri.parsePri(bytes, pos, length)) {
 							pos += pri.getPriLength();
-						}						
+						}
 					} catch (Exception e) {
 						priParseErrorsMeterTopic.mark();
 					}
@@ -653,7 +642,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 				this.offset = previousShift.offset;
 				this.shiftNumber = previousShift.shiftNumber + 1;
 			} else {
-				this.offset = getStoredOffsetFromZk();				
+				this.offset = getStoredOffsetFromZk();
 				this.shiftNumber = 1;
 			}
 
@@ -682,8 +671,8 @@ public final class Worker extends AsyncAssignee implements Runnable {
 		}
 
 		/** 				 
-		@param persistMetadata whether to persist the partition metadata to ZK
-		*/
+		 @param persistMetadata whether to persist the partition metadata to ZK
+		 */
 		private void finish(boolean persistMetadata) throws Exception {
 			LOG.info("[{}] Shift ending at {} is finished", partitionId, dateString(shiftEnd));
 			hdfsOutputPath.closeOffShift(shiftNumber);
@@ -691,7 +680,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 				storeOffset();
 				storeOffsetTimestamp();
 			}
-			finished = true;			
+			finished = true;
 		}
 
 		private boolean isOver() {
@@ -706,7 +695,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 			return !isFinished() && System.currentTimeMillis() - shiftEnd
 				 >= config.getRunningConfig().getFileCloseGraceTimeAfterExpiredMs();
 		}
-		
+
 		private void storeOffsetTimestamp() throws Exception {
 			long zkTimestamp = maxMessageTimestamp;
 			if (zkTimestamp == -1) {
@@ -716,14 +705,16 @@ public final class Worker extends AsyncAssignee implements Runnable {
 					 shiftEnd,
 					 dateString(shiftEnd));
 				zkTimestamp = shiftEnd;
-			} else if (zkTimestamp > System.currentTimeMillis()) {
-				zkTimestamp = System.currentTimeMillis();
-				LOG.warn("[{}] future max message timesamp ({}, {}) being limited to current system time ({}, {})",
-					 partitionId,
-					 maxMessageTimestamp,
-					 dateString(maxMessageTimestamp),
-					 zkTimestamp,
-					 dateString(zkTimestamp));
+			} else {
+				if (zkTimestamp > System.currentTimeMillis()) {
+					zkTimestamp = System.currentTimeMillis();
+					LOG.warn("[{}] future max message timesamp ({}, {}) being limited to current system time ({}, {})",
+						 partitionId,
+						 maxMessageTimestamp,
+						 dateString(maxMessageTimestamp),
+						 zkTimestamp,
+						 dateString(zkTimestamp));
+				}
 			}
 
 			if (curator.checkExists().forPath(zkPath_offSetTimestamp) == null) {

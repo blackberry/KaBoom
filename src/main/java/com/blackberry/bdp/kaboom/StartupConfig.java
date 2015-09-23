@@ -15,7 +15,6 @@
  */
 package com.blackberry.bdp.kaboom;
 
-import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 import java.net.InetAddress;
 import java.security.PrivilegedExceptionAction;
 
@@ -41,7 +40,6 @@ import com.blackberry.bdp.common.props.Parser;
 import com.blackberry.bdp.kaboom.api.RunningConfig;
 import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
-import com.codahale.metrics.Meter;
 import java.util.Iterator;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.cache.NodeCache;
@@ -80,9 +78,9 @@ public class StartupConfig {
 	private String kafkaZkConnectionString;
 	private final String loadBalancerType;
 	private final RunningConfig runningConfig;
-	
+
 	private String zkRootPathKafka = "";
-	private String zkRootPathKafkaBrokers = String.format("%s/%s", zkRootPathKafka, "brokers/ids");	
+	private String zkRootPathKafkaBrokers = String.format("%s/%s", zkRootPathKafka, "brokers/ids");
 	private String zkRootPathKaBoom = "/kaboom";
 	private String zkRootPathClients = String.format("%s/%s", zkRootPathKaBoom, "clients");
 	private String zkRootPathTopicConfigs = String.format("%s/%s", zkRootPathKaBoom, "topics");
@@ -90,7 +88,7 @@ public class StartupConfig {
 	private String zkRootPathFlagAssignments = String.format("%s/%s", zkRootPathKaBoom, "flag-assignments");
 	private String zkPathRunningConfig = String.format("%s/%s", zkRootPathKaBoom, "config");
 	private String zkPathLeaderClientId = String.format("%s/%s", zkRootPathKaBoom, "leader");
-	
+
 	private final HashMap<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
 
 	/**
@@ -108,17 +106,17 @@ public class StartupConfig {
 		LOG.info("kaboomZkConnectionString: {}", kaboomZkConnectionString);
 		LOG.info("kafkaZkConnectionString: {}", kafkaZkConnectionString);
 		LOG.info("kafkaSeedBrokers: {}", kafkaSeedBrokers);
-		LOG.info("loadBalancerType: {}", loadBalancerType);		
+		LOG.info("loadBalancerType: {}", loadBalancerType);
 		LOG.info("kerberosPrincipal: {}", kerberosPrincipal);
 		LOG.info("kerberosKeytab: {}", kerberosKeytab);
-		LOG.info("zkRootPathKaBoom: {}", zkRootPathKaBoom);		
+		LOG.info("zkRootPathKaBoom: {}", zkRootPathKaBoom);
 		LOG.info("zkRootPathKafkaBrokers: {}", zkRootPathKafkaBrokers);
 		LOG.info("zkRootPathKafka: {}", zkRootPathKafka);
 		LOG.info("zkRootPathClients: {}", zkRootPathClients);
 		LOG.info("zkRootPathTopicConfigs: {}", zkRootPathTopicConfigs);
 		LOG.info("zkRootPathPartitionAssignments: {}", getZkRootPathPartitionAssignments());
 		LOG.info("zkPathRunningConfig: {}", zkPathRunningConfig);
-		LOG.info("zkPathLeaderClientId: {}", zkPathLeaderClientId);		
+		LOG.info("zkPathLeaderClientId: {}", zkPathLeaderClientId);
 		LOG.info(" *** end dumping configuration *** ");
 	}
 
@@ -141,7 +139,7 @@ public class StartupConfig {
 		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		loadBalancerType = propsParser.parseString("kaboom.load.balancer.type", "even");
-		
+
 		zkRootPathKafka = propsParser.parseString("kafka.zk.root.path", zkRootPathKafka);
 		zkRootPathKafkaBrokers = propsParser.parseString("kafka.zk.root.path.brokers", zkRootPathKafkaBrokers);
 		zkRootPathKaBoom = propsParser.parseString("kaboom.zk.root.path", zkRootPathKaBoom);
@@ -151,7 +149,7 @@ public class StartupConfig {
 		zkRootPathFlagAssignments = propsParser.parseString("kaboom.zk.root.path.flag.assignments", zkRootPathFlagAssignments);
 		zkPathRunningConfig = propsParser.parseString("kaboom.zk.path.runningConfig", zkPathRunningConfig);
 		zkPathLeaderClientId = propsParser.parseString("kaboom.zk.path.leader.clientId", zkPathLeaderClientId);
-		
+
 		kaboomCurator = buildCuratorFramework(kaboomZkConnectionString);
 		kafkaCurator = buildCuratorFramework(kafkaZkConnectionString);
 
@@ -167,40 +165,9 @@ public class StartupConfig {
 
 		});
 		nodeCache.start();
-
-		/**
-		 * Get all the topic configurations and build the following maps while we're at it
-		 *  - topicConfigs
-		 *  - topicToProxyUser 
-		 *  - topicToSupportedStatus
-		 */
-		Iterator<KaBoomTopicConfig> iter = KaBoomTopicConfig.getAll(KaBoomTopicConfig.class, kaboomCurator, "/kaboom/topics").iterator();
-
-		while (iter.hasNext()) {
-			final KaBoomTopicConfig topicConfig = iter.next();
-			final NodeCache nodeCacheTopic = new NodeCache(kaboomCurator, "/kaboom/topics/" + topicConfig.getId());
-			nodeCacheTopic.getListenable().addListener(new NodeCacheListener() {
-				@Override
-				public void nodeChanged() throws Exception {
-					Stat newZkStat = kaboomCurator.checkExists().forPath(topicConfig.getZkPath());
-					if (newZkStat == null) {
-						LOG.info("The topic configuration for {} has been deleted", topicConfig.getId());
-					} else {
-						LOG.info("The topic configuration has changed in ZooKeeper");
-						String oldTopicId = topicConfig.getId();
-						topicConfig.reload();
-						if (!topicConfig.getId().equals(oldTopicId)) {
-							// Remove all references from old topic name
-							// Add references to new topic name
-							authenticatedFsForProxyUser(topicConfig.getProxyUser());
-							LOG.info("the topic {} was renamed to {} deleted old topic references",
-								 oldTopicId, topicConfig.getId());
-						}
-					}
-				}
-			});
-			nodeCacheTopic.start();
-		}
+		
+		Authenticator.getInstance().setKerbConfPrincipal(kerberosPrincipal);
+		Authenticator.getInstance().setKerbKeytab(kerberosKeytab);
 	}
 
 	/**
@@ -208,37 +175,28 @@ public class StartupConfig {
 	 *
 	 * @param proxyUser
 	 * @return
+	 * @throws java.io.IOException
+	 * @throws java.lang.InterruptedException
 	 */
-	public final FileSystem authenticatedFsForProxyUser(final String proxyUser) {
-		Authenticator.getInstance().setKerbConfPrincipal(kerberosPrincipal);
-		Authenticator.getInstance().setKerbKeytab(kerberosKeytab);
-		if (proxyUserToFileSystem.containsKey(proxyUser)) {
-			return proxyUserToFileSystem.get(proxyUser);
-		} else {
-			try {
-				LOG.info("Attempting to create file system {} for {}", getHadoopUrlPath(), proxyUser);
-				Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<Void>() {
-					@Override
-					public Void run() throws Exception {
-						synchronized (fsLock) {
-							try {
-								FileSystem fs = getHadoopUrlPath().getFileSystem(hadoopConfiguration);
-								proxyUserToFileSystem.put(proxyUser, fs);
-								LOG.debug("Opening {} for proxy user {}", getHadoopUrlPath(), proxyUser);
-							} catch (IOException ioe) {
-								LOG.error("Error getting file system {} for proxy user {}", getHadoopUrlPath(), proxyUser, ioe);
-								throw ioe;
-							}
-						}
-						return null;
+	public final FileSystem authenticatedFsForProxyUser(final String proxyUser) throws IOException, InterruptedException {
+		LOG.info("Attempting to create file system {} for {}", getHadoopUrlPath(), proxyUser);
+		return Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<FileSystem>() {
+			@Override
+			public FileSystem run() throws Exception {
+				FileSystem fs;
+				synchronized (fsLock) {
+					try {
+						fs = getHadoopUrlPath().getFileSystem(hadoopConfiguration);
+						proxyUserToFileSystem.put(proxyUser, fs);
+						LOG.debug("Created file system {} for proxy user {}", getHadoopUrlPath(), proxyUser);
+					} catch (IOException ioe) {
+						LOG.error("Error creaing file system {} for proxy user {}", getHadoopUrlPath(), proxyUser, ioe);
+						throw ioe;
 					}
-
-				});
-			} catch (IOException | InterruptedException e) {
-				LOG.error("Error creating file.", e);
+				}
+				return fs;
 			}
-			return proxyUserToFileSystem.get(proxyUser);
-		}
+		});
 	}
 
 	/**
@@ -319,13 +277,13 @@ public class StartupConfig {
 		newCurator.start();
 		return newCurator;
 	}
-	
+
 	public String zkPathPartitionAssignment(String partitionId) {
-		return String.format("%s/%s", getZkRootPathPartitionAssignments(),  partitionId); 
+		return String.format("%s/%s", getZkRootPathPartitionAssignments(), partitionId);
 	}
 
 	public String zkPathPartitionAssignment(String topicName, int partitionNumber) {
-		return String.format("%s/%s-%d", getZkRootPathPartitionAssignments(),  topicName, partitionNumber); 
+		return String.format("%s/%s-%d", getZkRootPathPartitionAssignments(), topicName, partitionNumber);
 	}
 
 	/**

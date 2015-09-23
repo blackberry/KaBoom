@@ -46,7 +46,8 @@ public class TimeBasedHdfsOutputPath {
 
 	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();
 
-	public TimeBasedHdfsOutputPath(StartupConfig kaboomConfig, KaBoomTopicConfig topicConfig, int partition) {
+	public TimeBasedHdfsOutputPath(StartupConfig kaboomConfig, KaBoomTopicConfig topicConfig, int partition) 
+		 throws IOException, InterruptedException {
 		this.config = kaboomConfig;
 		this.topicConfig = topicConfig;
 		this.partition = partition;
