@@ -18,7 +18,6 @@ package com.blackberry.bdp.kaboom;
 import com.blackberry.bdp.common.conversion.Converter;
 import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -47,14 +46,6 @@ public class TimeBasedHdfsOutputPath {
 
 	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();
 
-	/**
-	 * Reusable objects only exist as class attributes because they are needed 
-	 * very frequently.  Instead of continually re-instantiating transient objects 
-	 * in the critical message path they are created once and long lived
-	 */
-	private long reusableRequestedStartTime;
-	private OutputFile reusableRequestedOutputFile;
-
 	public TimeBasedHdfsOutputPath(StartupConfig kaboomConfig, KaBoomTopicConfig topicConfig, int partition) {
 		this.config = kaboomConfig;
 		this.topicConfig = topicConfig;
@@ -64,18 +55,12 @@ public class TimeBasedHdfsOutputPath {
 		this.partitionId = String.format("%s-%d", topic, partition);
 	}
 
-	private static String dateString(Long ts) {
-		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-		String strDate = sdf.format(ts);
-		return strDate;
-	}
-
 	public FastBoomWriter getBoomWriter(long shiftNumber, long ts, String filename) throws IOException, Exception {
-		reusableRequestedStartTime = ts - ts % (this.config.getRunningConfig().getWorkerShiftDurationSeconds() * 1000);
-		reusableRequestedOutputFile = outputFileMap.get(reusableRequestedStartTime);
-		if (reusableRequestedOutputFile == null) {
-			reusableRequestedOutputFile = new OutputFile(shiftNumber, filename, reusableRequestedStartTime);
-			outputFileMap.put(reusableRequestedStartTime, reusableRequestedOutputFile);
+		long requestedStartTime = ts - ts % (this.config.getRunningConfig().getWorkerShiftDurationSeconds() * 1000);
+		OutputFile requestedOutputFile = outputFileMap.get(requestedStartTime);
+		if (requestedOutputFile == null) {
+			requestedOutputFile = new OutputFile(shiftNumber, filename, requestedStartTime);
+			outputFileMap.put(requestedStartTime, requestedOutputFile);
 			if (outputFileMap.size() > config.getRunningConfig().getMaxOpenBoomFilesPerPartition()) {
 				long oldestTs = getOldestLastUsedTimestamp();
 				try {
@@ -95,8 +80,8 @@ public class TimeBasedHdfsOutputPath {
 				}
 			}
 		}
-		reusableRequestedOutputFile.lastUsedTimestmap = System.currentTimeMillis();
-		return reusableRequestedOutputFile.getBoomWriter();
+		requestedOutputFile.lastUsedTimestmap = System.currentTimeMillis();
+		return requestedOutputFile.getBoomWriter();
 	}
 
 	private long getOldestLastUsedTimestamp() {
