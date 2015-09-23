@@ -447,6 +447,8 @@ limitations under the License.
 						<mapping>
 							<directory>/etc/rc.d/init.d</directory>
 							<filemode>744</filemode>
+							<username>root</username>
+							<groupname>root</groupname>
 							<sources>
 								<source>
 									<location>${project.basedir}/bin</location>
