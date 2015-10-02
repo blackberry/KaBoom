@@ -1,63 +1,34 @@
-##### Krackle Consumer Configs #####
-## Check the Krackle docs for more details.
+######################
+# KaBoom Configuration
+######################
 
-metadata.broker.list=broker1.kafka.domain:9092,broker2.kafka.domain:9092,broker3.kafka.domain:9092
+kaboom.id=1001
+hadooop.fs.uri=hdfs://hadoop.company.com
+#kaboom.weighting=<number> - the default is number of cores
+kerberos.keytab=/opt/kaboom/config/kaboom.keytab
+kerberos.principal=principal@AD0.COMPANY
+#kaboom.hostname=<name> - the default is the system's hostname
+zookeeper.connection.string=r3k1.kafka.company.com:2181,r3k2.kafka.company.com:2181,r3k3.kafka.company.com:2181/KaBoomDev
+kafka.zookeeper.connection.string=r3k1.kafka.company.com:2181,r3k2.kafka.company.com:2181,r3k3.kafka.company.com:2181
+#kaboom.load.balancer.type=even - this is the default
+#kafka.zk.root.path= - the default is none/empty string
+#kafka.zk.root.path.brokers=brokers/ids - this is the default
+#kaboom.zk.root.path=/kaboom - this is the default
+#kaboom.zk.root.path.topic.configs=/kaboom/topics - this is the default
+#kaboom.zk.root.path.clients=/kaboom/clients - this is the default
+#kaboom.zk.root.path.partition.assignments=/kaboom/assignments - this is the default
+#kaboom.zk.root.path.flag.assignments=/kaboom/flag-assignments - this is the default
+#kaboom.runningConfig.zkPath=/kaboom/config - this is the default
+#kaboom.zk.path.leader.clientId=/kaboom/leader - this is the default
+
+########################
+# Consumer Configuration 
+########################
+
+metadata.broker.list=r3k1.kafka.company.com:9092,r3k2.kafka.company.com:9092,r3k3.kafka.company.com:9092
+fetch.message.max.bytes=10485760
 fetch.wait.max.ms=5000
-
-# Set this to smallest, to reduce data loss in extremely laggy conditions.
+#fetch.min.bytes=1 - this is the default
+socket.receive.buffer.bytes=10485760
 auto.offset.reset=smallest
-
-## Defaults are fine for these
-#fetch.message.max.bytes=1048576
-#fetch.min.bytes=1
-#socket.receive.buffer.bytes=65536
-
-#####################
-##### KaBoom Specific #####
-
-# Hadoop URI
-hadooop.fs.uri=hdfs://hadoop.lab.com
-
-# Each instance of KaBoom needs a unique integer id.
-kaboom.id=99999
-
-# How often to rotate files (in ms)
-file.rotate.interval=180000
-
-# How often to periodically flush open output paths to HDFS
-kaboom.boomWriter.periodicHdfsFlushInterval=30000
-
-# Store open files in a temp directory (based off filename) while they are open
-kaboom.useTempOpenFileDirectory = false
-
-# Load within the cluster is distributed based on a weighting of each client.
-# The higher the weight, the more load this KaBoom instance will take on.
-# Defaults to the number of available processors.
-#kaboom.weighting=10
-
-# Hostname used when registering with the cluster.  This should be auto
-# discovered, but you can override it if you want.
-#kaboom.hostname=myhost.mydomain
-
-# ZooKeeper connection string for KaBoom
-# You can use an appropriate suffix to set a root for KaBoom
-zookeeper.connection.string=zk1.mydomain:2181,zk2.mydomain:2181,zk3.mydomain:2181/KaBoom-test
-
-# If Kerberos is enabled (which it is), then we need a principal and keytab
-kerberos.principal=user@DOMAIN
-kerberos.keytab=user.keytab
-
-# ZooKeeper connection string for Kafka
-# Used to auto-discover topics
-kafka.zookeeper.connection.string=zk1.kafka.domain:2181,zk2.kafka.domain:2181,zk3.kafka.domain:2181
-
-# Once each topic is discovered, we need to know where to write to
-# The destination directory is here. 
-# Note: hadooop.fs.uri is prepended to hdfsRootRir 
-# Note: hdfsRootDir is prepended to each output path
-# Default duration is 180
-
-topic.topic1.hdfsRootDir=/service/82/topic1/logs/%y%M%d/%H/topic1
-topic.topic1.proxy.user=someuser
-topic.topic1.hdfsDir.1=data
-topic.topic1.hdfsDir.1.duration=3600
+#socket.timeout.seconds=30000 - this is the default

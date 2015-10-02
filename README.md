@@ -10,8 +10,8 @@ KaBoom uses Krackle to consume from partitions of topics in Kafka and write them
 * Supports flagging timestamp template HDFS directories as 'Ready' when all a topic's partition's messages have been written for a given hour
 
 ## Author(s)
-* Will Chartrand (original author)
-* [Dave Ariens](<mailto:dariens@blackberry.com>) (current maintainer)
+* [Dave Ariens](<mailto:dariens@blackberry.com>) ([Github](https://github.com/ariens))
+* [Matthew Bruce](<mailto:mbruce@blackberry.com>) ([Github](https://github.com/MatthewRBruce))
 
 ## Building
 Performing a Maven install produces: 
@@ -19,103 +19,100 @@ Performing a Maven install produces:
 * An RPM package that currently installs RPM based Linux distributions
 * A Debian package for dpkg based Linux distributions
 
-## Configuring
-Below is an example configuration for running a KaBoom instance that consumes messages in two topics (topic1, topic2) and writes them to HDFS paths owned by different HDFS users.
+## Major Changes in 0.8.x
+This release contains the most significant updates to KaBoom we have introduced in a single version bump.  The most significant changes include the migration of all running configuration parameters and topic configurations to ZooKeeper and the introduction of worker sprints.  The remaining confiugration continues to be read in via a property file and is now referred to as startup configuration.  
 
-### Note: Kaboom version 0.7.1 
+## Worker Sprints
 
-0.7.1 Introduces a few new required configuration properties and changes how HDFS output paths and file systems are defined.  It aso supports writing to open files intended to be read and consumed by downstream tooling and map reduce jobs.  A configurable flush interval has been exposed to periodically perform an HDFS flush on the open file.
+Workers are now aligned to sprints lasting `workerSprintDurationSeconds` seconds.  A sprint is associated to a partition ID (topic-partition), and starting Kafka offset.  A KaBoom worker will keep track of the partition IDs latest offest and largest parsed message timestamp for the duration of it's sprint.  Following `fileCloseGraceTimeAfterExpiredMs` milliseconds after the end of a sprint, KaBoom will then close off any open boom files and record the sprint's latest offset and largest observed timestamp to ZooKeeper.  
 
-New required configuration property: 
+## Startup versus Running Configurations
+Startup configuration changes require a KaBoom service restart to be loaded, whereas the running configuration is reloaded by KaBoom as changes are made in ZooKeeper.  Updated running configuration values are then used as they are accessed by KaBoom.  For example you can change the number of HDFS replicas to store for boom files in Hadoop however it will not affect any open or previously closed files only files that are created after the new configuration has been loaded (as replicas are specified only when creating files).
 
-```
-# Define the URI to your Hadoop file system (this was previously required to be included before each topic's path)
-hadooop.fs.uri=hdfs://hadoop.site.cluster-01
-```
+## Topic Configurations
+Unlike running configurations which are reloaded instantly topic configuration updates trigger all workers assigned to a partition of the topic to be gracefully shutdown (boom files closed, offsets, and offset timestamps  stored in ZK).  The KaBoom client will then detect and restart any gracefully shutdown workers.  Workers load their topic configuration when they are launched.
 
-For writing to open files turn this (new property) off and _tmp_<fileName> directories will not be created to hold the open files:
-
-```
-# Store open files in a temp directory (based off filename) while they are open
-kaboom.useTempOpenFileDirectory=false
-```
-
-These two properties are still recommended:
+## Example Topic Configuration
+The topic configurations are stored at `zk://<root>/kaboom/topics/<id>`, as:
 
 ```
-# If the expected offset is greater than than actual offset and also higher than the high watermark 
-# then perhaps the broker we're receiving messages from has changed and the new broker has a 
-# lower offset because it was behind when it took over...  If so, allow ourselves to sink to the new high watermark  
-kaboom.sinkToHighWatermark=true
-
-# Kaboom stores the offsets for the topic-partition it's assigned in ZK...  Sometimes there's a need to override that, 
-# So if a znode is created alongside the offset znode called offset_override, kaboom will start there instead
-kaboom.allowOffsetOverrides=true
+{
+        version: 1,
+        id: "devtest-test3",
+        hdfsRootDir: "/service/82/devtest/logs/%y%M%d/%H/devtest-test3",
+        proxyUser: "dariens",
+        defaultDirectory: "data",
+        filterSet: [ ]
+}
 ```
 
-Topics and their output paths are now configured a little differently.  An hdfsRootDir is now required for every topic in addition to the proxy user.  
+Note: The empty filterSet array is reserved for future to-be-implemented  use-cases.
 
-Note that the hdfsRootDir is prefixed with the hadoop.fs.uri before it's used.
-
-```
-topic.devtest-test1.hdfsRootDir=/service/82/devtest/logs/%y%M%d/%H/test1
-topic.devtest-test1.proxy.user=dariens
-```
-
-Multiple numbered HDFS output directories are supported.  The numbers are meaningless and the duration determines how long the file will remain open before it's closed off.  
-
-Note: The duration + 60 seconds is used.  The 60 seconds is an attempt at ensuring that late events don't still require the open file.
+## Startup Configuration
+Example startup configuration (property file based):
 
 ```
-topic.devtest-test1.hdfsDir.1=data
-topic.devtest-test1.hdfsDir.1.duration=3600
-```
+######################
+# KaBoom Configuration
+######################
 
-The hdfsDir above is prefixed with the hdfsRootDir for the topic (which in turn is prefixed with the hadoop.fs.uri).  In this example the fully populated URL would be:
+kaboom.id=1001
+hadooop.fs.uri=hdfs://hadoop.company.com
+#kaboom.weighting=<number> - the default is number of cores
+kerberos.keytab=/opt/kaboom/config/kaboom.keytab
+kerberos.principal=kaboom@COMPANY.COM
+#kaboom.hostname=<name> - the default is the system's hostname
+zookeeper.connection.string=r3k1.kafka.company.com:2181,r3k2.kafka.company.com:2181,r3k3.kafka.company.com:2181/KaBoomDev
+kafka.zookeeper.connection.string=r3k1.kafka.company.com:2181,r3k2.kafka.company.com:2181,r3k3.kafka.company.com:2181
+#kaboom.load.balancer.type=even - this is the default
+#kaboom.runningConfig.zkPath=/kaboom/config - this is the default
 
-hdfs://hadoop.site.cluster-01/service/82/devtest/logs/%y%M%d/%H/test1/data/
+########################
+# Consumer Configuration 
+########################
 
-The file created for a message received at the time of this writing for partition 0 in the above topic would in turn create a boom  file called: <partition_number>_<offset>.bm, example:
-
-hdfs://hadoop.site.cluster-01/service/82/devtest/logs/20150212/17/test1/data/0_12345678.bm
-
-### Example Configuration FIle: /opt/kaboom/config/kaboom.properties (defines Klogger configuration, topics, and ports)
-```
-# This must be unique amongst all KaBoom instances
-kaboom.id=666
-
-# Hadoop URI
-hadooop.fs.uri=hdfs://hadoop.site.cluster-01
-
-# How often to periodically flush open output paths to HDFS
-kaboom.boomWriter.periodicHdfsFlushInterval=30000
-
-# Store open files in a temp directory (based off filename) while they are open
-kaboom.useTempOpenFileDirectory = false
-
-kerberos.principal = flume@AD0.BBLABS
-kerberos.keytab = /opt/kaboom/config/kaboom.keytab
-kaboom.readyflag.prevhours = 30
-
-zookeeper.connection.string=kaboom1.site.cluster-01:2181,kaboom2.site.cluster-01:2181,kaboom3.site.cluster-01:2181/KaBoom
-
-kafka.zookeeper.connection.string=kafka1.site.cluster-01:2181,kafka2.site.cluster-01:2181,kafka3.site.cluster-01:2181
-fetch.wait.max.ms=5000
-auto.offset.reset=smallest
-socket.receive.buffer.bytes=1048576
+metadata.broker.list=r3k1.kafka.company.com:9092,r3k2.kafka.company.com:9092,r3k3.kafka.company.com:9092
 fetch.message.max.bytes=10485760
-kaboom.sinkToHighWatermark=true
-kaboom.allowOffsetOverrides=true
-
-metadata.broker.list=kafka1.site.cluster-01:9092,kafka2.site.cluster-01:9092,kafka3.site.cluster-01:9092
-
-topic.topic1.hdfsRootDir=/service/82/topic1/logs/%y%M%d/%H/topic1
-topic.topic1.proxy.user=someuser
-topic.topic1.hdfsDir.1=data
-topic.topic1.hdfsDir.1.duration=3600
+fetch.wait.max.ms=5000
+#fetch.min.bytes=1 - this is the default
+socket.receive.buffer.bytes=10485760
+auto.offset.reset=smallest
+#socket.timeout.seconds=30000 - this is the default
 ```
 
-### Example Configuration FIle: /opt/kaboom/config/kaboom-env.sh (defines runtime configuration and JVM properties)
+## Running Configuration
+Here is an example running configuration stored at `zk://<root>/kaboom/config`:
+
+```
+{
+        version: 8,
+        allowOffsetOverrides: true,
+        sinkToHighWatermark: true,
+        useTempOpenFileDirectory: false,
+        useNativeCompression: false,
+        readyFlagPrevHoursCheck: 24,
+        leaderSleepDurationMs: 600001,
+        compressionLevel: 6,
+        boomFileBufferSize: 16384,
+        boomFileReplicas: 3,
+        boomFileBlocksize: 268435456,
+        boomFileTmpPrefix: "_tmp_",
+        periodicHdfsFlushInterval: 30000,
+        kaboomServerSleepDurationMs: 10000,
+        fileCloseGraceTimeAfterExpiredMs: 30000,
+        forcedZkOffsetTsUpdateMs: 600000,
+        kafkaReadyFlagFilename: "_READY",
+        maxOpenBoomFilesPerPartition: 5,
+        workerSprintDurationSeconds: 3600,
+        propagateReadyFlags: true,
+        propagateReadyFlagFrequency: 600000,
+        propateReadyFlagDelayBetweenPathsMs: 10
+}
+```
+
+## Example Configuration File: /opt/kaboom/config/kaboom-env.sh
+Here is an exmaple environemnt configuration file (defines runtime configuration and JVM properties):
+
 ```
 JAVA=`which java`
 BASEDIR=/opt/kaboom
@@ -124,7 +121,7 @@ LIBDIR="$BASEDIR/lib"
 LOGDIR="/var/log/kaboom"
 CONFIGDIR="$BASEDIR/config"
 JMXPORT=9580
-LOG4JPROPERTIES=$CONFIGDIR/log4j.properties
+LOG4JPROPERTIES=$CONFIGDIR/log4j2.xml
 PIDBASE=/var/run/kaboom
 KABOOM_USER=kafka
 
@@ -144,34 +141,47 @@ JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.authenticate=false"
 JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.ssl=false"
 JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote.port=$JMXPORT"
 
-JAVA_OPTS="$JAVA_OPTS -Dlog4j.configuration=file:$LOG4JPROPERTIES"
+JAVA_OPTS="$JAVA_OPTS -Dlog4j.configurationFile=file:$LOG4JPROPERTIES"
 
 JAVA_OPTS="$JAVA_OPTS -Dkaboom.logs.dir=$LOGDIR"
 
 CLASSPATH=$CONFIGDIR:/etc/hadoop/conf:$LIBDIR/*
 ```
 
-### Example Configuration FIle: /opt/kaboom/config/log4j.properties (logging)
+## Example Configuration File: /opt/kaboom/config/log4j2.xml (logging)
 ```
-kaboom.logs.dir=/var/log/kaboom
-log4j.rootLogger=INFO, kaboomAppender
-
-log4j.appender.stdout=org.apache.log4j.ConsoleAppender
-log4j.appender.stdout.layout=org.apache.log4j.PatternLayout
-log4j.appender.stdout.layout.ConversionPattern=[%d] %p %m (%c)n
-
-log4j.appender.kaboomAppender=org.apache.log4j.DailyRollingFileAppender
-log4j.appender.kaboomAppender.DatePattern='.'yyy-MM-dd-HH
-log4j.appender.kaboomAppender.File=${kaboom.logs.dir}/server.log
-log4j.appender.kaboomAppender.layout=org.apache.log4j.PatternLayout
-log4j.appender.kaboomAppender.layout.ConversionPattern=[%d] %p %m (%c)%n
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- This status="$LEVEL" on the next line  is for the logging of log4j2 as it configured tself, don't adjust it for  your application logging -->
+<configuration status="WARN" monitorInterval="30">
+   <appenders>
+      <Console name="console" target="SYSTEM_OUT">
+         <PatternLayout pattern="[%d] %p %m (%c)%n" />
+      </Console>
+      <RollingFile name="primary" fileName="/var/log/kaboom/server.log" filePattern="/var/log/kaboom/server.log.%d{yyyy-MM-dd-k}.log">
+         <PatternLayout>
+            <Pattern>[%d] %p %m (%c)%n</Pattern>
+         </PatternLayout>
+         <Policies>
+            <TimeBasedTriggeringPolicy interval="1" modulate="true" />
+         </Policies>
+      </RollingFile>
+   </appenders>
+   <Loggers>
+      <Logger name="stdout" level="info" additivity="false">
+         <AppenderRef ref="console" />
+      </Logger>
+      <Root level="INFO">
+         <AppenderRef ref="primary" />
+      </Root>
+   </Loggers>
+</configuration>
 ```
 
 ## Running
 After configuration simply start the kaboom service 'service kabom start'.
 
 ## Monitoring
-Exposed via [Coda Hale's Metric's](https://github.com/dropwizard/metrics) are metrics for monitoring message count, size, and lag (measure of how far behind KaBoom is compared to most recent message in Kafka--both in offset count and seconds):
+Exposed via [Dropwizard Metric's](https://github.com/dropwizard/metrics) are metrics for monitoring message count, size, and lag (measure of how far behind KaBoom is compared to most recent message in Kafka--both in offset count and seconds):
 
 New monitoring metrics in 0.7.1:
 
@@ -246,7 +256,6 @@ Specifically, we always use a compression codec of 'deflate' and we always use t
               "name": "messageWithMillis",
               "fields": [ 
                 { "name": "ms",      "type": "long" },
-                { "name": "eventId", "type": "int", "default": 0 },
                 { "name": "message", "type": "string" }
               ]
             }

@@ -24,8 +24,6 @@ import java.util.TimeZone;
 
 import org.junit.Test;
 
-import com.blackberry.bdp.kaboom.TimestampParser;
-
 public class TimestampParserTest {
 
 	@Test
@@ -93,6 +91,16 @@ public class TimestampParserTest {
 		assertEquals(cal.getTimeInMillis(), tsp.getTimestamp());
 		assertEquals(19, tsp.getLength());
 
+		//IPGBD-3830 Test Whitespace padded days
+		timestamp = "May  7 17:05:08.123 This is a test";
+		tsp.parse(timestamp.getBytes(), 0, timestamp.length());
+		assertEquals(TimestampParser.NO_ERROR, tsp.getError());
+		Calendar cal2 = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+		cal2.setTimeInMillis(1399482308123L);
+		cal2.set(Calendar.YEAR, currentYear);
+		assertEquals(cal2.getTimeInMillis(), tsp.getTimestamp());
+		assertEquals(19, tsp.getLength());
+		
 		timestamp = "<1>1 2014-05-07T17:05:08 This is a test";
 		tsp.parse(timestamp.getBytes(), 5, timestamp.length());
 		assertEquals(TimestampParser.NO_ERROR, tsp.getError());

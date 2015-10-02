@@ -9,11 +9,11 @@ CONFIGDIR="$BASEDIR/config"
 JMXPORT=9580
 LOG4JPROPERTIES=$CONFIGDIR/log4j.properties
 PIDBASE=/var/run/kaboom
-KABOOM_USER=kafka
+KABOOM_USER=kaboom
 
 JAVA_OPTS=""
 JAVA_OPTS="$JAVA_OPTS -server"
-JAVA_OPTS="$JAVA_OPTS -Xms10G -Xmx10G"
+JAVA_OPTS="$JAVA_OPTS -Xms5G -Xmx5G"
 JAVA_OPTS="$JAVA_OPTS -XX:+UseParNewGC -XX:+UseConcMarkSweepGC"
 JAVA_OPTS="$JAVA_OPTS -XX:+UseCMSInitiatingOccupancyOnly -XX:+CMSConcurrentMTEnabled -XX:+CMSScavengeBeforeRemark"
 JAVA_OPTS="$JAVA_OPTS -XX:CMSInitiatingOccupancyFraction=30"

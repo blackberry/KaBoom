@@ -59,14 +59,12 @@ public class TimestampParser {
 				return;
 			}
 
-			// It it start with a number assume YYYY MM DD HH MM SS[.ffffff][TZ] with
-			// arbitrary separators.
+			// It it start with a number assume YYYY MM DD HH MM SS[.ffffff][TZ] with arbitrary separators.
 			if (bytes[pos] >= '0' && bytes[pos] <= '9') {
 				parseYyyyMmDd();
 
 			}
-			// If it starts with a month name assume MMM DD HH MM SS[.ffffff][TZ] with
-			// arbitrary separators
+			// If it starts with a month name assume MMM DD HH MM SS[.ffffff][TZ] with arbitrary separators
 			else if (bytes[pos] >= 'A' && bytes[pos] <= 'S') {
 				parseMmmDd();
 
@@ -89,7 +87,7 @@ public class TimestampParser {
 
 			this.length = pos - i;
 		} catch (Throwable t) {
-			LOG.error("Error parsing timestamp.", t);
+			LOG.debug("Error parsing timestamp.", t);
 			error = ERROR;
 		}
 	}
@@ -232,7 +230,8 @@ public class TimestampParser {
 	private void parseMmmDd() throws ParseException {
 		assumeYear();
 		parseMmm();
-		advance();
+		//advance();
+		pos++;
 		parseDd();
 	}
 

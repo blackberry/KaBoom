@@ -5,103 +5,89 @@
  */
 package com.blackberry.bdp.kaboom;
 
+import static com.blackberry.bdp.common.conversion.Converter.intFromBytes;
+import static com.blackberry.bdp.kaboom.Leader.UTF8;
+import com.blackberry.bdp.kaboom.api.KaBoomClient;
+import com.blackberry.bdp.kaboom.api.KaBoomPartition;
+import com.blackberry.bdp.kaboom.api.KaBoomTopic;
+import com.blackberry.bdp.kaboom.api.KafkaBroker;
+import com.blackberry.bdp.kaboom.api.KafkaTopic;
+import java.util.HashMap;
+import java.util.List;
 import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The fair load balancer
- * 
- * Partitions are assigned based off a weighted workload.  
- * 
- * The default weighting is based on how many cores each client has.
- * 
- * There will be a preference for local work while the client is under-loaded.
- * 
- * However, as soon as the client is over-loaded, work is arbitrarily assigned.
- * 
- * @author dariens
+ * Assigns partitions to whomever their local client is
  */
-public class LocalLoadBalancer extends Leader
-{
-	
+public class LocalLoadBalancer extends Leader {
+
 	private static final Logger LOG = LoggerFactory.getLogger(EvenLoadBalancer.class);
 
-	public LocalLoadBalancer(KaboomConfiguration config)
-	{
+	public LocalLoadBalancer(StartupConfig config) {
 		super(config);
-		LOG.info("The local load balancer has been instantiated");
 	}
 
 	/**
-	 * Iterate through all partitions...
-	 * 
-	 * Unassign non-local assignment and assign unassigned partitions to the local client 
+	 * Unassign non-local assignments and assigns unassigned partitions to the local client 
+	 * @param kafkaBrokers
+	 * @param kaboomClients
+	 * @param kaboomTopics
+	 * @param kafkaTopics
+	 * @throws java.lang.Exception
 	 */
-	
 	@Override
-	protected void run_balancer()
-	{	
-		for (String partition : partitionToHost.keySet())
-		{
-			// Are we assigned?
-			
-			String leaderClientId = hostnameToClientId.get(partitionToHost.get(partition));
-			
-			if (partitionToClient.containsKey(partition))
-			{
-				// Is the assigned client the leader of the partition?
-				
-				if (partitionToClient.get(partition).equals(leaderClientId))
-				{
-					LOG.info("{} is already assigned to the partition leader");
-				}
-				else
-				{
-					LOG.warn("partition {} is assigned to {} however {} is the leader", partition, partitionToClient.get(partition), leaderClientId);
-					
-					try
-					{					
-						curator.delete().forPath("/kaboom/assignments/" + partition);
+	protected void run_balancer(
+		 List<KafkaBroker> kafkaBrokers,
+		 List<KaBoomClient> kaboomClients,
+		 List<KaBoomTopic> kaboomTopics,
+		 List<KafkaTopic> kafkaTopics) throws Exception {
 
-						LOG.info("{} non-local assignment to {} deleted from ZK ", partition, partitionToClient.get(partition));
-
-						curator
-							 .create()
-							 .withMode(CreateMode.PERSISTENT)
-							 .forPath("/kaboom/assignments/" + partition, leaderClientId.getBytes(UTF8));					
-						
-						partitionToClient.put(partition, leaderClientId);
-						
-						LOG.info("{} previously assigned to remote client now assigned to local client: {}", partition, leaderClientId);
-					}
-					catch (Exception e)
-					{
-						LOG.error("[{}] error trying to correct non-local assignment", partition);
-					}
-				}
-			}
-			
-			// Nope, not assigned, just assign it to the local client
-			else
-			{
-				try
-				{	
-					curator
-						 .create()
-						 .withMode(CreateMode.PERSISTENT)
-						 .forPath("/kaboom/assignments/" + partition, leaderClientId.getBytes(UTF8));					
-
-					partitionToClient.put(partition, leaderClientId);
-
-					LOG.info("{} assigned to local client: {}", partition, leaderClientId);
-				}
-				catch (Exception e)
-				{
-					LOG.error("[{}] error trying to assign to {}", partition, leaderClientId);
-				}
+		HashMap<String, KaBoomPartition> idToPartition = new HashMap<>();
+		for (KaBoomTopic topic : kaboomTopics) {
+			for (KaBoomPartition partition : topic.getPartitions()) {
+				idToPartition.put(partition.getTopicPartitionString(), partition);
 			}
 		}
+
+		HashMap<String, KaBoomClient> hostToKaBoomClient = new HashMap<>();
+		HashMap<Integer, KaBoomClient> idToKaBoomClient = new HashMap<>();
+		for (KaBoomClient client : kaboomClients) {
+			hostToKaBoomClient.put(client.getHostname(), client);
+			idToKaBoomClient.put(client.getId(), client);
+		}
+
+		// Delete an assignemnts if the kaboom client isn't local
+		try {
+			for (String partitionId : curator.getChildren().forPath(config.getZkRootPathPartitionAssignments())) {
+				String assignmentZkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(), partitionId);
+				KaBoomClient assignedClient = idToKaBoomClient.get(intFromBytes(curator.getData().forPath(assignmentZkPath)));
+				KafkaBroker leader = idToPartition.get(partitionId).getKafkaPartition().getLeader();				
+				if (!leader.getHost().equals(assignedClient.getHostname())) {
+					curator.delete().forPath(assignmentZkPath);
+					LOG.info("Non-local assignment {} to client {} (hostname: {}) deleted because leader's  hostname is{}",
+						 assignmentZkPath, assignedClient.getId(), assignedClient.getHostname(), leader.getHost());
+				}
+			}
+		} catch (Exception e) {
+			LOG.error("There was a problem pruning the assignments of unsupported topics", e);
+		}
+		
+		for (KaBoomPartition partition : KaBoomPartition.unassignedPartitions(kaboomTopics)) {
+			String leaderHostname = partition.getKafkaPartition().getLeader().getHost();
+			KaBoomClient localClient = hostToKaBoomClient.get(leaderHostname);
+			if (localClient != null) {
+				String zkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(), 
+					 partition.getTopicPartitionString());
+				curator.create().withMode(CreateMode.PERSISTENT).forPath(zkPath, 
+					 String.valueOf(localClient.getId()).getBytes(UTF8));
+				partition.setAssignedClient(localClient);
+				localClient.getAssignedPartitions().add(partition);
+				
+			}
 			
+		}
 	}
+
 }

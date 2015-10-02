@@ -1,0 +1,21 @@
+{
+  "namespace": "com.blackberry.bdp.containers.boom",
+  "type": "record",
+  "name": "LogBlock",
+  "fields": [
+    { "name": "second",      "type": "long" },
+    { "name": "createTime",  "type": "long" },
+    { "name": "blockNumber", "type": "long" },
+    { "name": "logLines", "type": {
+      "type": "array",
+        "items": {
+          "type": "record",
+          "name": "MessageWithMillis",
+          "fields": [ 
+            { "name": "ms",      "type": "long" },
+            { "name": "message", "type": "string" }
+          ]
+        }
+    }}
+  ]
+}

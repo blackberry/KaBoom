@@ -3,3 +3,4 @@
 .settings/
 target/
 NativeDeflate/lib/libNativeDeflate.so
+nb-configuration.xml
