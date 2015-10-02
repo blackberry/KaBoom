@@ -563,7 +563,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 					hdfsOutputPath.getBoomWriter(
 						 currentShift.shiftNumber,
 						 timestamp,
-						 config.getKaboomId() + "-" + partitionId + "-" + currentShift.offset + ".bm").writeLine(timestamp, bytes, pos, length - pos);
+						 partitionId + "-" + currentShift.offset + ".bm").writeLine(timestamp, bytes, pos, length - pos);
 
 					boomWritesMeter.mark();
 					boomWritesMeterTopic.mark();
