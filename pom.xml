@@ -18,9 +18,9 @@ limitations under the License.
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>com.blackberry.bdp.kaboom</groupId>
-	<name>kaboom-0.8.2</name>
+	<name>kaboom-0.8.2-HF1</name>
 	<artifactId>kaboom</artifactId>
-	<version>0.8.2</version>
+	<version>0.8.2.1</version>
 	<packaging>jar</packaging>	
 	<url>http://blackberry.com</url>
 

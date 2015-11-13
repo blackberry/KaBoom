@@ -37,6 +37,7 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.Meter;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import org.apache.curator.framework.recipes.cache.NodeCache;
 import org.apache.curator.framework.recipes.cache.NodeCacheListener;
@@ -87,6 +88,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 	private WorkerShift previousShift = null;
 	private WorkerShift currentShift;
 	private InterProcessMutex lock;
+	private NodeCache nodeCache;
 
 	static {
 		MetricRegistrySingleton.getInstance().getMetricsRegistry()
@@ -264,7 +266,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 
 		LOG.info("[{}] worker instantiated with topic configuration version {}", partitionId, topicConfig.getVersion());
 
-		NodeCache nodeCache = new NodeCache(curator, topicConfig.getZkPath());
+		nodeCache = new NodeCache(curator, topicConfig.getZkPath());
 		nodeCache.getListenable().addListener(new NodeCacheListener() {
 			@Override
 			public void nodeChanged() throws Exception {
@@ -290,6 +292,8 @@ public final class Worker extends AsyncAssignee implements Runnable {
 
 		});
 		nodeCache.start();
+		
+		//curator.
 
 		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
 		lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
@@ -581,6 +585,12 @@ public final class Worker extends AsyncAssignee implements Runnable {
 		} catch (Exception e) {
 			LOG.error("[{}] An exception occured while setting up this worker thread", getPartitionId(), e);
 		} finally {
+			try {
+				nodeCache.close();
+				LOG.info("[{}] closed off the node cache listener", partitionId);
+			} catch (IOException ioe) {
+				LOG.error("[{}] failed to close off the node cache listener: ", partitionId, ioe);
+			}
 			LOG.info("[{}] Worker finished after having processed {} events", partitionId, messagesWritten);
 			try {
 				releaseAssignment();

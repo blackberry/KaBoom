@@ -1,5 +1,9 @@
 # KaBoom Changes
 
+## 0.8.2-HF1
+
+* Moves the node cache listener to an attribute of worker and closes off in the finally block executed after the run
+
 ## 0.8.2:
 
 * TODO: Re-write the change log
