@@ -89,7 +89,7 @@ public class TimeBasedHdfsOutputPath {
 		long oldestTs = outputFileMap.entrySet().iterator().next().getValue().lastUsedTimestmap;
 		long outputFileStartTime = outputFileMap.entrySet().iterator().next().getKey();
 		for (Entry<Long, OutputFile> entry : outputFileMap.entrySet()) {
-			if (oldestTs < entry.getValue().lastUsedTimestmap) {
+			if (entry.getValue().lastUsedTimestmap < oldestTs) {
 				oldestTs = entry.getValue().lastUsedTimestmap;
 				// We actually need the entry's key, which represents the outputfile's start time
 				outputFileStartTime = entry.getKey();
