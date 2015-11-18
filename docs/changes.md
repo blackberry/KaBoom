@@ -1,5 +1,9 @@
 # KaBoom Changes
 
+## 0.8.2-HF3
+
+* Fixes KABOOM-20 - Maps Used by Leader Not Emptied 
+
 ## 0.8.2-HF2
 
 * Fixes IPGBD-4245/KABOOM-18 - Bug closing LRU Output File

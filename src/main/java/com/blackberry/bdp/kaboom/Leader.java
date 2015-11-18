@@ -29,6 +29,7 @@ import com.blackberry.bdp.kaboom.api.KaBoomTopic;
 import com.blackberry.bdp.common.zk.ZkUtils;
 import com.blackberry.bdp.kaboom.api.KaBoomClient;
 import com.blackberry.bdp.kaboom.api.KafkaBroker;
+import com.blackberry.bdp.kaboom.api.KafkaPartition;
 
 import com.blackberry.bdp.kaboom.api.KafkaTopic;
 import java.util.List;
@@ -52,6 +53,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 
 	private final HashMap<Integer, KaBoomClient> idToKaBoomClient = new HashMap<>();
 	private final HashMap<String, KaBoomTopic> nameToKaBoomTopic = new HashMap<>();
+	private final HashMap<String, KafkaPartition> kafkaPartitionIdToPartition = new HashMap<>();
 
 	public Leader(StartupConfig config) {
 		this.config = config;
@@ -64,6 +66,11 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 		 List<KafkaTopic> kafkaTopics)
 		 throws Exception;
 
+	private void deleteAssignment(String reason, String zkPath) throws Exception {
+		curator.delete().forPath(zkPath);
+		LOG.info("Assignment {} deleted {}", zkPath, reason);
+	}
+	
 	@Override
 	public void takeLeadership(CuratorFramework curator) throws Exception {
 		this.curator = curator;
@@ -74,6 +81,11 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 
 		while (true) {
 
+			// Clear all convenience mappings
+			idToKaBoomClient.clear();
+			nameToKaBoomTopic.clear();
+			kafkaPartitionIdToPartition.clear();
+			
 			kafkaBrokers = KafkaBroker.getAll(config.getKafkaCurator(), config.getZkRootPathKafkaBrokers());
 			kafkaTopics = KafkaTopic.getAll(config.getKafkaSeedBrokers(), "leaderLookup", kafkaBrokers);
 			kaboomClients = KaBoomClient.getAll(KaBoomClient.class, curator, config.getZkRootPathClients());
@@ -95,6 +107,12 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 			for (KaBoomTopic kaboomTopic : kaboomTopics) {
 				nameToKaBoomTopic.put(kaboomTopic.getKafkaTopic().getName(), kaboomTopic);
 			}
+			
+			for (KafkaTopic kafkaTopic : kafkaTopics) {
+				for (KafkaPartition kafkaPartition : kafkaTopic.getPartitions()) {
+					kafkaPartitionIdToPartition.put(kafkaPartition.getTopicPartitionString(), kafkaPartition);
+				}
+			}
 
 			// Delete an assignemnts if the kaboom client isn't connected or the topic is not configured
 			try {
@@ -109,16 +127,17 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 							String topicName = m.group(1);
 							int partitonId = Integer.parseInt(m.group(2));
 							int assignedClientId = new Integer(clientId);							
+							
+							// Check for all the reasons to delete an invalid assignment
+							
 							if (!nameToKaBoomTopic.containsKey(topicName)) {
-								deletedReason = "because of missing topic configuration";
-							} else {
-								if (!idToKaBoomClient.containsKey(assignedClientId)) {
-									deletedReason = String.format("because client %s is not connected", assignedClientId);
-								}
-							}							
-							if (deletedReason != null) {
-								curator.delete().forPath(assignmentZkPath);
-								LOG.info("Assignment {} deleted {}", assignmentZkPath, deletedReason);
+								deleteAssignment("because of missing topic configuration", assignmentZkPath);
+							} else if (!idToKaBoomClient.containsKey(assignedClientId)) {
+								deleteAssignment(String.format("because client %s is not connected", assignedClientId), 
+									 assignmentZkPath);
+							} else if (!kafkaPartitionIdToPartition.containsKey(partitionId)) {
+								deleteAssignment(String.format("because %s is not a valid Kafka partition", partitionId),
+									 assignmentZkPath);
 							} else {
 								LOG.info("Pre-balanced found  {} assigned to {}", partitionId, assignedClientId);
 								idToKaBoomClient.get(assignedClientId).getAssignedPartitions().add(
