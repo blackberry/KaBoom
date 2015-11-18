@@ -78,6 +78,7 @@ public class TimeBasedHdfsOutputPath {
 					outputFileMap.remove(oldestTs);
 				} catch (Exception e) {
 					LOG.error("[{}] Failed to close off oldest boom writer: ", partitionId, e);
+					throw e;
 				}
 			}
 		}
@@ -104,7 +105,7 @@ public class TimeBasedHdfsOutputPath {
 		}
 	}
 
-	public void closeAll() {
+	public void closeAll() throws IOException {
 		for (Map.Entry<Long, OutputFile> entry : outputFileMap.entrySet()) {
 			entry.getValue().close();
 		}
@@ -123,7 +124,7 @@ public class TimeBasedHdfsOutputPath {
 						 entry.getValue().openFilePath,
 						 outputFileMap.size());
 					iter.remove();
-				} catch (Exception e) {
+				} catch (IOException | IllegalArgumentException e) {
 					LOG.error("Error closing output path {}", this, e);
 					throw e;
 				}
@@ -152,7 +153,7 @@ public class TimeBasedHdfsOutputPath {
 		private long lastUsedTimestmap;
 		private final long shiftNumber;
 
-		public OutputFile(long shiftNumber, String filename, Long startTime) {
+		public OutputFile(long shiftNumber, String filename, Long startTime) throws Exception {
 			this.shiftNumber = shiftNumber;
 			this.filename = filename;
 			this.startTime = startTime;
@@ -198,6 +199,7 @@ public class TimeBasedHdfsOutputPath {
 
 			} catch (Exception e) {
 				LOG.error("[{}] Error creating file {}: ", partitionId, openFilePath, e);
+				throw e;
 			}
 		}
 
@@ -229,33 +231,25 @@ public class TimeBasedHdfsOutputPath {
 			}
 		}
 
-		public void close() {
+		public void close() throws IOException, IllegalArgumentException {
 			LOG.info("[{}] Closing {}", partitionId, openFilePath);
-
 			try {
 				boomWriter.close();
 				LOG.info("[{}] Boom writer closed for {}", partitionId, openFilePath);
+				
 				hdfsDataOut.close();
 				LOG.info("[{}] Output stream closed for {}", partitionId, openFilePath);
-			} catch (IOException ioe) {
-				LOG.error("[{}] Error closing up boomWriter {}:", partitionId, openFilePath, ioe);
-			}
-
-			if (useTempOpenFileDir) {
-				try {
-					LOG.info("[{}] Moving {} to {}", partitionId, openFilePath, finalPath);
+			
+				if (useTempOpenFileDir) {
 					fileSystem.rename(openFilePath, finalPath);
-				} catch (Exception e) {
-					LOG.error("[{}] Error moving {} to {}", partitionId, openFilePath, finalPath, e);
-					abort();
-				}
+					LOG.info("[{}] moved {} to {}", partitionId, openFilePath, finalPath);
 
-				try {
 					fileSystem.delete(new Path(openFileDirectory), true);
 					LOG.info("[{}] Deleted temp open file directory: {}", partitionId, openFileDirectory);
-				} catch (IllegalArgumentException | IOException e) {
-					LOG.error("[{}] Error deleting temp open file direcrory {}", partitionId, openFileDirectory, e);
 				}
+			} catch (IOException ioe) {
+				LOG.error("[{}] Error closing up boomWriter {}:", partitionId, openFilePath, ioe);
+				throw ioe;
 			}
 		}
 

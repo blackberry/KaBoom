@@ -122,7 +122,6 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 						Matcher m = topicPartitionPattern.matcher(partitionId);
 						if (m.matches()) {
 							String assignmentZkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(), partitionId);
-							String deletedReason = null;
 							String clientId = new String(curator.getData().forPath(assignmentZkPath), UTF8);
 							String topicName = m.group(1);
 							int partitonId = Integer.parseInt(m.group(2));
@@ -138,10 +137,10 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 							} else if (!kafkaPartitionIdToPartition.containsKey(partitionId)) {
 								deleteAssignment(String.format("because %s is not a valid Kafka partition", partitionId),
 									 assignmentZkPath);
-							} else {
-								LOG.info("Pre-balanced found  {} assigned to {}", partitionId, assignedClientId);
+							} else {								
 								idToKaBoomClient.get(assignedClientId).getAssignedPartitions().add(
 									 nameToKaBoomTopic.get(topicName).getKaBoomPartition(partitonId));
+								LOG.info("Pre-balanced found  {} assigned to {}", partitionId, assignedClientId);
 							}
 						}
 					} catch (Exception e) {
