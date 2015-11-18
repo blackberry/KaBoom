@@ -3,6 +3,8 @@
 ## 0.8.2-HF3
 
 * Fixes KABOOM-20 - Maps Used by Leader Not Emptied 
+* Fixes KABOOM-21 - Ensure Exceptions Are Not Swallowed And Abort Accordingly
+* Fixes KABOOM-22 - Bug in Closing LRU Boom File Closing Most Recently Used v2
 
 ## 0.8.2-HF2
 

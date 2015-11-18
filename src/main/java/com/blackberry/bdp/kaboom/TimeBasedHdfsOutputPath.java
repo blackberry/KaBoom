@@ -61,6 +61,7 @@ public class TimeBasedHdfsOutputPath {
 		OutputFile requestedOutputFile = outputFileMap.get(requestedStartTime);
 		if (requestedOutputFile == null) {
 			requestedOutputFile = new OutputFile(shiftNumber, filename, requestedStartTime);
+			requestedOutputFile.lastUsedTimestmap = System.currentTimeMillis();
 			outputFileMap.put(requestedStartTime, requestedOutputFile);
 			if (outputFileMap.size() > config.getRunningConfig().getMaxOpenBoomFilesPerPartition()) {
 				long oldestTs = getOldestLastUsedTimestamp();
