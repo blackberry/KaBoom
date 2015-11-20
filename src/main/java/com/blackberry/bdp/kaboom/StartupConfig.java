@@ -24,7 +24,6 @@ import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.IOException;
 
-import java.util.HashMap;
 import java.util.Properties;
 
 import org.apache.hadoop.conf.Configuration;
@@ -38,9 +37,7 @@ import org.apache.curator.retry.ExponentialBackoffRetry;
 import com.blackberry.bdp.common.props.Parser;
 
 import com.blackberry.bdp.kaboom.api.RunningConfig;
-import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
-import java.util.Iterator;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.cache.NodeCache;
 import org.apache.curator.framework.recipes.cache.NodeCacheListener;
@@ -49,7 +46,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.zookeeper.data.Stat;
 
 /**
  *
@@ -71,6 +67,7 @@ public class StartupConfig {
 	private int weight;
 	private final CuratorFramework kaboomCurator;
 	private final CuratorFramework kafkaCurator;
+	private final NodeCache nodeCache;
 	private String kerberosPrincipal;
 	private String kerberosKeytab;
 	private String hostname;
@@ -88,8 +85,6 @@ public class StartupConfig {
 	private String zkRootPathFlagAssignments = String.format("%s/%s", zkRootPathKaBoom, "flag-assignments");
 	private String zkPathRunningConfig = String.format("%s/%s", zkRootPathKaBoom, "config");
 	private String zkPathLeaderClientId = String.format("%s/%s", zkRootPathKaBoom, "leader");
-
-	private final HashMap<String, FileSystem> proxyUserToFileSystem = new HashMap<>();
 
 	/**
 	 * POSIX style NONE("---"), EXECUTE("--x"), WRITE("-w-"), WRITE_EXECUTE("-wx"), READ("r--"), READ_EXECUTE("r-x"), READ_WRITE("rw-"), ALL("rwx");
@@ -155,7 +150,7 @@ public class StartupConfig {
 
 		runningConfig = RunningConfig.get(RunningConfig.class, kaboomCurator, zkPathRunningConfig);
 
-		final NodeCache nodeCache = new NodeCache(kaboomCurator, zkPathRunningConfig);
+		nodeCache = new NodeCache(kaboomCurator, zkPathRunningConfig);
 		nodeCache.getListenable().addListener(new NodeCacheListener() {
 			@Override
 			public void nodeChanged() throws Exception {
@@ -165,38 +160,37 @@ public class StartupConfig {
 
 		});
 		nodeCache.start();
-		
+
 		Authenticator.getInstance().setKerbConfPrincipal(kerberosPrincipal);
 		Authenticator.getInstance().setKerbKeytab(kerberosKeytab);
 	}
 
 	/**
-	 * Builds the proxyUserToFileSystem mapping
+	 * Returns an authenticated file system for a proxy user
 	 *
 	 * @param proxyUser
 	 * @return
 	 * @throws java.io.IOException
 	 * @throws java.lang.InterruptedException
 	 */
-	public final FileSystem authenticatedFsForProxyUser(final String proxyUser) throws IOException, InterruptedException {
-		LOG.info("Attempting to create file system {} for {}", getHadoopUrlPath(), proxyUser);
-		return Authenticator.getInstance().runPrivileged(proxyUser, new PrivilegedExceptionAction<FileSystem>() {
-			@Override
-			public FileSystem run() throws Exception {
-				FileSystem fs;
-				synchronized (fsLock) {
-					try {
-						fs = getHadoopUrlPath().getFileSystem(hadoopConfiguration);
-						proxyUserToFileSystem.put(proxyUser, fs);
-						LOG.debug("Created file system {} for proxy user {}", getHadoopUrlPath(), proxyUser);
-					} catch (IOException ioe) {
-						LOG.error("Error creaing file system {} for proxy user {}", getHadoopUrlPath(), proxyUser, ioe);
-						throw ioe;
-					}
-				}
-				return fs;
-			}
-		});
+	public final FileSystem authenticatedFsForProxyUser(final String proxyUser)
+		 throws IOException, InterruptedException {
+		return Authenticator.getInstance().runPrivileged(proxyUser,
+			 new PrivilegedExceptionAction<FileSystem>() {
+				 @Override
+				 public FileSystem run() throws Exception {
+					 synchronized (fsLock) {
+						 try {
+							 return getHadoopUrlPath().getFileSystem(hadoopConfiguration);
+						 } catch (IOException ioe) {
+							 LOG.error("Error creaing file system {} for proxy user {}",
+								  getHadoopUrlPath(), proxyUser, ioe);
+							 throw ioe;
+						 }
+					 }
+				 }
+
+			 });
 	}
 
 	/**
@@ -213,13 +207,13 @@ public class StartupConfig {
 				propsIn = new FileInputStream(System.getProperty("kaboom.configuration"));
 				props.load(propsIn);
 			} else {
-				LOG.info("Loading configs from default properties file {}", KaBoom.class.getClassLoader().getResource(defaultProperyFile));
+				LOG.info("Loading configs from default properties file {}", 
+					 KaBoom.class.getClassLoader().getResource(defaultProperyFile));
 				propsIn = KaBoom.class.getClassLoader().getResourceAsStream(defaultProperyFile);
 				props.load(propsIn);
 			}
 		} catch (Throwable t) {
 			System.err.println("Error getting config file:");
-			System.err.printf("stacktrace: %s", t.getStackTrace().toString());
 			System.exit(1);
 		}
 
@@ -431,6 +425,13 @@ public class StartupConfig {
 	 */
 	public Path getHadoopUrlPath() {
 		return hadoopUrlPath;
+	}
+
+	/**
+	 * @return the nodeCache
+	 */
+	public NodeCache getNodeCache() {
+		return nodeCache;
 	}
 
 }

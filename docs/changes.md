@@ -1,5 +1,11 @@
 # KaBoom Changes
 
+## 0.8.2-HF4
+
+* Updates the kaboom-api dependency to 0.8.3 (which resolves leaking Kafka simple consumer sockets)
+* Exposes the startup config's node cache listener as an accessible attribute
+* Removes unnecessary and unused mapping of proxy user to file system
+
 ## 0.8.2-HF3
 
 * Fixes KABOOM-20 - Maps Used by Leader Not Emptied 
