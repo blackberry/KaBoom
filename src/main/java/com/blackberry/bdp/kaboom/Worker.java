@@ -87,7 +87,6 @@ public final class Worker extends AsyncAssignee implements Runnable {
 	private KaBoomTopicConfig topicConfig;
 	private WorkerShift previousShift = null;
 	private WorkerShift currentShift;
-	private InterProcessMutex lock;
 	private NodeCache nodeCache;
 
 	static {
@@ -198,42 +197,6 @@ public final class Worker extends AsyncAssignee implements Runnable {
 			 });
 	}
 
-	static {
-		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register("kaboom:total:avg messages written per sec", new Gauge<Long>() {
-				 @Override
-				 public Long getValue() {
-					 long sumMsgWritten = 0;
-					 int count = 0;
-					 synchronized (workersLock) {
-						 for (Worker w : workers) {
-							 count++;
-							 sumMsgWritten += w.getMsgWrittenPerSec();
-						 }
-					 }
-					 return sumMsgWritten / count;
-				 }
-
-			 });
-	}
-
-	static {
-		MetricRegistrySingleton.getInstance().getMetricsRegistry()
-			 .register("kaboom:total:total messages written per sec", new Gauge<Long>() {
-				 @Override
-				 public Long getValue() {
-					 long sumMsgWritten = 0;
-					 synchronized (workersLock) {
-						 for (Worker w : workers) {
-							 sumMsgWritten += w.getMsgWrittenPerSec();
-						 }
-					 }
-					 return sumMsgWritten;
-				 }
-
-			 });
-	}
-
 	public Worker(StartupConfig config, String topicName, int partition) throws Exception {
 		// Set up our Synchronous Worker
 		super(config.getKaBoomCurator(),
@@ -291,10 +254,8 @@ public final class Worker extends AsyncAssignee implements Runnable {
 			}
 
 		});
-		nodeCache.start();
 		
-		//curator.
-
+		nodeCache.start();
 		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
 		lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
 		msgWrittenGaugeName = "kaboom:partitions:" + partitionId + ":messages written per second";
@@ -590,8 +551,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 				LOG.info("[{}] closed off the node cache listener", partitionId);
 			} catch (IOException ioe) {
 				LOG.error("[{}] failed to close off the node cache listener: ", partitionId, ioe);
-			}
-			LOG.info("[{}] Worker finished after having processed {} events", partitionId, messagesWritten);
+			}			
 			try {
 				releaseAssignment();
 			} catch (Exception ex) {
@@ -600,6 +560,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 			synchronized (workersLock) {
 				workers.remove(this);
 			}
+			LOG.info("[{}] Worker finished after having processed {} events", partitionId, messagesWritten);
 		}
 	}
 
@@ -818,10 +779,6 @@ public final class Worker extends AsyncAssignee implements Runnable {
 
 	public int getLagSec() {
 		return lag_sec;
-	}
-
-	public long getMsgWrittenPerSec() {
-		return messagesWritten / ((System.currentTimeMillis() - startTime) / 1000);
 	}
 
 	public String getPartitionId() {

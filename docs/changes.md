@@ -1,5 +1,10 @@
 # KaBoom Changes
 
+## 0.8.3
+
+* AsyncAssignee: moved node cache listener on assignment path to attribute and closes on release lock
+* AsyncAssignee: moved connection state listener to attribute and removes on release lock
+
 ## 0.8.2-HF4
 
 * Updates the kaboom-api dependency to 0.8.3 (which resolves leaking Kafka simple consumer sockets)

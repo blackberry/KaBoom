@@ -54,6 +54,9 @@ public abstract class AsyncAssignee implements Runnable{
 
 	protected abstract void stop();
 	protected abstract void abort();
+	
+	private NodeCache assignmentNodeCache;
+	private ConnectionStateListener connectionListener;
 
 	protected AsyncAssignee(CuratorFramework curator,		 
 		 String workerName,
@@ -95,8 +98,27 @@ public abstract class AsyncAssignee implements Runnable{
 		}	
 	}
 	
-	protected void releaseAssignment() throws Exception {
-		lock.release();
+	protected void releaseAssignment() {
+		try {
+			assignmentNodeCache.close();
+			LOG.info("assignment node cache closed");
+		} catch (Exception e) {
+			LOG.error("Failed to close off assignment node cache: ", e);
+		}
+		
+		try {
+			curator.getConnectionStateListenable().removeListener(connectionListener);
+			LOG.info("removed the connection state listener on the curator connection");
+		} catch (Exception e) {
+			LOG.error("Failed to remove the connction state listener on the curator connection: ", e);
+		}
+		
+		try {
+			lock.release();		
+			LOG.info("released lock on {}", zkPathToLock());
+		} catch (Exception e) {
+			LOG.error("Failed to release lock on {}: ", zkPathToLock(), e);
+		}		
 	}
 
 	private boolean isAssigned() throws Exception {
@@ -107,8 +129,8 @@ public abstract class AsyncAssignee implements Runnable{
 		}		
 	}
 
-	private void watchConnection() {
-		curator.getConnectionStateListenable().addListener(new ConnectionStateListener() {
+	private void watchConnection() {		
+		connectionListener = new ConnectionStateListener() {
 			@Override
 			public void stateChanged(CuratorFramework client, ConnectionState newState) {
 				if (newState == ConnectionState.SUSPENDED) {
@@ -139,12 +161,13 @@ public abstract class AsyncAssignee implements Runnable{
 					}
 				}
 			}
-		});
+		};
+		curator.getConnectionStateListenable().addListener(connectionListener);
 	}
 
 	private void watchAssignment() throws Exception {
-		NodeCache nodeCache = new NodeCache(curator, zkAssignmentPath);
-		nodeCache.getListenable().addListener(new NodeCacheListener() {
+		assignmentNodeCache = new NodeCache(curator, zkAssignmentPath);
+		assignmentNodeCache.getListenable().addListener(new NodeCacheListener() {
 			@Override
 			public void nodeChanged() throws Exception {
 				if (!isAssigned()) {
@@ -153,7 +176,7 @@ public abstract class AsyncAssignee implements Runnable{
 				}
 			}
 		});
-		nodeCache.start();
+		assignmentNodeCache.start();
 	}
 
 	public final String zkPathToLock() {
