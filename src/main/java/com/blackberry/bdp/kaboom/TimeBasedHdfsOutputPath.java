@@ -44,10 +44,13 @@ public class TimeBasedHdfsOutputPath {
 	private final int partition;
 	private final FileSystem fileSystem;
 	private final String partitionId;
+	private Worker worker;
 
 	private final Map<Long, OutputFile> outputFileMap = new HashMap<>();
 
-	public TimeBasedHdfsOutputPath(StartupConfig kaboomConfig, KaBoomTopicConfig topicConfig, int partition) 
+	public TimeBasedHdfsOutputPath(StartupConfig kaboomConfig, 
+		 KaBoomTopicConfig topicConfig, 
+		 int partition) 
 		 throws IOException, InterruptedException {
 		this.config = kaboomConfig;
 		this.topicConfig = topicConfig;
@@ -140,6 +143,13 @@ public class TimeBasedHdfsOutputPath {
 		return partition;
 	}
 
+	/**
+	 * @param worker the worker to set
+	 */
+	public void setWorker(Worker worker) {
+		this.worker = worker;
+	}
+
 	private class OutputFile {
 
 		private String dir;
@@ -190,6 +200,9 @@ public class TimeBasedHdfsOutputPath {
 							 config.getRunningConfig().getNodeOpenFileWaittimeMs(),
 							 openFilePath);
 						Thread.sleep(config.getRunningConfig().getNodeOpenFileWaittimeMs());
+						
+						if (worker.pinged()) 
+							worker.setPong(true);
 					}
 					
 					fileSystem.delete(openFilePath, false);

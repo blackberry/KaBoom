@@ -41,7 +41,6 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import org.apache.curator.framework.recipes.cache.NodeCache;
 import org.apache.curator.framework.recipes.cache.NodeCacheListener;
-import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.zookeeper.data.Stat;
 
 public final class Worker extends AsyncAssignee implements Runnable {
@@ -331,6 +330,8 @@ public final class Worker extends AsyncAssignee implements Runnable {
 	public void run() {
 		try {
 			aquireAssignment();
+			this.hdfsOutputPath.setWorker(this);
+			
 			try {
 				currentShift = new WorkerShift();
 				hostname = InetAddress.getLocalHost().getCanonicalHostName();
@@ -801,4 +802,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 		return pong;
 	}
 
+	public void setPong(Boolean val) {
+		this.pong = val;
+	}
 }
