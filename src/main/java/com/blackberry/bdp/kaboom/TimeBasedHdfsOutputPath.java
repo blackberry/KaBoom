@@ -25,6 +25,7 @@ import java.util.Map.Entry;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.client.HdfsDataOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -172,8 +173,29 @@ public class TimeBasedHdfsOutputPath {
 
 			try {
 				if (fileSystem.exists(openFilePath)) {
+					long startWaitTime = System.currentTimeMillis();
+					DistributedFileSystem dfs = (DistributedFileSystem) fileSystem;
+					
+					while (!dfs.isFileClosed(openFilePath)) {
+						if (System.currentTimeMillis() - startWaitTime 
+							 > (config.getRunningConfig().getNodeOpenFileForceDeleteSeconds() * 1000))  {
+							LOG.warn("[{}] max wait time ({} seconds) elapsed for file close on {}",
+								 partitionId, 
+								 config.getRunningConfig().getNodeOpenFileForceDeleteSeconds(),
+								 openFilePath);
+							break;
+						}
+						LOG.warn("[{}] waiting {} ms for open file to close: {}",
+							 partitionId, 
+							 config.getRunningConfig().getNodeOpenFileWaittimeMs(),
+							 openFilePath);
+						Thread.sleep(config.getRunningConfig().getNodeOpenFileWaittimeMs());
+					}
+					
 					fileSystem.delete(openFilePath, false);
-					LOG.info("Removing file from HDFS because it already exists: {}", openFilePath);
+					LOG.info("[{}] removing file from HDFS because it already exists: {}", 
+						 partitionId, 
+						 openFilePath);
 				}
 
 				hdfsDataOut = (HdfsDataOutputStream) fileSystem.create(

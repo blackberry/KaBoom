@@ -2,8 +2,15 @@
 
 ## 0.8.3
 
+* kaboom-api dependency now on version 0.8.4
 * AsyncAssignee: moved node cache listener on assignment path to attribute and closes on release lock
 * AsyncAssignee: moved connection state listener to attribute and removes on release lock
+* TimeBasedHdfsOutputPath now waits for existing open files to close waiting nodeOpenFileWaittimeMs between isFileClosed()
+* TimeBasedHdfsOutputPath gives up and deletes existing open files if not closed after nodeOpenFileForceDeleteSeconds
+* Leader has a new method called refreshMetadata() that clears all convenience mappings and refreshes all metadata
+* Leader has a new method called pauseOnFirstDisconnectedAssignee() that iterates through all assignments and waits leaderNodeDisconnectionWaittimeSeconds on the first disconnected assigned node before calling refreshMetadata() and returning
+* Leader's main loop now calls refreshMetadata() and then pauseOnFirstDisconnectedAssignee()
+* Leader worst case running time increased by at least leaderNodeDisconnectionWaittimeSeconds
 
 ## 0.8.2-HF4
 
