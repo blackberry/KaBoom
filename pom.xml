@@ -113,7 +113,7 @@ limitations under the License.
 		<dependency>
 			<groupId>com.blackberry.bdp.common</groupId>
 			<artifactId>bdp-common</artifactId>
-			<version>0.0.12</version>
+			<version>0.5.1-SNAPSHOT</version>
 		</dependency>
 		
 		<dependency>
