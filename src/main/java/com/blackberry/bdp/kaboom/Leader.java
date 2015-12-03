@@ -96,7 +96,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 			totalWeight += kaboomClient.getWeight();
 			idToKaBoomClient.put(kaboomClient.getId(), kaboomClient);
 		}
-		LOG.debug("The total weight of the KaBoom cluster is {}", totalWeight);
+		
 
 		for (KaBoomTopic kaboomTopic : kaboomTopics) {
 			nameToKaBoomTopic.put(kaboomTopic.getKafkaTopic().getName(), kaboomTopic);
@@ -108,7 +108,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 			}
 		}
 		
-		LOG.info("metadata refreshed");
+		LOG.info("metadata refreshed => total weight {}, number of partitions: {}", totalWeight, totalPartitions);
 	}
 	
 	private void pauseOnFirstDisconnectedAssignee() throws Exception {		

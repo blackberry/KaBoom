@@ -16,7 +16,9 @@
 package com.blackberry.bdp.kaboom;
 
 import com.blackberry.bdp.common.conversion.Converter;
+import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
+import com.codahale.metrics.Meter;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -163,15 +165,40 @@ public class TimeBasedHdfsOutputPath {
 		private Boolean useTempOpenFileDir;
 		private long lastUsedTimestmap = System.currentTimeMillis();
 		private final long shiftNumber;
-
+		private String dataDirectory;
+		private Meter skewedTsBoomFilesTotal;
+		private Meter skewedTsBoomFilesTopic;
+		
 		public OutputFile(long shiftNumber, String filename, Long startTime) throws Exception {
 			this.shiftNumber = shiftNumber;
 			this.filename = filename;
 			this.startTime = startTime;
 			this.useTempOpenFileDir = config.getRunningConfig().getUseTempOpenFileDirectory();
-
+			this.dataDirectory = topicConfig.getDefaultDirectory();
+			
+			this.skewedTsBoomFilesTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				 .meter("kaboom:total:skewed time boom files");
+			
+			this.skewedTsBoomFilesTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry()
+				 .meter("kaboom:partitions:" + partitionId + ":skewed time boom files");
+			
+			if (skewed()) {				
+				if (config.getRunningConfig().getSkewedTsBoomFilenamePrefix() != null) 
+					filename = config.getRunningConfig().getBoomFileTmpPrefix() 
+						 + filename;				
+				
+				if (config.getRunningConfig().getSkewedTsDataDir() != null) 
+					dataDirectory = config.getRunningConfig().getSkewedTsDataDir();
+				
+				if (config.getRunningConfig().isSkewedTsDateDirToNow()) 
+					startTime = System.currentTimeMillis();
+				
+				skewedTsBoomFilesTotal.mark();
+				skewedTsBoomFilesTopic.mark();
+			}
+			
 			dir = Converter.timestampTemplateBuilder(startTime,
-				 String.format("%s/%s", topicConfig.getHdfsRootDir(), topicConfig.getDefaultDirectory()));
+				 String.format("%s/%s", topicConfig.getHdfsRootDir(), dataDirectory));
 			finalPath = new Path(dir + "/" + filename);
 			openFilePath = finalPath;
 
@@ -185,7 +212,15 @@ public class TimeBasedHdfsOutputPath {
 				if (fileSystem.exists(openFilePath)) {
 					long startWaitTime = System.currentTimeMillis();
 					DistributedFileSystem dfs = (DistributedFileSystem) fileSystem;
-					
+					if (!dfs.isFileClosed(openFilePath)) {
+						LOG.warn("[{}] open file: waiting up to {} seconds for file "
+							 + "to close checking every {} ms if still open file {}",
+							 partitionId, 
+							 config.getRunningConfig().getNodeOpenFileForceDeleteSeconds(),
+							 config.getRunningConfig().getNodeOpenFileWaittimeMs(),
+							 openFilePath);
+						
+					}
 					while (!dfs.isFileClosed(openFilePath)) {
 						if (System.currentTimeMillis() - startWaitTime 
 							 > (config.getRunningConfig().getNodeOpenFileForceDeleteSeconds() * 1000))  {
@@ -195,12 +230,7 @@ public class TimeBasedHdfsOutputPath {
 								 openFilePath);
 							break;
 						}
-						LOG.warn("[{}] waiting {} ms for open file to close: {}",
-							 partitionId, 
-							 config.getRunningConfig().getNodeOpenFileWaittimeMs(),
-							 openFilePath);
-						Thread.sleep(config.getRunningConfig().getNodeOpenFileWaittimeMs());
-						
+						Thread.sleep(config.getRunningConfig().getNodeOpenFileWaittimeMs());						
 						if (worker.pinged()) 
 							worker.setPong(true);
 					}
@@ -232,10 +262,20 @@ public class TimeBasedHdfsOutputPath {
 
 				LOG.info("[{}] FastBoomWriter created {}", partitionId, openFilePath);
 
-			} catch (Exception e) {
+			} catch (IOException | InterruptedException e) {
 				LOG.error("[{}] Error creating file {}: ", partitionId, openFilePath, e);
 				throw e;
 			}
+		}
+		
+		private boolean skewed() {
+			if (config.getRunningConfig().getSkewedTsSecondsFuture() != null 
+				 && startTime - System.currentTimeMillis() > 
+				 config.getRunningConfig().getSkewedTsSecondsFuture()) {
+				return true;
+			} else return config.getRunningConfig().getSkewedTsSecondsPast() != null 
+				 && System.currentTimeMillis() - startTime >
+				 config.getRunningConfig().getSkewedTsSecondsPast();
 		}
 
 		public void abort() {

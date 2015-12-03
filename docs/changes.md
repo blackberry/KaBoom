@@ -1,6 +1,19 @@
 # KaBoom Changes
 
-## 0.8.3
+## 0.8.4
+
+* KABOOM-26 Fix Overburdening Assignment (Even Load Balancer will not assign a partition to a node if that would make the node over-burdened).  EvenLoadBalancer ensures clients meet the criteria of canTakeAnotherAssignment() and  hasLocalPartition(KaBoomPartition partition) before assigning an unassigned partition
+* KABOOM-27 Implement Skewed Timestamp (Old/Future Parsed Dates) Handling
+
+TimeBasedHdfsOutputPath: New method skewed() return true if the boom files date directory is too far into the past/future based on new running configuration options
+TimeBasedHdfsOutputPath: OutputFile private class overwrites the boom filename, date directory, and data directory according to new running configuration options
+
+New Metrics:
+
+* kaboom:total:skewed time boom files // the total number of skewed boom files for the node
+* kaboom:partitions:<partition>:skewed time boom files // the total number of skewed boom files for the partiton 
+
+## 0.8.3 (never released outside of labs)
 
 * kaboom-api dependency now on version 0.8.4
 * AsyncAssignee: moved node cache listener on assignment path to attribute and closes on release lock

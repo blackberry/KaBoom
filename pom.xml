@@ -18,9 +18,9 @@ limitations under the License.
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>com.blackberry.bdp.kaboom</groupId>
-	<name>kaboom-0.8.3-SNAPSHOT</name>
+	<name>kaboom-0.8.4-SNAPSHOT</name>
 	<artifactId>kaboom</artifactId>
-	<version>0.8.3</version>
+	<version>0.8.4-SNAPSHOT</version>
 	<packaging>jar</packaging>
 	<url>http://blackberry.com</url>
 
@@ -64,7 +64,7 @@ limitations under the License.
 		<dependency>
 			<groupId>com.blackberry.bdp.kaboom</groupId>
 			<artifactId>kaboom-api</artifactId>
-			<version>0.8.4-SNAPSHOT</version>				
+			<version>0.8.5-SNAPSHOT</version>				
 		</dependency>
 		
 		<dependency>
