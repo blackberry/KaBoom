@@ -20,6 +20,8 @@ import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import com.codahale.metrics.Meter;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -151,6 +153,13 @@ public class TimeBasedHdfsOutputPath {
 	public void setWorker(Worker worker) {
 		this.worker = worker;
 	}
+	
+	private String dateString(Long ts) {
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+		Date now = new Date();
+		String strDate = sdf.format(ts);
+		return strDate;
+	}	
 
 	private class OutputFile {
 
@@ -182,9 +191,9 @@ public class TimeBasedHdfsOutputPath {
 			this.skewedTsBoomFilesTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry()
 				 .meter("kaboom:partitions:" + partitionId + ":skewed time boom files");
 			
-			if (skewed()) {				
+			if (skewed()) {
 				if (config.getRunningConfig().getSkewedTsBoomFilenamePrefix() != null) 
-					filename = config.getRunningConfig().getBoomFileTmpPrefix() 
+					filename = config.getRunningConfig().getSkewedTsBoomFilenamePrefix()
 						 + filename;				
 				
 				if (config.getRunningConfig().getSkewedTsDataDir() != null) 
@@ -268,14 +277,30 @@ public class TimeBasedHdfsOutputPath {
 			}
 		}
 		
-		private boolean skewed() {
-			if (config.getRunningConfig().getSkewedTsSecondsFuture() != null 
-				 && startTime - System.currentTimeMillis() > 
-				 config.getRunningConfig().getSkewedTsSecondsFuture()) {
-				return true;
-			} else return config.getRunningConfig().getSkewedTsSecondsPast() != null 
-				 && System.currentTimeMillis() - startTime >
-				 config.getRunningConfig().getSkewedTsSecondsPast();
+		private boolean skewed() {			
+			if (config.getRunningConfig().getSkewedTsSecondsFuture() != null) {
+				long futureThreshold = System.currentTimeMillis() 
+					 + (config.getRunningConfig().getSkewedTsSecondsFuture() * 1000);
+				if (startTime > futureThreshold) {
+					LOG.info("[{}] skewed timestamp {} beyond future date {}",
+						 partitionId,
+						 dateString(startTime),
+						 dateString(futureThreshold));
+					return true;
+				}
+			} else if (config.getRunningConfig().getSkewedTsSecondsPast() != null) {
+				long pastThreshold = System.currentTimeMillis() - 
+					 (config.getRunningConfig().getSkewedTsSecondsPast() * 1000);
+				if (startTime < pastThreshold) {
+					LOG.info("[{}] skewed timestamp {} beyond past date {}",
+						 partitionId,
+						 dateString(startTime),
+						 dateString(pastThreshold));
+					return true;
+				}
+				
+			}
+			return false;
 		}
 
 		public void abort() {
