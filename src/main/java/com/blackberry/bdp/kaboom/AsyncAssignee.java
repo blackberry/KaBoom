@@ -100,15 +100,23 @@ public abstract class AsyncAssignee implements Runnable{
 	
 	protected void releaseAssignment() {
 		try {
-			assignmentNodeCache.close();
-			LOG.info("assignment node cache closed");
+			if (assignmentNodeCache != null) {
+				assignmentNodeCache.close();
+				LOG.info("assignment node cache closed");
+			} else {
+				LOG.warn("assignment node cache listener is null and cannot be closed");
+			}
 		} catch (Exception e) {
 			LOG.error("Failed to close off assignment node cache: ", e);
 		}
 		
 		try {
-			curator.getConnectionStateListenable().removeListener(connectionListener);
-			LOG.info("removed the connection state listener on the curator connection");
+			if (connectionListener != null) {
+				curator.getConnectionStateListenable().removeListener(connectionListener);
+				LOG.info("removed the connection state listener on the curator connection");
+			} else {
+				LOG.warn("connection state listener is null and cannot be removed");
+			}
 		} catch (Exception e) {
 			LOG.error("Failed to remove the connction state listener on the curator connection: ", e);
 		}
@@ -116,9 +124,11 @@ public abstract class AsyncAssignee implements Runnable{
 		try {
 			lock.release();		
 			LOG.info("released lock on {}", zkPathToLock());
+		} catch (IllegalMonitorStateException  imse) {
+			LOG.error("Failed to release lock on {} for reason: ", zkPathToLock(), imse.getMessage());
 		} catch (Exception e) {
-			LOG.error("Failed to release lock on {}: ", zkPathToLock(), e);
-		}		
+			LOG.error("unknown error trying to relase the lock {}: ", zkPathToLock(), e);
+		}
 	}
 
 	private boolean isAssigned() throws Exception {

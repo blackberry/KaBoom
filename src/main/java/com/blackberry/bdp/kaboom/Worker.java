@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import com.blackberry.bdp.kaboom.api.KaBoomTopicConfig;
 import com.blackberry.bdp.common.conversion.Converter;
 import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
+import com.blackberry.bdp.kaboom.exception.LockNotAcquiredException;
 import com.blackberry.bdp.krackle.consumer.Consumer;
 
 import com.codahale.metrics.Gauge;
@@ -544,6 +545,8 @@ public final class Worker extends AsyncAssignee implements Runnable {
 				}
 			}
 			shutdown();
+		} catch (LockNotAcquiredException lnae) {
+			LOG.error("[{}] failed to aquire lock", getPartitionId());
 		} catch (Exception e) {
 			LOG.error("[{}] An exception occured while setting up this worker thread", getPartitionId(), e);
 		} finally {

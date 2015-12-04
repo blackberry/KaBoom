@@ -2,8 +2,13 @@
 
 ## 0.8.4
 
+Tickets:
+
 * KABOOM-26 Fix Overburdening Assignment (Even Load Balancer will not assign a partition to a node if that would make the node over-burdened).  EvenLoadBalancer ensures clients meet the criteria of canTakeAnotherAssignment() and  hasLocalPartition(KaBoomPartition partition) before assigning an unassigned partition
 * KABOOM-27 Implement Skewed Timestamp (Old/Future Parsed Dates) Handling
+* KABOOM-28 Improve Assignment and Lock Error Handling
+
+Features:
 
 TimeBasedHdfsOutputPath: New method skewed() return true if the boom files date directory is too far into the past/future based on new running configuration options
 TimeBasedHdfsOutputPath: OutputFile private class overwrites the boom filename, date directory, and data directory according to new running configuration options
