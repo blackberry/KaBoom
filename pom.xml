@@ -18,9 +18,9 @@ limitations under the License.
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>com.blackberry.bdp.kaboom</groupId>
-	<name>kaboom-0.8.4-SNAPSHOT</name>
+	<name>kaboom-0.8.4</name>
 	<artifactId>kaboom</artifactId>
-	<version>0.8.4-SNAPSHOT</version>
+	<version>0.8.4</version>
 	<packaging>jar</packaging>
 	<url>http://blackberry.com</url>
 
@@ -58,27 +58,27 @@ limitations under the License.
 		<dependency>
 			<groupId>args4j</groupId>
 			<artifactId>args4j</artifactId>
-			<version>2.32</version>				
+			<version>2.32</version>
 		</dependency>
-				
+
 		<dependency>
 			<groupId>com.blackberry.bdp.kaboom</groupId>
 			<artifactId>kaboom-api</artifactId>
-			<version>0.8.5-SNAPSHOT</version>				
+			<version>0.8.5-SNAPSHOT</version>
 		</dependency>
-		
+
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-api</artifactId>
 			<version>1.7.12</version>
 		</dependency>
-		
+
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-log4j12</artifactId>
 			<version>1.7.12</version>
 		</dependency>
-		
+
 		<dependency>
 			<groupId>log4j</groupId>
 			<artifactId>log4j</artifactId>
@@ -91,13 +91,13 @@ limitations under the License.
 			<artifactId>hadoop-client</artifactId>
 			<version>2.4.0</version>
 		</dependency>
-		
+
 		<dependency>
 			<groupId>org.apache.curator</groupId>
 			<artifactId>curator-recipes</artifactId>
 			<version>2.7.1</version>
 		</dependency>
-		
+
 		<dependency>
 			<groupId>com.blackberry.bdp.krackle</groupId>
 			<artifactId>krackle</artifactId>
@@ -105,29 +105,29 @@ limitations under the License.
 			<exclusions>
 				<exclusion>
 					<groupId>com.blackberry.bdp.common</groupId>
-					<artifactId>bdp-common</artifactId>					
+					<artifactId>bdp-common</artifactId>
 				</exclusion>
-			</exclusions>			
+			</exclusions>
 		</dependency>
-		
+
 		<dependency>
 			<groupId>com.blackberry.bdp.common</groupId>
 			<artifactId>bdp-common</artifactId>
 			<version>0.5.2-SNAPSHOT</version>
 		</dependency>
-		
+
 		<dependency>
 			<groupId>org.apache.kafka</groupId>
 			<artifactId>kafka_2.9.2</artifactId>
 			<version>0.8.1.1</version>
 		</dependency>
-		
+
 		<dependency>
 			<groupId>org.codehaus.jackson</groupId>
 			<artifactId>jackson-mapper-asl</artifactId>
 			<version>1.9.13</version>
 		</dependency>
-		
+
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
@@ -171,7 +171,7 @@ limitations under the License.
 					</execution>
 				</executions>
 			</plugin>
-			
+
 			<!-- Generate a build number based off the commit hash -->
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
@@ -187,10 +187,10 @@ limitations under the License.
 				</executions>
 				<configuration>
 					<doCheck>false</doCheck>
-					<doUpdate>false</doUpdate>		
-				</configuration>	
+					<doUpdate>false</doUpdate>
+				</configuration>
 			</plugin>
-			
+
 			<!-- Insert the build branch and commit hash into the manifest -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -208,14 +208,14 @@ limitations under the License.
 					</archive>
 				</configuration>
 			</plugin>
-			
+
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>native-maven-plugin</artifactId>
 				<version>1.0-alpha-8</version>
 				<extensions>true</extensions>
 				<configuration>
-					
+
 					<javahClassNames>com.blackberry.bdp.kaboom.FastBoomWriter</javahClassNames>
 					<javahIncludes>
 						<javahInclude>
@@ -224,7 +224,7 @@ limitations under the License.
 						</javahInclude>
 					</javahIncludes>
 				</configuration>
-			</plugin>			
+			</plugin>
 
 			<!-- Cheat and use the antrun plugin that exposes the classpath required for running javah -->
 			<plugin>
@@ -270,7 +270,7 @@ limitations under the License.
 							<controlDir>src/deb/control</controlDir>
 							<timestamped>true</timestamped>
 							<dataSet>
-								
+
 								<!-- Create required directories -->
 								<data>
 									<type>template</type>
@@ -301,7 +301,7 @@ limitations under the License.
 										<group>root</group>
 									</mapper>
 								</data>
-								
+
 								<!-- Copy all required libraries -->
 								<data>
 									<type>directory</type>
@@ -315,8 +315,8 @@ limitations under the License.
 										<group>root</group>
 									</mapper>
 								</data>
-								
-								<!--  Copy the lib for NativeDeflate 
+
+								<!--  Copy the lib for NativeDeflate
 								<data>
 									<type>directory</type>
 									<src>NativeDeflate/lib</src>
@@ -329,7 +329,7 @@ limitations under the License.
 										<group>kaboom</group>
 									</mapper>
 								</data>-->
-								
+
 								<!-- Copy the config sample(s) -->
 								<data>
 									<type>files</type>
@@ -340,22 +340,22 @@ limitations under the License.
 									</paths>
 									<dst>/opt/kaboom/config</dst>
 								</data>
-								
+
 								<!-- Copy the init upstart script -->
 								<data>
 									<src>${project.basedir}/init/kaboom.conf</src>
 									<dst>/etc/init/kaboom.conf</dst>
 									<type>file</type>
 								</data>
-								
+
 								<!-- Link the upstart file to -->
 								<data>
 									<type>link</type>
 									<linkName>/etc/init.d/kaboom</linkName>
 									<linkTarget>/lib/init/upstart-job</linkTarget>
 									<symlink>true</symlink>
-								</data>								
-								
+								</data>
+
 							</dataSet>
 						</configuration>
 					</execution>
@@ -368,7 +368,7 @@ limitations under the License.
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>rpm-maven-plugin</artifactId>
 				<version>2.1</version>
-			
+
 				<!-- When to build -->
 				<executions>
 					<execution>
@@ -378,7 +378,7 @@ limitations under the License.
 						</goals>
 					</execution>
 				</executions>
-				
+
 				<configuration>
 					<defineStatements>
 						<defineStatement>_tmppath /tmp</defineStatement>
@@ -414,8 +414,8 @@ limitations under the License.
 									</includes>
 								</source>
 							</sources>
-						</mapping>						
-																		
+						</mapping>
+
 						<!-- Config -->
 						<mapping>
 							<directory>/opt/kaboom/config</directory>
@@ -429,7 +429,7 @@ limitations under the License.
 							</sources>
 						</mapping>
 
-						<!--  Copy the lib for NativeDeflate 
+						<!--  Copy the lib for NativeDeflate
 						<mapping>
 							<directory>/opt/kaboom/lib</directory>
 							<filemode>644</filemode>
@@ -441,8 +441,8 @@ limitations under the License.
 									</includes>
 								</source>
 							</sources>
-						</mapping>-->					
-								
+						</mapping>-->
+
 						<!-- Executables -->
 						<mapping>
 							<directory>/etc/rc.d/init.d</directory>
@@ -468,12 +468,12 @@ limitations under the License.
 						<mapping>
 							<directory>/var/log/kaboom</directory>
 						</mapping>
-						
+
 					</mappings>
 
 					<!-- Create the user and the group if they do not already exist -->
 					<preinstallScriptlet>
-						<scriptFile>src/rpm/preinst</scriptFile>					
+						<scriptFile>src/rpm/preinst</scriptFile>
 					</preinstallScriptlet>
 
 				</configuration>
@@ -492,11 +492,11 @@ limitations under the License.
 						</goals>
 					</execution>
 				</executions>
-			</plugin>		
+			</plugin>
 			-->
-			
+
 			<!--
-			<plugin> 
+			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
 				<version>2.3</version>
