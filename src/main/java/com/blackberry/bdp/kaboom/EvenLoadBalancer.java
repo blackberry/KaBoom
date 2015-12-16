@@ -109,7 +109,6 @@ public class EvenLoadBalancer extends Leader {
 					}
 				}
 			}
-
 		};
 
 		// Find clients for any unassigned partitions
@@ -120,8 +119,7 @@ public class EvenLoadBalancer extends Leader {
 			// Grab the least loaded client  in case we  cannot find an underloaded local client
 			KaBoomClient chosenClient = kaboomClients.get(0);
 			for (KaBoomClient client : kaboomClients) {
-				if (!client.tooManyAssignedPartitions() && client.getHostname().equals(
-					 partition.getKafkaPartition().getLeader().getHost())) {
+				if (client.canTakeAnotherAssignment() && client.hasLocalPartition(partition)) {
 					chosenClient = client;
 					break;
 				}

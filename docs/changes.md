@@ -1,5 +1,58 @@
 # KaBoom Changes
 
+## 0.8.4
+
+Tickets:
+
+* KABOOM-26 Fix Overburdening Assignment (Even Load Balancer will not assign a partition to a node if that would make the node over-burdened).  EvenLoadBalancer ensures clients meet the criteria of canTakeAnotherAssignment() and  hasLocalPartition(KaBoomPartition partition) before assigning an unassigned partition
+* KABOOM-27 Implement Skewed Timestamp (Old/Future Parsed Dates) Handling
+* KABOOM-28 Improve Assignment and Lock Error Handling
+
+Features:
+
+TimeBasedHdfsOutputPath: New method skewed() return true if the boom files date directory is too far into the past/future based on new running configuration options
+TimeBasedHdfsOutputPath: OutputFile private class overwrites the boom filename, date directory, and data directory according to new running configuration options
+
+New Metrics:
+
+* kaboom:total:skewed time boom files // the total number of skewed boom files for the node
+* kaboom:partitions:<partition>:skewed time boom files // the total number of skewed boom files for the partiton 
+
+## 0.8.3 (never released outside of labs)
+
+* kaboom-api dependency now on version 0.8.4
+* AsyncAssignee: moved node cache listener on assignment path to attribute and closes on release lock
+* AsyncAssignee: moved connection state listener to attribute and removes on release lock
+* TimeBasedHdfsOutputPath now waits for existing open files to close waiting nodeOpenFileWaittimeMs between isFileClosed()
+* TimeBasedHdfsOutputPath gives up and deletes existing open files if not closed after nodeOpenFileForceDeleteSeconds
+* TimeBasedHdfsOutputPath now has an instance of the Worker as an attribute and can respond to pings when it's busy
+* Leader has a new method called refreshMetadata() that clears all convenience mappings and refreshes all metadata
+* Leader has a new method called pauseOnFirstDisconnectedAssignee() that iterates through all assignments and waits leaderNodeDisconnectionWaittimeSeconds on the first disconnected assigned node before calling refreshMetadata() and returning
+* Leader's main loop now calls refreshMetadata() and then pauseOnFirstDisconnectedAssignee()
+* Leader worst case running time increased by at least leaderNodeDisconnectionWaittimeSeconds
+
+
+## 0.8.2-HF4
+
+* Updates the kaboom-api dependency to 0.8.3 (which resolves leaking Kafka simple consumer sockets)
+* Exposes the startup config's node cache listener as an accessible attribute
+* Removes unnecessary and unused mapping of proxy user to file system
+
+## 0.8.2-HF3
+
+* Fixes KABOOM-20 - Maps Used by Leader Not Emptied 
+* Fixes KABOOM-21 - Ensure Exceptions Are Not Swallowed And Abort Accordingly
+* Fixes KABOOM-22 - Bug in Closing LRU Boom File Closing Most Recently Used v2
+
+## 0.8.2-HF2
+
+* Fixes IPGBD-4245/KABOOM-18 - Bug closing LRU Output File
+
+
+## 0.8.2-HF1
+
+* Moves the node cache listener to an attribute of worker and closes off in the finally block executed after the run
+
 ## 0.8.2:
 
 * TODO: Re-write the change log

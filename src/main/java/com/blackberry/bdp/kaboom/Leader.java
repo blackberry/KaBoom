@@ -15,6 +15,7 @@
  */
 package com.blackberry.bdp.kaboom;
 
+import static com.blackberry.bdp.common.conversion.Converter.longFromBytes;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Random;
@@ -29,6 +30,7 @@ import com.blackberry.bdp.kaboom.api.KaBoomTopic;
 import com.blackberry.bdp.common.zk.ZkUtils;
 import com.blackberry.bdp.kaboom.api.KaBoomClient;
 import com.blackberry.bdp.kaboom.api.KafkaBroker;
+import com.blackberry.bdp.kaboom.api.KafkaPartition;
 
 import com.blackberry.bdp.kaboom.api.KafkaTopic;
 import java.util.List;
@@ -52,6 +54,10 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 
 	private final HashMap<Integer, KaBoomClient> idToKaBoomClient = new HashMap<>();
 	private final HashMap<String, KaBoomTopic> nameToKaBoomTopic = new HashMap<>();
+	private final HashMap<String, KafkaPartition> kafkaPartitionIdToPartition = new HashMap<>();
+	
+	private int totalPartitions;			
+	private int totalWeight;
 
 	public Leader(StartupConfig config) {
 		this.config = config;
@@ -64,6 +70,69 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 		 List<KafkaTopic> kafkaTopics)
 		 throws Exception;
 
+	private void deleteAssignment(String reason, String zkPath) throws Exception {
+		curator.delete().forPath(zkPath);
+		LOG.info("Assignment {} deleted {}", zkPath, reason);
+	}
+	
+	private void refreshMetadata() throws Exception {
+		idToKaBoomClient.clear();
+		nameToKaBoomTopic.clear();
+		kafkaPartitionIdToPartition.clear();
+
+		kafkaBrokers = KafkaBroker.getAll(config.getKafkaCurator(), config.getZkRootPathKafkaBrokers());
+		kafkaTopics = KafkaTopic.getAll(config.getKafkaSeedBrokers(), "leaderLookup", kafkaBrokers);
+		kaboomClients = KaBoomClient.getAll(KaBoomClient.class, curator, config.getZkRootPathClients());
+		kaboomTopics = KaBoomTopic.getAll(kaboomClients, kafkaTopics,
+			 config.getKaBoomCurator(),
+			 config.getZkRootPathTopicConfigs(),
+			 config.getZkRootPathPartitionAssignments(),
+			 config.getZkRootPathFlagAssignments());
+		
+		totalPartitions = KaBoomTopic.getTotalPartitonCount(kaboomTopics);
+		totalWeight = 0;
+		
+		for (KaBoomClient kaboomClient : kaboomClients) {
+			totalWeight += kaboomClient.getWeight();
+			idToKaBoomClient.put(kaboomClient.getId(), kaboomClient);
+		}
+		
+
+		for (KaBoomTopic kaboomTopic : kaboomTopics) {
+			nameToKaBoomTopic.put(kaboomTopic.getKafkaTopic().getName(), kaboomTopic);
+		}
+
+		for (KafkaTopic kafkaTopic : kafkaTopics) {
+			for (KafkaPartition kafkaPartition : kafkaTopic.getPartitions()) {
+				kafkaPartitionIdToPartition.put(kafkaPartition.getTopicPartitionString(), kafkaPartition);
+			}
+		}
+		
+		LOG.info("metadata refreshed => total weight {}, number of partitions: {}", totalWeight, totalPartitions);
+	}
+	
+	private void pauseOnFirstDisconnectedAssignee() throws Exception {		
+		for (String partitionId : curator.getChildren().
+			 forPath(config.getZkRootPathPartitionAssignments())) {
+			long sleepTime = config.getRunningConfig().getLeaderNodeDisconnectionWaittimeSeconds();
+			try {
+			String assignedClientId = new String(curator.getData()
+				 .forPath(String.format("%s/%s", 
+					 config.getZkRootPathPartitionAssignments(), partitionId)), UTF8);				
+				if (!idToKaBoomClient.containsKey(Integer.parseInt(assignedClientId))) {
+					LOG.warn("disconnected client detected forcing {} second sleep",
+						 sleepTime);
+					Thread.sleep(sleepTime * 1000);
+					refreshMetadata();
+					return;
+				}				
+			} catch (Exception e) {
+				LOG.error("error while fetching unique client IDs: ", e);
+			}
+		}
+		
+	}
+	
 	@Override
 	public void takeLeadership(CuratorFramework curator) throws Exception {
 		this.curator = curator;
@@ -74,27 +143,8 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 
 		while (true) {
 
-			kafkaBrokers = KafkaBroker.getAll(config.getKafkaCurator(), config.getZkRootPathKafkaBrokers());
-			kafkaTopics = KafkaTopic.getAll(config.getKafkaSeedBrokers(), "leaderLookup", kafkaBrokers);
-			kaboomClients = KaBoomClient.getAll(KaBoomClient.class, curator, config.getZkRootPathClients());
-			kaboomTopics = KaBoomTopic.getAll(kaboomClients, kafkaTopics,
-				 config.getKaBoomCurator(),
-				 config.getZkRootPathTopicConfigs(),
-				 config.getZkRootPathPartitionAssignments(),
-				 config.getZkRootPathFlagAssignments());
-
-			int totalPartitions = KaBoomTopic.getTotalPartitonCount(kaboomTopics);
-
-			int totalWeight = 0;
-			for (KaBoomClient kaboomClient : kaboomClients) {
-				totalWeight += kaboomClient.getWeight();
-				idToKaBoomClient.put(kaboomClient.getId(), kaboomClient);
-			}
-			LOG.debug("The total weight of the KaBoom cluster is {}", totalWeight);
-
-			for (KaBoomTopic kaboomTopic : kaboomTopics) {
-				nameToKaBoomTopic.put(kaboomTopic.getKafkaTopic().getName(), kaboomTopic);
-			}
+			refreshMetadata();
+			pauseOnFirstDisconnectedAssignee();			
 
 			// Delete an assignemnts if the kaboom client isn't connected or the topic is not configured
 			try {
@@ -104,25 +154,25 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 						Matcher m = topicPartitionPattern.matcher(partitionId);
 						if (m.matches()) {
 							String assignmentZkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(), partitionId);
-							String deletedReason = null;
 							String clientId = new String(curator.getData().forPath(assignmentZkPath), UTF8);
 							String topicName = m.group(1);
 							int partitonId = Integer.parseInt(m.group(2));
 							int assignedClientId = new Integer(clientId);							
+							
+							// Check for all the reasons to delete an invalid assignment
+							
 							if (!nameToKaBoomTopic.containsKey(topicName)) {
-								deletedReason = "because of missing topic configuration";
-							} else {
-								if (!idToKaBoomClient.containsKey(assignedClientId)) {
-									deletedReason = String.format("because client %s is not connected", assignedClientId);
-								}
-							}							
-							if (deletedReason != null) {
-								curator.delete().forPath(assignmentZkPath);
-								LOG.info("Assignment {} deleted {}", assignmentZkPath, deletedReason);
-							} else {
-								LOG.info("Pre-balanced found  {} assigned to {}", partitionId, assignedClientId);
+								deleteAssignment("because of missing topic configuration", assignmentZkPath);
+							} else if (!idToKaBoomClient.containsKey(assignedClientId)) {
+								deleteAssignment(String.format("because client %s is not connected", assignedClientId), 
+									 assignmentZkPath);
+							} else if (!kafkaPartitionIdToPartition.containsKey(partitionId)) {
+								deleteAssignment(String.format("because %s is not a valid Kafka partition", partitionId),
+									 assignmentZkPath);
+							} else {								
 								idToKaBoomClient.get(assignedClientId).getAssignedPartitions().add(
 									 nameToKaBoomTopic.get(topicName).getKaBoomPartition(partitonId));
+								LOG.info("Pre-balanced found  {} assigned to {}", partitionId, assignedClientId);
 							}
 						}
 					} catch (Exception e) {

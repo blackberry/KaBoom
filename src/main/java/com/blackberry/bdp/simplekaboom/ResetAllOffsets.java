@@ -1,4 +1,4 @@
-package com.blackberry.bdp.kaboom.util;
+package com.blackberry.bdp.simplekaboom;
 
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
