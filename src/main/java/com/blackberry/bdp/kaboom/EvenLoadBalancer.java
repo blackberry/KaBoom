@@ -18,8 +18,7 @@ package com.blackberry.bdp.kaboom;
 import com.blackberry.bdp.kaboom.api.KaBoomClient;
 import com.blackberry.bdp.kaboom.api.KaBoomPartition;
 import com.blackberry.bdp.kaboom.api.KaBoomTopic;
-import com.blackberry.bdp.kaboom.api.KafkaBroker;
-import com.blackberry.bdp.kaboom.api.KafkaTopic;
+import com.blackberry.bdp.krackle.meta.MetaData;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -29,10 +28,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Assigns partitions based off a weighted workload.  The default 
- * weighting is based on how many cores each client has. There will 
+ * Assigns partitions based off a weighted workload.  The default
+ * weighting is based on how many cores each client has. There will
  * be a preference for local work while the client is under-loaded.
- * 
+ *
  * Work is assigned to least loaded once all clients are over-loaded.
  */
 public class EvenLoadBalancer extends Leader {
@@ -44,14 +43,18 @@ public class EvenLoadBalancer extends Leader {
 		LOG.info("The even load balancer has been instantiated");
 	}
 
+	/**
+	 * Evenly distributes partitions across nodes preferring local
+	 * @param kaboomClients
+	 * @param kaboomTopics
+	 * @throws Exception
+	 */
 	@Override
 	protected void run_balancer(
-		 List<KafkaBroker> kafkaBrokers,
 		 List<KaBoomClient> kaboomClients,
-		 List<KaBoomTopic> kaboomTopics,
-		 List<KafkaTopic> kafkaTopics) throws Exception {
+		 List<KaBoomTopic> kaboomTopics) throws Exception {
 
-		// Overloaded?  
+		// Overloaded?
 		for (KaBoomClient client : kaboomClients) {
 			LOG.info("Client {} has {} assigned partitons", client.getId(), client.getAssignedPartitions().size());
 			if (client.tooManyAssignedPartitions() == false) {
@@ -124,10 +127,10 @@ public class EvenLoadBalancer extends Leader {
 					break;
 				}
 			}
-			String zkPath = config.zkPathPartitionAssignment(partition.getTopicPartitionString());			
-			try {				
+			String zkPath = config.zkPathPartitionAssignment(partition.getTopicPartitionString());
+			try {
 				if (curator.checkExists().forPath(zkPath) != null) {
-					curator.setData().forPath(zkPath, 
+					curator.setData().forPath(zkPath,
 						 String.valueOf(chosenClient.getId()).getBytes(UTF8));
 				} else {
 					curator.create().withMode(CreateMode.PERSISTENT).forPath(zkPath,

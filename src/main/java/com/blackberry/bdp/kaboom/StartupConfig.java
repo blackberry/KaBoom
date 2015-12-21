@@ -46,6 +46,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.zookeeper.Environment;
 
 /**
  *
@@ -66,7 +67,6 @@ public class StartupConfig {
 	private int kaboomId;
 	private int weight;
 	private final CuratorFramework kaboomCurator;
-	private final CuratorFramework kafkaCurator;
 	private final NodeCache nodeCache;
 	private String kerberosPrincipal;
 	private String kerberosKeytab;
@@ -146,7 +146,7 @@ public class StartupConfig {
 		zkPathLeaderClientId = propsParser.parseString("kaboom.zk.path.leader.clientId", zkPathLeaderClientId);
 
 		kaboomCurator = buildCuratorFramework(kaboomZkConnectionString);
-		kafkaCurator = buildCuratorFramework(kafkaZkConnectionString);
+		// kafkaCurator = buildCuratorFramework(kafkaZkConnectionString);
 
 		runningConfig = RunningConfig.get(RunningConfig.class, kaboomCurator, zkPathRunningConfig);
 
@@ -207,7 +207,7 @@ public class StartupConfig {
 				propsIn = new FileInputStream(System.getProperty("kaboom.configuration"));
 				props.load(propsIn);
 			} else {
-				LOG.info("Loading configs from default properties file {}", 
+				LOG.info("Loading configs from default properties file {}",
 					 KaBoom.class.getClassLoader().getResource(defaultProperyFile));
 				propsIn = KaBoom.class.getClassLoader().getResourceAsStream(defaultProperyFile);
 				props.load(propsIn);
@@ -260,6 +260,7 @@ public class StartupConfig {
 		LOG.info("attempting to connect to ZK with connection string {}", connectionString);
 		String[] connStringAndPrefix = connectionString.split("/", 2);
 		CuratorFramework newCurator;
+		LOG.info("jaas key: {}", System.getProperty(Environment.JAAS_CONF_KEY));
 		if (connStringAndPrefix.length == 1) {
 			newCurator = CuratorFrameworkFactory.newClient(connectionString, retryPolicy);
 		} else {
@@ -402,9 +403,9 @@ public class StartupConfig {
 	/**
 	 * @return the kafkaCurator
 	 */
-	public CuratorFramework getKafkaCurator() {
-		return kafkaCurator;
-	}
+//	public CuratorFramework getKafkaCurator() {
+//		return kafkaCurator;
+//	}
 
 	/**
 	 * @return the zkRootPathKafkaBrokers
