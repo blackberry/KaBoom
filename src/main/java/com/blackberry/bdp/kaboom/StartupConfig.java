@@ -72,7 +72,7 @@ public class StartupConfig {
 	private String kerberosKeytab;
 	private String hostname;
 	private String kaboomZkConnectionString;
-	private String kafkaZkConnectionString;
+	//private String kafkaZkConnectionString;
 	private final String loadBalancerType;
 	private final RunningConfig runningConfig;
 
@@ -99,7 +99,7 @@ public class StartupConfig {
 		LOG.info("kerberosKeytab: {}", kerberosKeytab);
 		LOG.info("hostname: {}", getHostname());
 		LOG.info("kaboomZkConnectionString: {}", kaboomZkConnectionString);
-		LOG.info("kafkaZkConnectionString: {}", kafkaZkConnectionString);
+		//LOG.info("kafkaZkConnectionString: {}", kafkaZkConnectionString);
 		LOG.info("kafkaSeedBrokers: {}", kafkaSeedBrokers);
 		LOG.info("loadBalancerType: {}", loadBalancerType);
 		LOG.info("kerberosPrincipal: {}", kerberosPrincipal);
@@ -131,7 +131,7 @@ public class StartupConfig {
 		kerberosPrincipal = propsParser.parseString("kerberos.principal");
 		hostname = propsParser.parseString("kaboom.hostname", InetAddress.getLocalHost().getHostName());
 		kaboomZkConnectionString = propsParser.parseString("zookeeper.connection.string");
-		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
+		//kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		loadBalancerType = propsParser.parseString("kaboom.load.balancer.type", "even");
 
