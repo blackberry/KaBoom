@@ -10,8 +10,7 @@ import static com.blackberry.bdp.kaboom.Leader.UTF8;
 import com.blackberry.bdp.kaboom.api.KaBoomClient;
 import com.blackberry.bdp.kaboom.api.KaBoomPartition;
 import com.blackberry.bdp.kaboom.api.KaBoomTopic;
-import com.blackberry.bdp.kaboom.api.KafkaBroker;
-import com.blackberry.bdp.kaboom.api.KafkaTopic;
+import com.blackberry.bdp.krackle.meta.Broker;
 import java.util.HashMap;
 import java.util.List;
 import org.apache.zookeeper.CreateMode;
@@ -30,19 +29,15 @@ public class LocalLoadBalancer extends Leader {
 	}
 
 	/**
-	 * Unassign non-local assignments and assigns unassigned partitions to the local client 
-	 * @param kafkaBrokers
+	 * Unassign non-local assignments and assigns unassigned partitions to the local client
 	 * @param kaboomClients
 	 * @param kaboomTopics
-	 * @param kafkaTopics
 	 * @throws java.lang.Exception
 	 */
 	@Override
 	protected void run_balancer(
-		 List<KafkaBroker> kafkaBrokers,
 		 List<KaBoomClient> kaboomClients,
-		 List<KaBoomTopic> kaboomTopics,
-		 List<KafkaTopic> kafkaTopics) throws Exception {
+		 List<KaBoomTopic> kaboomTopics) throws Exception {
 
 		HashMap<String, KaBoomPartition> idToPartition = new HashMap<>();
 		for (KaBoomTopic topic : kaboomTopics) {
@@ -63,7 +58,7 @@ public class LocalLoadBalancer extends Leader {
 			for (String partitionId : curator.getChildren().forPath(config.getZkRootPathPartitionAssignments())) {
 				String assignmentZkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(), partitionId);
 				KaBoomClient assignedClient = idToKaBoomClient.get(intFromBytes(curator.getData().forPath(assignmentZkPath)));
-				KafkaBroker leader = idToPartition.get(partitionId).getKafkaPartition().getLeader();				
+				Broker leader = idToPartition.get(partitionId).getKafkaPartition().getLeader();
 				if (!leader.getHost().equals(assignedClient.getHostname())) {
 					curator.delete().forPath(assignmentZkPath);
 					LOG.info("Non-local assignment {} to client {} (hostname: {}) deleted because leader's  hostname is{}",
@@ -73,20 +68,20 @@ public class LocalLoadBalancer extends Leader {
 		} catch (Exception e) {
 			LOG.error("There was a problem pruning the assignments of unsupported topics", e);
 		}
-		
+
 		for (KaBoomPartition partition : KaBoomPartition.unassignedPartitions(kaboomTopics)) {
 			String leaderHostname = partition.getKafkaPartition().getLeader().getHost();
 			KaBoomClient localClient = hostToKaBoomClient.get(leaderHostname);
 			if (localClient != null) {
-				String zkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(), 
+				String zkPath = String.format("%s/%s", config.getZkRootPathPartitionAssignments(),
 					 partition.getTopicPartitionString());
-				curator.create().withMode(CreateMode.PERSISTENT).forPath(zkPath, 
+				curator.create().withMode(CreateMode.PERSISTENT).forPath(zkPath,
 					 String.valueOf(localClient.getId()).getBytes(UTF8));
 				partition.setAssignedClient(localClient);
 				localClient.getAssignedPartitions().add(partition);
-				
+
 			}
-			
+
 		}
 	}
 

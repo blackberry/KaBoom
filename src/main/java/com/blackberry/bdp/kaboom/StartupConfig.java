@@ -46,6 +46,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.zookeeper.Environment;
 
 /**
  *
@@ -66,13 +67,12 @@ public class StartupConfig {
 	private int kaboomId;
 	private int weight;
 	private final CuratorFramework kaboomCurator;
-	private final CuratorFramework kafkaCurator;
 	private final NodeCache nodeCache;
 	private String kerberosPrincipal;
 	private String kerberosKeytab;
 	private String hostname;
 	private String kaboomZkConnectionString;
-	private String kafkaZkConnectionString;
+	//private String kafkaZkConnectionString;
 	private final String loadBalancerType;
 	private final RunningConfig runningConfig;
 
@@ -99,7 +99,7 @@ public class StartupConfig {
 		LOG.info("kerberosKeytab: {}", kerberosKeytab);
 		LOG.info("hostname: {}", getHostname());
 		LOG.info("kaboomZkConnectionString: {}", kaboomZkConnectionString);
-		LOG.info("kafkaZkConnectionString: {}", kafkaZkConnectionString);
+		//LOG.info("kafkaZkConnectionString: {}", kafkaZkConnectionString);
 		LOG.info("kafkaSeedBrokers: {}", kafkaSeedBrokers);
 		LOG.info("loadBalancerType: {}", loadBalancerType);
 		LOG.info("kerberosPrincipal: {}", kerberosPrincipal);
@@ -131,7 +131,7 @@ public class StartupConfig {
 		kerberosPrincipal = propsParser.parseString("kerberos.principal");
 		hostname = propsParser.parseString("kaboom.hostname", InetAddress.getLocalHost().getHostName());
 		kaboomZkConnectionString = propsParser.parseString("zookeeper.connection.string");
-		kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
+		//kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		loadBalancerType = propsParser.parseString("kaboom.load.balancer.type", "even");
 
@@ -146,7 +146,7 @@ public class StartupConfig {
 		zkPathLeaderClientId = propsParser.parseString("kaboom.zk.path.leader.clientId", zkPathLeaderClientId);
 
 		kaboomCurator = buildCuratorFramework(kaboomZkConnectionString);
-		kafkaCurator = buildCuratorFramework(kafkaZkConnectionString);
+		// kafkaCurator = buildCuratorFramework(kafkaZkConnectionString);
 
 		runningConfig = RunningConfig.get(RunningConfig.class, kaboomCurator, zkPathRunningConfig);
 
@@ -207,7 +207,7 @@ public class StartupConfig {
 				propsIn = new FileInputStream(System.getProperty("kaboom.configuration"));
 				props.load(propsIn);
 			} else {
-				LOG.info("Loading configs from default properties file {}", 
+				LOG.info("Loading configs from default properties file {}",
 					 KaBoom.class.getClassLoader().getResource(defaultProperyFile));
 				propsIn = KaBoom.class.getClassLoader().getResourceAsStream(defaultProperyFile);
 				props.load(propsIn);
@@ -260,6 +260,7 @@ public class StartupConfig {
 		LOG.info("attempting to connect to ZK with connection string {}", connectionString);
 		String[] connStringAndPrefix = connectionString.split("/", 2);
 		CuratorFramework newCurator;
+		LOG.info("jaas key: {}", System.getProperty(Environment.JAAS_CONF_KEY));
 		if (connStringAndPrefix.length == 1) {
 			newCurator = CuratorFrameworkFactory.newClient(connectionString, retryPolicy);
 		} else {
@@ -402,9 +403,9 @@ public class StartupConfig {
 	/**
 	 * @return the kafkaCurator
 	 */
-	public CuratorFramework getKafkaCurator() {
-		return kafkaCurator;
-	}
+//	public CuratorFramework getKafkaCurator() {
+//		return kafkaCurator;
+//	}
 
 	/**
 	 * @return the zkRootPathKafkaBrokers
