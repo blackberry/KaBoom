@@ -243,7 +243,7 @@ public class FastBoomWriter {
 		if ((logBlockBuffer.position() > 0 && second != logBlockSecond)
 			 || logLinesBytes.length - logLinesBuffer.position() < 10 + 10 + length) {
 			if (logBlockBuffer.position() > 0 && second != logBlockSecond) {
-				LOG.debug("[{}] New Block ({} lines) (second changed from {} to {})", partitionId, logLineCount, logBlockSecond, second);
+				LOG.trace("[{}] New Block ({} lines) (second changed from {} to {})", partitionId, logLineCount, logBlockSecond, second);
 			} else {
 				if (logLinesBytes.length - logLinesBuffer.position() < 10 + 10 + length) {
 					LOG.trace("[{}] New Block. ({} lines) (buffer full)", partitionId, logLineCount);
@@ -278,7 +278,7 @@ public class FastBoomWriter {
 		 * aryder: added try-catch back in to catch errors
 		 */
 		try {
-			LOG.debug("[{}] logBlockBuffer: CurPosition {}, InsertMessage-Offset {}, InsertMessage Length {}", partitionId, logBlockBuffer.position(), offset, length);
+			LOG.trace("[{}] logBlockBuffer: CurPosition {}, InsertMessage-Offset {}, InsertMessage Length {}", partitionId, logBlockBuffer.position(), offset, length);
 
 			encodeLong(ms);
 			logLinesBuffer.put(longBytes, 0, longBuffer.position());
@@ -305,14 +305,14 @@ public class FastBoomWriter {
 			writeAvroBlock();
 		}
 
-		LOG.debug("[{}] avroBlockBuffer adding logBlockBytes: CurPosition {}, insert length {}", partitionId, avroBlockBuffer.position(), logBlockBuffer.position());
+		LOG.trace("[{}] avroBlockBuffer adding logBlockBytes: CurPosition {}, insert length {}", partitionId, avroBlockBuffer.position(), logBlockBuffer.position());
 
 		avroBlockBuffer.put(logBlockBytes, 0, logBlockBuffer.position());
 
 		encodeLong(logLineCount);
 		avroBlockBuffer.put(longBytes, 0, longBuffer.position());
 
-		LOG.debug("[{}] avroBlockBuffer adding logLineBytes: CurPosition {}, insert length {}", partitionId, avroBlockBuffer.position(), logLinesBuffer.position());
+		LOG.trace("[{}] avroBlockBuffer adding logLineBytes: CurPosition {}, insert length {}", partitionId, avroBlockBuffer.position(), logLinesBuffer.position());
 
 		avroBlockBuffer.put(logLinesBytes, 0, logLinesBuffer.position());
 

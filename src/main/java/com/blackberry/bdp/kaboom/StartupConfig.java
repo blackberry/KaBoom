@@ -38,6 +38,8 @@ import com.blackberry.bdp.common.props.Parser;
 
 import com.blackberry.bdp.kaboom.api.RunningConfig;
 import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
+import com.blackberry.bdp.krackle.jaas.Login;
+import java.security.PrivilegedActionException;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.cache.NodeCache;
 import org.apache.curator.framework.recipes.cache.NodeCacheListener;
@@ -46,6 +48,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.zookeeper.Environment;
 
 /**
@@ -85,6 +88,8 @@ public class StartupConfig {
 	private String zkRootPathFlagAssignments = String.format("%s/%s", zkRootPathKaBoom, "flag-assignments");
 	private String zkPathRunningConfig = String.format("%s/%s", zkRootPathKaBoom, "config");
 	private String zkPathLeaderClientId = String.format("%s/%s", zkRootPathKaBoom, "leader");
+
+	private final Login kaboomLogin;
 
 	/**
 	 * POSIX style NONE("---"), EXECUTE("--x"), WRITE("-w-"), WRITE_EXECUTE("-wx"), READ("r--"), READ_EXECUTE("r-x"), READ_WRITE("rw-"), ALL("rwx");
@@ -161,8 +166,9 @@ public class StartupConfig {
 		});
 		nodeCache.start();
 
-		Authenticator.getInstance().setKerbConfPrincipal(kerberosPrincipal);
-		Authenticator.getInstance().setKerbKeytab(kerberosKeytab);
+		kaboomLogin = new Login("kaboom", new Login.ClientCallbackHandler());
+		kaboomLogin.startThreadIfNeeded();
+		UserGroupInformation.loginUserFromSubject(kaboomLogin.getSubject());
 	}
 
 	/**
@@ -172,9 +178,10 @@ public class StartupConfig {
 	 * @return
 	 * @throws java.io.IOException
 	 * @throws java.lang.InterruptedException
+	 * @throws java.security.PrivilegedActionException
 	 */
 	public final FileSystem authenticatedFsForProxyUser(final String proxyUser)
-		 throws IOException, InterruptedException {
+		 throws IOException, InterruptedException, PrivilegedActionException {
 		return Authenticator.getInstance().runPrivileged(proxyUser,
 			 new PrivilegedExceptionAction<FileSystem>() {
 				 @Override
@@ -189,7 +196,6 @@ public class StartupConfig {
 						 }
 					 }
 				 }
-
 			 });
 	}
 
