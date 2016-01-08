@@ -178,10 +178,9 @@ public class StartupConfig {
 	 * @return
 	 * @throws java.io.IOException
 	 * @throws java.lang.InterruptedException
-	 * @throws java.security.PrivilegedActionException
 	 */
 	public final FileSystem authenticatedFsForProxyUser(final String proxyUser)
-		 throws IOException, InterruptedException, PrivilegedActionException {
+		 throws IOException, InterruptedException {
 		return Authenticator.getInstance().runPrivileged(proxyUser,
 			 new PrivilegedExceptionAction<FileSystem>() {
 				 @Override
