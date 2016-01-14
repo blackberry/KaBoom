@@ -10,90 +10,41 @@
  *  distributed under the License is distributed on an "AS IS" BASIS,
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
- *  limitations under the License. 
+ *  limitations under the License.
  */
-
 package com.blackberry.bdp.kaboom;
 
 import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.UserGroupInformation.AuthenticationMethod;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Preconditions;
-
 public class Authenticator {
-	private static final Logger LOG = LoggerFactory
-			.getLogger(Authenticator.class);
 
-	private String kerbConfPrincipal;
-	private String kerbKeytab;
-	/**
-	 * Singleton credential manager that manages static credentials for the entire
-	 * JVM
-	 */
-	private static final AtomicReference<KerberosUser> staticLogin = new AtomicReference<>();
-
+	private static final Logger LOG = LoggerFactory.getLogger(Authenticator.class);
 	private final Map<String, UGIState> proxyUserMap;
 	private final Object lock = new Object();
-
-	private final long reauthenticationRetryInterval = 10000;
 
 	private Authenticator() {
 		proxyUserMap = new HashMap<>();
 	}
 
 	private static class SingletonHolder {
+
 		public static final Authenticator INSTANCE = new Authenticator();
+
 	}
 
 	public static Authenticator getInstance() {
 		return SingletonHolder.INSTANCE;
 	}
 
-	public String getKerbConfPrincipal() {
-		return kerbConfPrincipal;
-	}
-
-	public void setKerbConfPrincipal(String kerbConfPrincipal) {
-		this.kerbConfPrincipal = kerbConfPrincipal;
-	}
-
-	public String getKerbKeytab() {
-		return kerbKeytab;
-	}
-
-	public void setKerbKeytab(String kerbKeytab) {
-		this.kerbKeytab = kerbKeytab;
-	}
-
-	/*
-	 * The following methods were taken from the Apache Flume project, and are
-	 * used under license.
-	 * 
-	 * Licensed to the Apache Software Foundation (ASF) under one or more
-	 * contributor license agreements. See the NOTICE file distributed with this
-	 * work for additional information regarding copyright ownership. The ASF
-	 * licenses this file to you under the Apache License, Version 2.0 (the
-	 * "License"); you may not use this file except in compliance with the
-	 * License. You may obtain a copy of the License at
-	 * 
-	 * http://www.apache.org/licenses/LICENSE-2.0
-	 * 
-	 * Unless required by applicable law or agreed to in writing, software
-	 * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-	 * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-	 * License for the specific language governing permissions and limitations
-	 * under the License.
-	 */
-	private boolean authenticate(String proxyUserName) {
+	private boolean authenticate(String proxyUserName) throws IOException {
 		UserGroupInformation proxyTicket;
 
 		// logic for kerberos login
@@ -102,97 +53,19 @@ public class Authenticator {
 		LOG.info("Hadoop Security enabled: " + useSecurity);
 
 		if (useSecurity) {
-			// sanity checking
-			if (kerbConfPrincipal.isEmpty()) {
-				LOG.error("Hadoop running in secure mode, but Flume config doesn't "
-						+ "specify a principal to use for Kerberos auth.");
-				return false;
+			// We now expect that all the logins are handled externally
+			if (UserGroupInformation.getLoginUser() == null) {
+				throw new IOException("current logged in super user not found");
 			}
-			if (kerbKeytab.isEmpty()) {
-				LOG.error("Hadoop running in secure mode, but Flume config doesn't "
-						+ "specify a keytab to use for Kerberos auth.");
-				return false;
-			}
-
-			String principal;
-			try {
-				// resolves _HOST pattern using standard Hadoop search/replace
-				// via DNS lookup when 2nd argument is empty
-				principal = SecurityUtil.getServerPrincipal(kerbConfPrincipal, "");
-			} catch (IOException e) {
-				LOG.error("Host lookup error resolving kerberos principal ("
-						+ kerbConfPrincipal + "). Exception follows.", e);
-				return false;
-			}
-
-			Preconditions.checkNotNull(principal, "Principal must not be null");
-			KerberosUser prevUser = staticLogin.get();
-			KerberosUser newUser = new KerberosUser(principal, kerbKeytab);
-
-			// be cruel and unusual when user tries to login as multiple principals
-			// this isn't really valid with a reconfigure but this should be rare
-			// enough to warrant a restart of the agent JVM
-			// TODO: find a way to interrogate the entire current config state,
-			// since we don't have to be unnecessarily protective if they switch all
-			// HDFS sinks to use a different principal all at once.
-			Preconditions.checkState(prevUser == null || prevUser.equals(newUser),
-					"Cannot use multiple kerberos principals in the same agent. "
-							+ " Must restart agent to use new principal or keytab. "
-							+ "Previous = %s, New = %s", prevUser, newUser);
-
-			// attempt to use cached credential if the user is the same
-			// this is polite and should avoid flooding the KDC with auth requests
-			UserGroupInformation curUser = null;
-			if (prevUser != null && prevUser.equals(newUser)) {
-				try {
-					LOG.info("Attempting login as {} with cached credentials", prevUser.getPrincipal());
-					curUser = UserGroupInformation.getLoginUser();
-				} catch (IOException e) {
-					LOG.warn("User unexpectedly had no active login. Continuing with "
-							+ "authentication", e);
-				}
-			}
-
-			if (curUser == null || !curUser.getUserName().equals(principal)) {
-				try {
-					// static login
-					curUser = kerberosLogin(this, principal, kerbKeytab);
-					LOG.info("Current user obtained from Kerberos login {}", curUser.getUserName());
-				} catch (IOException e) {
-					LOG.error("Authentication or file read error while attempting to "
-							+ "login as kerberos principal (" + principal + ") using "
-							+ "keytab (" + kerbKeytab + "). Exception follows.", e);
-					return false;
-				}
-			} else {
-				LOG.debug("{}: Using existing principal login: {}", this, curUser);
-			}
-
-			try {
-				if (UserGroupInformation.getLoginUser().isFromKeytab() == false) 					
-				{					
-					LOG.warn("Using a keytab for authentication is {}", UserGroupInformation.getLoginUser().isFromKeytab());
-					LOG.warn("curUser.isFromKeytab(): {}", curUser.isFromKeytab());
-					LOG.warn("UserGroupInformation.getCurrentUser().isLoginKeytabBased(): {}", UserGroupInformation.getCurrentUser().isLoginKeytabBased());
-					LOG.warn("UserGroupInformation.isLoginKeytabBased(): {}", UserGroupInformation.isLoginKeytabBased());
-					LOG.warn("curUser.getAuthenticationMethod(): {}", curUser.getAuthenticationMethod());
-					//System.exit(1);
-				}
-			} catch (IOException e) {
-				LOG.error("Failed to get login user.", e);
-				System.exit(1);
-			}
-
-			// we supposedly got through this unscathed... so store the static user
-			staticLogin.set(newUser);
 		}
 
 		// hadoop impersonation works with or without kerberos security
 		proxyTicket = null;
+
 		if (!proxyUserName.isEmpty()) {
 			try {
 				proxyTicket = UserGroupInformation.createProxyUser(proxyUserName,
-						UserGroupInformation.getLoginUser());
+					 UserGroupInformation.getLoginUser());
 			} catch (IOException e) {
 				LOG.error("Unable to login as proxy user. Exception follows.", e);
 				return false;
@@ -202,18 +75,19 @@ public class Authenticator {
 		UserGroupInformation ugi = null;
 		if (proxyTicket != null) {
 			ugi = proxyTicket;
-		} else if (useSecurity) {
-			try {
-				ugi = UserGroupInformation.getLoginUser();
-			} catch (IOException e) {
-				LOG.error("Unexpected error: Unable to get authenticated user after "
-						+ "apparent successful login! Exception follows.", e);
-				return false;
+		} else {
+			if (useSecurity) {
+				try {
+					ugi = UserGroupInformation.getLoginUser();
+				} catch (IOException e) {
+					LOG.error("Unexpected error: Unable to get authenticated user after "
+						 + "apparent successful login! Exception follows.", e);
+					return false;
+				}
 			}
 		}
 
 		if (ugi != null) {
-			// dump login information
 			AuthenticationMethod authMethod = ugi.getAuthenticationMethod();
 			LOG.info("Auth method: {}", authMethod);
 			LOG.info(" User name: {}", ugi.getUserName());
@@ -227,7 +101,7 @@ public class Authenticator {
 					LOG.info(" Superuser using keytab: {}", superUser.isFromKeytab());
 				} catch (IOException e) {
 					LOG.error("Unexpected error: unknown superuser impersonating proxy.",
-							e);
+						 e);
 					return false;
 				}
 			}
@@ -246,87 +120,18 @@ public class Authenticator {
 	}
 
 	/**
-	 * Static synchronized method for static Kerberos login. <br/>
-	 * Static synchronized due to a thundering herd problem when multiple Sinks
-	 * attempt to log in using the same principal at the same time with the
-	 * intention of impersonating different users (or even the same user). If this
-	 * is not controlled, MIT Kerberos v5 believes it is seeing a replay attach
-	 * and it returns: <blockquote>Request is a replay (34) -
-	 * PROCESS_TGS</blockquote> In addition, since the underlying Hadoop APIs we
-	 * are using for impersonation are static, we define this method as static as
-	 * well.
-	 * 
-	 * @param principal
-	 *          Fully-qualified principal to use for authentication.
-	 * @param keytab
-	 *          Location of keytab file containing credentials for principal.
-	 * @return Logged-in user
-	 * @throws IOException
-	 *           if login fails.
-	 */
-	private synchronized UserGroupInformation kerberosLogin(
-			Authenticator authenticator, String principal, String keytab)
-			throws IOException {
-
-		// if we are the 2nd user thru the lock, the login should already be
-		// available statically if login was successful
-		UserGroupInformation curUser = null;
-		try {
-			curUser = UserGroupInformation.getLoginUser();
-		} catch (IOException e) {
-			// not a big deal but this shouldn't typically happen because it will
-			// generally fall back to the UNIX user
-			LOG.debug("Unable to get login user before Kerberos auth attempt.", e);
-		}
-
-		// we already have logged in successfully
-		if (curUser != null && curUser.getUserName().equals(principal)) {
-			LOG.debug("{}: Using existing principal ({}): {}", new Object[] {
-					authenticator, principal, curUser });
-
-			// no principal found
-		} else {
-
-			LOG.info("{}: Attempting kerberos login as principal ({}) from keytab "
-					+ "file ({})", new Object[] { authenticator, principal, keytab });
-
-			// attempt static kerberos login
-			UserGroupInformation.loginUserFromKeytab(principal, keytab);
-			curUser = UserGroupInformation.getLoginUser();
-		}
-
-		return curUser;
-	}
-
-	private void reauthenticate(String proxyUser) {
-		try {
-			Thread.sleep(reauthenticationRetryInterval);
-		} catch (InterruptedException e) {
-			// do nothing.
-		}
-
-		synchronized (lock) {
-			UGIState state = proxyUserMap.get(proxyUser);
-			if (state == null
-					|| System.currentTimeMillis() - state.lastAuthenticated < reauthenticationRetryInterval) {
-				authenticate(proxyUser);
-
-			}
-		}
-	}
-
-	/**
 	 * Allow methods to act as another user (typically used for HDFS Kerberos)
-	 * 
+	 *
 	 * @param <T>
+	 * @param proxyUser
 	 * @param action
 	 * @return
 	 * @throws IOException
 	 * @throws InterruptedException
 	 */
 	public <T> T runPrivileged(final String proxyUser,
-			final PrivilegedExceptionAction<T> action) throws IOException,
-			InterruptedException {
+		 final PrivilegedExceptionAction<T> action) throws IOException,
+		 InterruptedException {
 
 		UGIState state = null;
 		synchronized (lock) {
@@ -344,26 +149,16 @@ public class Authenticator {
 			try {
 				return proxyTicket.doAs(action);
 			} catch (IOException e) {
-				LOG.error(
-						"Caught IO exception while performing a privileged action.  Reauthenticating.",
-						e);
-				reauthenticate(proxyUser);
+				LOG.error("Caught IOException while performing a privileged action: ", e);
 				throw e;
 			} catch (InterruptedException e) {
-				LOG.error(
-						"Caught interrupted exception while performing a privileged action.  Reauthenticating.",
-						e);
-				reauthenticate(proxyUser);
+				LOG.error("Caught InterruptedException while performing a privileged action: ", e);
 				throw e;
 			}
 		} else {
 			try {
 				return action.run();
-			} catch (IOException ex) {
-				throw ex;
-			} catch (InterruptedException ex) {
-				throw ex;
-			} catch (RuntimeException ex) {
+			} catch (IOException | InterruptedException | RuntimeException ex) {
 				throw ex;
 			} catch (Exception ex) {
 				throw new RuntimeException("Unexpected exception.", ex);
