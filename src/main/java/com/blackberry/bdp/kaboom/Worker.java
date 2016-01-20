@@ -84,6 +84,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 	private TimeBasedHdfsOutputPath hdfsOutputPath;
 	private static Set<Worker> workers = new HashSet<>();
 	private static final Object workersLock = new Object();
+	private final Object zkLock = new Object();
 	private KaBoomTopicConfig topicConfig;
 	private WorkerShift previousShift = null;
 	private WorkerShift currentShift;
@@ -254,7 +255,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 			}
 
 		});
-		
+
 		nodeCache.start();
 		lagGaugeName = "kaboom:partitions:" + partitionId + ":message lag";
 		lagSecGaugeName = "kaboom:partitions:" + partitionId + ":message lag sec";
@@ -332,7 +333,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 		try {
 			aquireAssignment();
 			this.hdfsOutputPath.setWorker(this);
-			
+
 			try {
 				currentShift = new WorkerShift();
 				hostname = InetAddress.getLocalHost().getCanonicalHostName();
@@ -392,19 +393,19 @@ public final class Worker extends AsyncAssignee implements Runnable {
 					}
 
 					/**
-					 * offset always refers to the next offset we expect and since we just 
-					 * called consumer.getMessage() let's see if the offset of the last message 
+					 * offset always refers to the next offset we expect and since we just
+					 * called consumer.getMessage() let's see if the offset of the last message
 					 * is what we expected and handle the fun edge cases when it's not
 					 */
 					if (currentShift.offset != consumer.getLastOffset()) {
 						long highWatermark = consumer.getHighWaterMark();
 						if (currentShift.offset > consumer.getLastOffset()) {
 							if (currentShift.offset < highWatermark) {
-								/* 
+								/*
 								 * When using SNAPPY compression in Krackle's consumer there will be messages received
 								 * that are in the snappy block that are from earlier than our requested offset.  When this
 								 * happens the consumer will continue to send us messages from within that block so we
-								 * should just be patient until the offsets are from where we want.  
+								 * should just be patient until the offsets are from where we want.
 								 */
 								LOG.debug("[{}] skipping last offset {} since earlier than our requested offset 's and lower than high watermark {}",
 									 getPartitionId(),
@@ -414,10 +415,10 @@ public final class Worker extends AsyncAssignee implements Runnable {
 								continue;
 							} else {
 								if (currentShift.offset > highWatermark) {
-									/*	
-									 *	If the expected offset is greater than than actual offset and also higher than the high watermark 
-									 *	then perhaps the broker we're receiving messages from has changed and the new broker has a 
-									 *	lower offset because it was behind when it took over... Maybe?  
+									/*
+									 *	If the expected offset is greater than than actual offset and also higher than the high watermark
+									 *	then perhaps the broker we're receiving messages from has changed and the new broker has a
+									 *	lower offset because it was behind when it took over... Maybe?
 									 */
 									if (config.getRunningConfig().getSinkToHighWatermark()) {
 										LOG.warn("[{}] offset {} is greater than high watermark {} and sinkToHighWatermark is {}, sinking to high watermark.",
@@ -492,7 +493,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 
 					if (tsp.getError() == TimestampParser.NO_ERROR) {
 						timestamp = tsp.getTimestamp();
-						// Move position to the end of the timestamp						
+						// Move position to the end of the timestamp
 						pos += tsp.getLength();
 						/**
 						 * mbruce: occasionally we get a line that is truncated partway through the timestamp, however we still have the rest of the last message in the byte buffer and parsing the timestamp will push us past then end of the line
@@ -555,7 +556,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 				LOG.info("[{}] closed off the node cache listener", partitionId);
 			} catch (IOException ioe) {
 				LOG.error("[{}] failed to close off the node cache listener: ", partitionId, ioe);
-			}			
+			}
 			try {
 				releaseAssignment();
 			} catch (Exception ex) {
@@ -593,6 +594,13 @@ public final class Worker extends AsyncAssignee implements Runnable {
 		} catch (Exception e) {
 			LOG.error("[{}] Exception raised during shutdown: ", partitionId, e);
 		}
+	}
+
+	/**
+	 * @return the zkLock
+	 */
+	public Object getZkLock() {
+		return zkLock;
 	}
 
 	private class WorkerShift {
@@ -645,15 +653,17 @@ public final class Worker extends AsyncAssignee implements Runnable {
 			finish(false);
 		}
 
-		/** 				 
+		/**
 		 @param persistMetadata whether to persist the partition metadata to ZK
 		 */
 		private void finish(boolean persistMetadata) throws Exception {
 			LOG.info("[{}] Shift ending at {} is finished", partitionId, dateString(shiftEnd));
 			hdfsOutputPath.closeOffShift(shiftNumber);
 			if (persistMetadata) {
-				storeOffset();
-				storeOffsetTimestamp();
+				synchronized(zkLock) {
+					storeOffset();
+					storeOffsetTimestamp();
+				}
 			}
 			finished = true;
 		}
