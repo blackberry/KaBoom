@@ -61,12 +61,12 @@ public class KaBoom {
 		if (Boolean.parseBoolean(System.getProperty("metrics.to.console", "false").trim())) {
 			MetricRegistrySingleton.getInstance().enableConsole();
 		}
-		
+
 		deadWorkerMeter = MetricRegistrySingleton.getInstance().
 			 getMetricsRegistry().meter("kaboom:total:dead workers");
-		
-		gracefulWorkerShutdownMeter = MetricRegistrySingleton.getInstance().			 
-			 getMetricsRegistry().meter("kaboom:total:gracefully shutdown workers");		
+
+		gracefulWorkerShutdownMeter = MetricRegistrySingleton.getInstance().
+			 getMetricsRegistry().meter("kaboom:total:gracefully shutdown workers");
 
 		try {
 			Properties props = StartupConfig.getProperties();
@@ -178,7 +178,7 @@ public class KaBoom {
 		Pattern topicPartitionPattern = Pattern.compile("^(.*)-(\\d+)$");
 
 		while (shutdown == false) {
-			synchronized (serverLock) {			
+			synchronized (serverLock) {
 				// Get all my assignments and create a worker if there's anything not already being worked
 				Map<String, Boolean> validWorkingPartitions = new HashMap<>();
 				for (String partitionId : client.getAssignments(config.getKaBoomCurator(), config.getZkRootPathPartitionAssignments())) {
@@ -231,16 +231,18 @@ public class KaBoom {
 					if (worker.pinged()) {
 						if (!worker.getPong()) {
 							LOG.error("[{}] has not responded from being pinged, aborting", worker.getPartitionId());
-							worker.abort();
-							partitionToThreadsMap.get(worker.getPartitionId()).interrupt();
-							iter.remove();
+							synchronized(worker.getZkLock()) {
+								worker.abort();
+								partitionToThreadsMap.get(worker.getPartitionId()).interrupt();
+								iter.remove();
+							}
 						} else {
 							worker.ping();
 						}
 					} else {
 						worker.ping();
 					}
-				}				
+				}
 			}
 			Thread.sleep(config.getRunningConfig().getKaboomServerSleepDurationMs());
 		}
