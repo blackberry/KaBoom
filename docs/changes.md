@@ -1,5 +1,9 @@
 # KaBoom Changes
 
+## 0.8.4-HF1
+
+* KABOOM-33: Provide Better Resiliency around ZK Corruption
+
 ## 0.8.4
 
 Tickets:
