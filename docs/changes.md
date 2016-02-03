@@ -1,5 +1,13 @@
 # KaBoom Changes
 
+## 0.9.0
+
+* KABOOM-39: deprecate kerberos configs in kaboom.properties for kaboom versions >= 0.9.0
+
+## 0.8.4-HF2
+
+* KABOOM-37: Old timestamps are not being treated as skewed
+
 ## 0.8.4-HF1
 
 * KABOOM-33: Provide Better Resiliency around ZK Corruption
@@ -20,7 +28,7 @@ TimeBasedHdfsOutputPath: OutputFile private class overwrites the boom filename, 
 New Metrics:
 
 * kaboom:total:skewed time boom files // the total number of skewed boom files for the node
-* kaboom:partitions:<partition>:skewed time boom files // the total number of skewed boom files for the partiton 
+* kaboom:partitions:<partition>:skewed time boom files // the total number of skewed boom files for the partiton
 
 ## 0.8.3 (never released outside of labs)
 
@@ -44,7 +52,7 @@ New Metrics:
 
 ## 0.8.2-HF3
 
-* Fixes KABOOM-20 - Maps Used by Leader Not Emptied 
+* Fixes KABOOM-20 - Maps Used by Leader Not Emptied
 * Fixes KABOOM-21 - Ensure Exceptions Are Not Swallowed And Abort Accordingly
 * Fixes KABOOM-22 - Bug in Closing LRU Boom File Closing Most Recently Used v2
 
@@ -87,7 +95,7 @@ New Metrics:
 ## 0.7.15
 
 * Ensures that only topics with unique HDFS root paths are examined
-* New configuration option: kaboom.propagate.ready.flags.delay.ms (long, how often wait between paths, default 0) can be used to ease the burden on the name nodes if there's a massive amount of HDFS path traversal required 
+* New configuration option: kaboom.propagate.ready.flags.delay.ms (long, how often wait between paths, default 0) can be used to ease the burden on the name nodes if there's a massive amount of HDFS path traversal required
 
 ## 0.7.14
 
@@ -99,7 +107,7 @@ New Metrics:
 * New configuration option: kaboom.propagate.ready.flags.frequency (long, how often in ms to spawn propagator thread, default 10 * 60 * 1000)
 * Supports bdp-common 0,0.6 which provides all logging and monitoring deps
 * Instruments log4j2 with io.dropwizard.metrics
-* Adds a new API 
+* Adds a new API
 
 ## 0.7.13
 
@@ -149,7 +157,7 @@ New Metrics:
 
 * Adds new optional configuration option (Short): kaboom.deflate.compression.level, default=6
 * Adds new optional configuration option (Short): topic.<topic>.compression.level
-* Adds new histogram metric for compression ratio 
+* Adds new histogram metric for compression ratio
 
 ## 0.7.6
 
@@ -171,7 +179,7 @@ New Metrics:
 
 ## 0.7.3
 
-* Adds native compression 
+* Adds native compression
 
 ## 0.7.2
 
@@ -183,7 +191,7 @@ New Metrics:
 * New meter metrics for boom writes for topic-partition, topic, and total per server
 * Adds new required configuration option: hadoop.fs.uri
 * Adds new required topic configuration for HDFS root directory (string): topic.<topicName>.hdfsRootDir
-* Supports multiple numbered template based HDFS output paths per topic 
+* Supports multiple numbered template based HDFS output paths per topic
 * Topic HDFS output paths are now configurable to be left open for specific durations
 * Adds new optional configuration option (boolean): kaboom.useTempOpenFileDirectory
 * Adds new optional configuration option (Integer): boom.file.buffer.size, default=16384
@@ -199,7 +207,7 @@ New Metrics:
 * New dependency on Krackle 0.7.7 for configuring socket timeouts
 * New KaboomConfiguration class that encapsulates all the configuration
 * New accessor methods for instantiating CuratorFramework objects
-* Project builds produce an RPM artifact 
+* Project builds produce an RPM artifact
 * Fixes synchronization on non-final workersLock object (used when instantiating metrics)
 * Removes unused imports
 * Worker.java, int length; byte version; int pos; are no longer initialized with default values that are never used
@@ -209,7 +217,7 @@ New Metrics:
 
 ## 0.6.10
 
-* Re-formats source for Kaboom and Worker class 
+* Re-formats source for Kaboom and Worker class
 * Adds offset overrides feature for single partitions to be set to specific offsets in ZK
 * Adds  feature and configuration property to sink to lower offsets when offsets surpass the high watermark
 * Re-writes the offset handling code for when last offsets do not match expected offset

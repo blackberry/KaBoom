@@ -71,8 +71,6 @@ public class StartupConfig {
 	private int weight;
 	private final CuratorFramework kaboomCurator;
 	private final NodeCache nodeCache;
-	private String kerberosPrincipal;
-	private String kerberosKeytab;
 	private String hostname;
 	private String kaboomZkConnectionString;
 	//private String kafkaZkConnectionString;
@@ -100,15 +98,11 @@ public class StartupConfig {
 		LOG.info(" *** start dumping configuration *** ");
 		LOG.info("kaboomId: {}", getKaboomId());
 		LOG.info("weight: {}", getWeight());
-		LOG.info("kerberosPrincipal: {}", kerberosPrincipal);
-		LOG.info("kerberosKeytab: {}", kerberosKeytab);
 		LOG.info("hostname: {}", getHostname());
 		LOG.info("kaboomZkConnectionString: {}", kaboomZkConnectionString);
 		//LOG.info("kafkaZkConnectionString: {}", kafkaZkConnectionString);
 		LOG.info("kafkaSeedBrokers: {}", kafkaSeedBrokers);
 		LOG.info("loadBalancerType: {}", loadBalancerType);
-		LOG.info("kerberosPrincipal: {}", kerberosPrincipal);
-		LOG.info("kerberosKeytab: {}", kerberosKeytab);
 		LOG.info("zkRootPathKaBoom: {}", zkRootPathKaBoom);
 		LOG.info("zkRootPathKafkaBrokers: {}", zkRootPathKafkaBrokers);
 		LOG.info("zkRootPathKafka: {}", zkRootPathKafka);
@@ -132,8 +126,6 @@ public class StartupConfig {
 		kaboomId = propsParser.parseInteger("kaboom.id");
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));
 		weight = propsParser.parseInteger("kaboom.weighting", Runtime.getRuntime().availableProcessors());
-		kerberosKeytab = propsParser.parseString("kerberos.keytab");
-		kerberosPrincipal = propsParser.parseString("kerberos.principal");
 		hostname = propsParser.parseString("kaboom.hostname", InetAddress.getLocalHost().getHostName());
 		kaboomZkConnectionString = propsParser.parseString("zookeeper.connection.string");
 		//kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
