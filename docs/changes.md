@@ -5,6 +5,10 @@
 * KABOOM-39: deprecate kerberos configs in kaboom.properties for kaboom versions >= 0.9.0
 * KABOOM-40: Create KaBoom temp dir on package install and set snappy temp dir to use it
 
+## 0.8.4-HF2
+
+* KABOOM-37: Old timestamps are not being treated as skewed
+
 ## 0.8.4-HF1
 
 * KABOOM-33: Provide Better Resiliency around ZK Corruption
