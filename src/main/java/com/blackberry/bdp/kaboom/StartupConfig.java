@@ -161,6 +161,10 @@ public class StartupConfig {
 		kaboomLogin = new Login("kaboom", new Login.ClientCallbackHandler());
 		kaboomLogin.startThreadIfNeeded();
 		UserGroupInformation.loginUserFromSubject(kaboomLogin.getSubject());
+
+		// Check if we're using a custom tmp directory for Snappy
+		String snappyTempDir = props.getProperty("kaboom.temp.dir", "/opt/kaboom/tmp").trim();
+		System.setProperty("org.xerial.snappy.tempdir", snappyTempDir);
 	}
 
 	/**

@@ -277,6 +277,7 @@ limitations under the License.
 									<paths>
 										<path>/opt/kaboom/config</path>
 										<path>/opt/kaboom/lib</path>
+										<path>/opt/kaboom/tmp</path>
 										<path>/opt/kaboom/src</path>
 										<path>/var/log/kaboom</path>
 										<path>/var/run/kaboom</path>
@@ -467,6 +468,11 @@ limitations under the License.
 						<!-- Logs -->
 						<mapping>
 							<directory>/var/log/kaboom</directory>
+						</mapping>
+
+						<!-- Temp dir -->
+						<mapping>
+							<directory>/opt/kaboom/tmp</directory>
 						</mapping>
 
 					</mappings>
