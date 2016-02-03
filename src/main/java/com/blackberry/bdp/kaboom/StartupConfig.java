@@ -39,7 +39,6 @@ import com.blackberry.bdp.common.props.Parser;
 import com.blackberry.bdp.kaboom.api.RunningConfig;
 import com.blackberry.bdp.krackle.consumer.ConsumerConfiguration;
 import com.blackberry.bdp.krackle.jaas.Login;
-import java.security.PrivilegedActionException;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.cache.NodeCache;
 import org.apache.curator.framework.recipes.cache.NodeCacheListener;
@@ -104,7 +103,6 @@ public class StartupConfig {
 		LOG.info("kerberosKeytab: {}", kerberosKeytab);
 		LOG.info("hostname: {}", getHostname());
 		LOG.info("kaboomZkConnectionString: {}", kaboomZkConnectionString);
-		//LOG.info("kafkaZkConnectionString: {}", kafkaZkConnectionString);
 		LOG.info("kafkaSeedBrokers: {}", kafkaSeedBrokers);
 		LOG.info("loadBalancerType: {}", loadBalancerType);
 		LOG.info("kerberosPrincipal: {}", kerberosPrincipal);
@@ -136,7 +134,6 @@ public class StartupConfig {
 		kerberosPrincipal = propsParser.parseString("kerberos.principal");
 		hostname = propsParser.parseString("kaboom.hostname", InetAddress.getLocalHost().getHostName());
 		kaboomZkConnectionString = propsParser.parseString("zookeeper.connection.string");
-		//kafkaZkConnectionString = propsParser.parseString("kafka.zookeeper.connection.string");
 		kafkaSeedBrokers = propsParser.parseString("metadata.broker.list");
 		loadBalancerType = propsParser.parseString("kaboom.load.balancer.type", "even");
 
@@ -151,7 +148,6 @@ public class StartupConfig {
 		zkPathLeaderClientId = propsParser.parseString("kaboom.zk.path.leader.clientId", zkPathLeaderClientId);
 
 		kaboomCurator = buildCuratorFramework(kaboomZkConnectionString);
-		// kafkaCurator = buildCuratorFramework(kafkaZkConnectionString);
 
 		runningConfig = RunningConfig.get(RunningConfig.class, kaboomCurator, zkPathRunningConfig);
 
@@ -166,7 +162,8 @@ public class StartupConfig {
 		});
 		nodeCache.start();
 
-		kaboomLogin = new Login("kaboom", new Login.ClientCallbackHandler());
+		kaboomLogin = new Login(props.getProperty("hadoop.client.jaas.login.context", "kaboom").trim(),
+			 new Login.ClientCallbackHandler());
 		kaboomLogin.startThreadIfNeeded();
 		UserGroupInformation.loginUserFromSubject(kaboomLogin.getSubject());
 	}
@@ -404,13 +401,6 @@ public class StartupConfig {
 	public String getZkRootPathKafka() {
 		return zkRootPathKafka;
 	}
-
-	/**
-	 * @return the kafkaCurator
-	 */
-//	public CuratorFramework getKafkaCurator() {
-//		return kafkaCurator;
-//	}
 
 	/**
 	 * @return the zkRootPathKafkaBrokers
