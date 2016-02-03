@@ -2,6 +2,7 @@
 
 ## 0.9.0
 
+* KABOOM-36: Expose login context name as a confguration option
 * KABOOM-39: deprecate kerberos configs in kaboom.properties for kaboom versions >= 0.9.0
 * KABOOM-40: Create KaBoom temp dir on package install and set snappy temp dir to use it
 
