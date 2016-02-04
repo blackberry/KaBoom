@@ -2,6 +2,7 @@
 
 ## 0.9.0
 
+* KABOOM-3: Add JMX metric: Failed Block Writes
 * KABOOM-31: expose bytes written to HDFS via JMX
 * KABOOM-35: add a warning/error message in kaboom when /etc/hadoop/conf is not found or not defined in the classpath
 * KABOOM-36: Expose login context name as a confguration option

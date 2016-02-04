@@ -47,6 +47,7 @@ public class FastBoomWriter {
 	private final Histogram compressionRatioHistogramTotal;
 	private final Meter totalBytesWritten;
 	private final Meter topicBytesWritten;
+	private final Meter failedBlockWrites;
 	private int compressedSize;
 	private byte[] compressedBlockBytes = new byte[256 * 1024];
 	private final Deflater deflater;
@@ -106,6 +107,7 @@ public class FastBoomWriter {
 		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");
 		this.totalBytesWritten = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:bytes written");
 		this.topicBytesWritten = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":bytes written");
+		this.failedBlockWrites = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:failed block writes");
 		this.periodicHdfsFlushInterval = runningConfig.getPeriodicHdfsFlushInterval();
 		this.useNativeCompression = runningConfig.getUseNativeCompression();
 
@@ -392,6 +394,7 @@ public class FastBoomWriter {
 			topicBytesWritten.mark(compressedSize);
 		} catch (Exception e) {
 			LOG.error("[{}] error occured either compressing or writing the avro block: ", partitionId, e);
+			failedBlockWrites.mark();
 		} finally {
 			timerTopic.stop();
 			timerTotal.stop();
