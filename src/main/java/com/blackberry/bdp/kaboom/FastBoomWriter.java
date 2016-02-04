@@ -12,6 +12,7 @@ package com.blackberry.bdp.kaboom;
 import com.blackberry.bdp.common.jmx.MetricRegistrySingleton;
 import com.blackberry.bdp.kaboom.api.RunningConfig;
 import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -44,6 +45,8 @@ public class FastBoomWriter {
 	private final short compressionLevel;
 	private final Histogram compressionRatioHistogramTopic;
 	private final Histogram compressionRatioHistogramTotal;
+	private final Meter totalBytesWritten;
+	private final Meter topicBytesWritten;
 	private int compressedSize;
 	private byte[] compressedBlockBytes = new byte[256 * 1024];
 	private final Deflater deflater;
@@ -101,6 +104,8 @@ public class FastBoomWriter {
 		this.compressionRatioHistogramTopic = MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:topic:" + topic + ":compresssion ratio");
 		this.compressionRatioHistogramTotal = MetricRegistrySingleton.getInstance().getMetricsRegistry().histogram("kaboom:total:compression ratio");
 		this.hdfsFlushTimer = MetricRegistrySingleton.getInstance().getMetricsRegistry().timer("kaboom:partitions:" + this.partitionId + ":flush timer");
+		this.totalBytesWritten = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:total:bytes written");
+		this.topicBytesWritten = MetricRegistrySingleton.getInstance().getMetricsRegistry().meter("kaboom:topic:" + topic + ":bytes written");
 		this.periodicHdfsFlushInterval = runningConfig.getPeriodicHdfsFlushInterval();
 		this.useNativeCompression = runningConfig.getUseNativeCompression();
 
@@ -383,6 +388,8 @@ public class FastBoomWriter {
 			hdfsDataOut.write(longBytes, 0, longBuffer.position());
 			hdfsDataOut.write(compressedBlockBytes, 0, compressedSize);
 			hdfsDataOut.write(syncMarker);
+			totalBytesWritten.mark(compressedSize);
+			topicBytesWritten.mark(compressedSize);
 		} catch (Exception e) {
 			LOG.error("[{}] error occured either compressing or writing the avro block: ", partitionId, e);
 		} finally {
