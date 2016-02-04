@@ -228,10 +228,14 @@ public class StartupConfig {
 
 		if (new File("/etc/hadoop/conf/core-site.xml").exists()) {
 			newHadoopConfiguration.addResource(new FileInputStream("/etc/hadoop/conf/core-site.xml"));
+		} else {
+			LOG.warn("/etc/hadoop/conf/core-site.xml does not exist or cannot be read");
 		}
 
 		if (new File("/etc/hadoop/conf/hdfs-site.xml").exists()) {
 			newHadoopConfiguration.addResource(new FileInputStream("/etc/hadoop/conf/hdfs-site.xml"));
+		} else {
+			LOG.warn("/etc/hadoop/conf/hdfs-site.xml does not exist or cannot be read");
 		}
 
 		// Adds any more standard configs we find in the classpath
