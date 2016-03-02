@@ -1,5 +1,9 @@
 # KaBoom Changes
 
+## 0.9.1
+
+* KABOOM-44: Upgrade Hadoop Client to 2.7.2 and Login via Keytab
+
 ## 0.9.0
 
 * KABOOM-3: Add JMX metric: Failed Block Writes
