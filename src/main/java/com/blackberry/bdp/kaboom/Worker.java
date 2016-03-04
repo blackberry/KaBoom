@@ -345,7 +345,7 @@ public final class Worker extends AsyncAssignee implements Runnable {
 				return;
 			}
 
-			consumer = new Consumer(config.getConsumerConfiguration(),
+			consumer = new Consumer(config.newConsumerConfiguration(),
 				 "kaboom-" + hostname,
 				 getTopic(),
 				 getPartition(),

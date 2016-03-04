@@ -73,7 +73,7 @@ public class SimpleWorker {
 
 			String clientId = "kaboom-" + hostname;
 
-			consumer = new Consumer(startupConfig.getConsumerConfiguration(), clientId, topic, partition, startOffset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
+			consumer = new Consumer(startupConfig.newConsumerConfiguration(), clientId, topic, partition, startOffset, MetricRegistrySingleton.getInstance().getMetricsRegistry());
 
 			LOG.info("[{}] Created simple worker.  Starting at offset {}.", partitionId, startOffset);
 

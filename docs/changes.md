@@ -1,5 +1,9 @@
 # KaBoom Changes
 
+## 0.9.1-HF1
+
+* KABOOM-46: Do not share consumer configurations
+
 ## 0.9.1
 
 * KABOOM-44: Upgrade Hadoop Client to 2.7.2 and Login via Keytab
