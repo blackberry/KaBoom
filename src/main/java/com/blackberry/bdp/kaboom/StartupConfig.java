@@ -60,6 +60,7 @@ public class StartupConfig {
 	private final Parser propsParser;
 	private final Object fsLock = new Object();
 
+	private final Properties props;
 	private final ConsumerConfiguration consumerConfiguration;
 	private Configuration hadoopConfiguration;
 	private String kafkaSeedBrokers;
@@ -117,10 +118,11 @@ public class StartupConfig {
 	}
 
 	public StartupConfig(Properties props) throws Exception {
+		this.props = props;
 		propsParser = new Parser(props);
 
-		hadoopConfiguration = buildHadoopConfiguration();
 		consumerConfiguration = new ConsumerConfiguration(props);
+		hadoopConfiguration = buildHadoopConfiguration();
 		kaboomId = propsParser.parseInteger("kaboom.id");
 		hadoopUrlPath = new Path(propsParser.parseString("hadooop.fs.uri"));
 		weight = propsParser.parseInteger("kaboom.weighting", Runtime.getRuntime().availableProcessors());
@@ -327,8 +329,9 @@ public class StartupConfig {
 
 	/**
 	 * @return the consumerConfiguration
+	 * @throws java.lang.Exception
 	 */
-	public ConsumerConfiguration getConsumerConfiguration() {
+	public ConsumerConfiguration getConsumerConfiguration() throws Exception {
 		return consumerConfiguration;
 	}
 

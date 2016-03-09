@@ -71,7 +71,7 @@ public abstract class Leader extends LeaderSelectorListenerAdapter {
 		idToKaBoomClient.clear();
 		nameToKaBoomTopic.clear();
 
-		kafkaMetaData = MetaData.getMetaData(config.getConsumerConfiguration().getAuthSocketBuilder(), config.getKafkaSeedBrokers(), "kaboom");
+		kafkaMetaData = MetaData.getMetaData(config.getKafkaSeedBrokers(), "kaboom");
 
 		kaboomClients = KaBoomClient.getAll(KaBoomClient.class, curator, config.getZkRootPathClients());
 
