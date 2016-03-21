@@ -1,5 +1,9 @@
 # KaBoom Changes
 
+## 0.9.1-HF2
+
+* KABOOM-47: Release 0.9.1-HF2 (pull in formal Krackle 0.9.2 release)
+
 ## 0.9.1-HF1
 
 * KABOOM-46: Do not share consumer configurations

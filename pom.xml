@@ -18,9 +18,9 @@ limitations under the License.
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>com.blackberry.bdp.kaboom</groupId>
-	<name>kaboom-0.9.1-HF1</name>
+	<name>kaboom-0.9.1-HF2</name>
 	<artifactId>kaboom</artifactId>
-	<version>0.9.1.1</version>
+	<version>0.9.1.2</version>
 	<packaging>jar</packaging>
 	<url>http://blackberry.com</url>
 
@@ -101,7 +101,7 @@ limitations under the License.
 		<dependency>
 			<groupId>com.blackberry.bdp.krackle</groupId>
 			<artifactId>krackle</artifactId>
-			<version>0.9.2-SNAPSHOT</version>
+			<version>0.9.2</version>
 			<exclusions>
 				<exclusion>
 					<groupId>com.blackberry.bdp.common</groupId>
